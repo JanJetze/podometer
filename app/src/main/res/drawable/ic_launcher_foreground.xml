@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simplified footstep icon for Podometer -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30 C54,30 44,40 44,52 C44,58 48,62 54,62 C60,62 64,58 64,52 C64,40 54,30 54,30 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,66 C44,66 36,72 36,80 C36,84 39,86 44,86 C49,86 64,80 64,72 C64,68 60,66 54,66 L44,66 Z" />
+</vector>
