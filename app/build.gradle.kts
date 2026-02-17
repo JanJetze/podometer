@@ -59,6 +59,9 @@ dependencies {
     // Activity
     implementation(libs.androidx.activity.compose)
 
+    // Navigation
+    implementation(libs.androidx.navigation.compose)
+
     // Lifecycle
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)

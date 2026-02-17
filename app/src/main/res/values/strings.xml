@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Podometer</string>
+
+    <!-- Screen titles -->
+    <string name="screen_dashboard">Dashboard</string>
+    <string name="screen_settings">Settings</string>
+    <string name="screen_onboarding">Onboarding</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_open_settings">Open settings</string>
+    <string name="cd_navigate_back">Navigate back</string>
 </resources>
