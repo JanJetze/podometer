@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+package com.podometer.data.db
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
+
+/**
+ * DAO for [ActivityTransition] data.
+ *
+ * Flow-returning queries emit a new value whenever the underlying table changes.
+ * Write operations are [suspend] so callers must use a coroutine context.
+ */
+@Dao
+interface ActivityTransitionDao {
+
+    /**
+     * Returns all [ActivityTransition] rows with a timestamp >= [todayStart],
+     * ordered by timestamp ascending.
+     */
+    @Query("SELECT * FROM activity_transitions WHERE timestamp >= :todayStart ORDER BY timestamp ASC")
+    fun getTodayTransitions(todayStart: Long): Flow<List<ActivityTransition>>
+
+    /** Inserts a new [ActivityTransition] row. */
+    @Insert
+    suspend fun insertTransition(transition: ActivityTransition)
+
+    /** Updates an existing [ActivityTransition] row (matched by primary key). */
+    @Update
+    suspend fun updateTransition(transition: ActivityTransition)
+}
