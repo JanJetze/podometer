@@ -2,12 +2,15 @@
 package com.podometer
 
 import android.app.Application
+import dagger.hilt.android.HiltAndroidApp
 
 /**
  * Application class for Podometer.
  *
- * Hilt integration (@HiltAndroidApp) will be added in a separate task.
+ * Annotated with @HiltAndroidApp to enable Hilt dependency injection
+ * throughout the app.
  */
+@HiltAndroidApp
 class PodometerApp : Application() {
 
     override fun onCreate() {

@@ -14,14 +14,17 @@ import com.podometer.ui.dashboard.DashboardScreen
 import com.podometer.ui.Screen
 import com.podometer.ui.settings.SettingsScreen
 import com.podometer.ui.theme.PodometerTheme
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * Single-Activity entry point for Podometer.
  *
+ * Annotated with @AndroidEntryPoint to enable Hilt injection in this activity.
  * Hosts the Compose NavHost with Dashboard (start destination) and Settings routes.
  * The PodometerTheme wraps all content so every screen inherits the Material 3 colour
  * scheme and typography.
  */
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
