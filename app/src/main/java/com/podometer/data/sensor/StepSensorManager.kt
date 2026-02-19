@@ -19,8 +19,10 @@ import javax.inject.Singleton
  * Priority chain:
  *  1. TYPE_STEP_COUNTER — cumulative counter since last reboot; uses
  *     [maxReportLatencyUs] for hardware batching to save battery.
- *  2. TYPE_STEP_DETECTOR — fires once per detected step (fallback).
- *  3. NONE — no sensor available; [stepEvents] never emits.
+ *  2. TYPE_STEP_DETECTOR — fires once per detected step (first fallback).
+ *  3. TYPE_ACCELEROMETER — raw accelerometer with software step detection
+ *     via [AccelerometerStepDetector] (last resort).
+ *  4. NONE — no sensor available; [stepEvents] never emits.
  *
  * Usage:
  * ```
@@ -48,6 +50,8 @@ class StepSensorManager @Inject constructor(
      * - For TYPE_STEP_COUNTER this is `current − previous` (delta from the
      *   cumulative counter).
      * - For TYPE_STEP_DETECTOR each emission is always `1`.
+     * - For TYPE_ACCELEROMETER each emission is `1` when a step is detected
+     *   by [AccelerometerStepDetector].
      * - No emission is produced on the first TYPE_STEP_COUNTER event (baseline
      *   is established).
      */
@@ -56,6 +60,9 @@ class StepSensorManager @Inject constructor(
     /** Baseline for the cumulative TYPE_STEP_COUNTER; null before the first event. */
     @Volatile
     private var stepCounterBaseline: Float? = null
+
+    /** Software step detector for the TYPE_ACCELEROMETER fallback path. */
+    private val accelerometerDetector = AccelerometerStepDetector()
 
     // ─── Sensor availability ─────────────────────────────────────────────────
 
@@ -68,6 +75,7 @@ class StepSensorManager @Inject constructor(
     fun getAvailableSensorType(): SensorType = selectSensorType(
         hasStepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null,
         hasStepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null,
+        hasAccelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null,
     )
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────
@@ -78,6 +86,9 @@ class StepSensorManager @Inject constructor(
      * - TYPE_STEP_COUNTER is registered with a 5-second batch latency so the
      *   hardware can accumulate events and flush them in bulk (saves battery).
      * - TYPE_STEP_DETECTOR is registered with [SensorManager.SENSOR_DELAY_NORMAL].
+     * - TYPE_ACCELEROMETER is registered with [SensorManager.SENSOR_DELAY_GAME]
+     *   (~50 Hz) — above the Nyquist frequency for walking cadence (~2 Hz) so
+     *   the EMA filter in [AccelerometerStepDetector] has enough resolution.
      *
      * Calling this when already listening is a no-op (Android deduplicates
      * listeners for the same sensor).
@@ -103,6 +114,16 @@ class StepSensorManager @Inject constructor(
                 )
                 Log.d(TAG, "Registered TYPE_STEP_DETECTOR")
             }
+            SensorType.ACCELEROMETER -> {
+                val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)!!
+                accelerometerDetector.reset()
+                sensorManager.registerListener(
+                    this,
+                    sensor,
+                    SensorManager.SENSOR_DELAY_GAME,
+                )
+                Log.d(TAG, "Registered TYPE_ACCELEROMETER (software step detection)")
+            }
             SensorType.NONE -> {
                 Log.w(TAG, "No step-counting sensor available on this device")
             }
@@ -110,13 +131,14 @@ class StepSensorManager @Inject constructor(
     }
 
     /**
-     * Unregisters the sensor listener and resets the step-counter baseline.
+     * Unregisters the sensor listener and resets all internal state.
      *
      * Safe to call multiple times or before [startListening].
      */
     fun stopListening() {
         sensorManager.unregisterListener(this)
         stepCounterBaseline = null
+        accelerometerDetector.reset()
         Log.d(TAG, "Unregistered step sensor listener")
     }
 
@@ -126,6 +148,7 @@ class StepSensorManager @Inject constructor(
         when (event.sensor.type) {
             Sensor.TYPE_STEP_COUNTER -> handleStepCounterEvent(event.values[0])
             Sensor.TYPE_STEP_DETECTOR -> handleStepDetectorEvent()
+            Sensor.TYPE_ACCELEROMETER -> handleAccelerometerEvent(event)
         }
     }
 
@@ -150,6 +173,16 @@ class StepSensorManager @Inject constructor(
 
     private fun handleStepDetectorEvent() {
         _stepEvents.tryEmit(1)
+    }
+
+    private fun handleAccelerometerEvent(event: SensorEvent) {
+        // Threading: this callback runs on the sensor-delivery thread.
+        // [AccelerometerStepDetector] fields are @Volatile so changes written
+        // here (processSample) are immediately visible to any lifecycle thread
+        // that calls reset() via stopListening() / startListening().
+        if (accelerometerDetector.process(event)) {
+            _stepEvents.tryEmit(1)
+        }
     }
 
     // ─── Constants ───────────────────────────────────────────────────────────

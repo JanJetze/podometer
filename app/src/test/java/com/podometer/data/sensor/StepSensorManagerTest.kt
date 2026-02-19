@@ -80,33 +80,33 @@ class StepSensorManagerTest {
     }
 
     @Test
-    fun `SensorType enum contains exactly three values`() {
-        assertEquals(3, SensorType.entries.size)
+    fun `SensorType enum contains exactly four values`() {
+        assertEquals(4, SensorType.entries.size)
     }
 
     // ─── selectSensorType ────────────────────────────────────────────────────
 
     @Test
     fun `selectSensorType returns STEP_COUNTER when both are available`() {
-        val result = selectSensorType(hasStepCounter = true, hasStepDetector = true)
+        val result = selectSensorType(hasStepCounter = true, hasStepDetector = true, hasAccelerometer = false)
         assertEquals(SensorType.STEP_COUNTER, result)
     }
 
     @Test
     fun `selectSensorType returns STEP_COUNTER when only step counter available`() {
-        val result = selectSensorType(hasStepCounter = true, hasStepDetector = false)
+        val result = selectSensorType(hasStepCounter = true, hasStepDetector = false, hasAccelerometer = false)
         assertEquals(SensorType.STEP_COUNTER, result)
     }
 
     @Test
     fun `selectSensorType falls back to STEP_DETECTOR when counter unavailable`() {
-        val result = selectSensorType(hasStepCounter = false, hasStepDetector = true)
+        val result = selectSensorType(hasStepCounter = false, hasStepDetector = true, hasAccelerometer = false)
         assertEquals(SensorType.STEP_DETECTOR, result)
     }
 
     @Test
     fun `selectSensorType returns NONE when neither sensor is available`() {
-        val result = selectSensorType(hasStepCounter = false, hasStepDetector = false)
+        val result = selectSensorType(hasStepCounter = false, hasStepDetector = false, hasAccelerometer = false)
         assertEquals(SensorType.NONE, result)
     }
 

@@ -41,15 +41,24 @@ fun computeStepDelta(currentValue: Float, baseline: Float?): StepDeltaResult {
 /**
  * Selects the best available [SensorType] given hardware availability flags.
  *
- * TYPE_STEP_COUNTER is preferred because it supports batching (saves battery).
- * TYPE_STEP_DETECTOR is used as a fallback.
+ * Priority: TYPE_STEP_COUNTER > TYPE_STEP_DETECTOR > TYPE_ACCELEROMETER > NONE.
  *
- * @param hasStepCounter Whether TYPE_STEP_COUNTER is present on the device.
- * @param hasStepDetector Whether TYPE_STEP_DETECTOR is present on the device.
+ * TYPE_STEP_COUNTER is preferred because it supports batching (saves battery).
+ * TYPE_STEP_DETECTOR is used as first fallback.
+ * TYPE_ACCELEROMETER with software step detection is used as last resort.
+ *
+ * @param hasStepCounter   Whether TYPE_STEP_COUNTER is present on the device.
+ * @param hasStepDetector  Whether TYPE_STEP_DETECTOR is present on the device.
+ * @param hasAccelerometer Whether TYPE_ACCELEROMETER is present on the device.
  */
-fun selectSensorType(hasStepCounter: Boolean, hasStepDetector: Boolean): SensorType =
+fun selectSensorType(
+    hasStepCounter: Boolean,
+    hasStepDetector: Boolean,
+    hasAccelerometer: Boolean,
+): SensorType =
     when {
         hasStepCounter -> SensorType.STEP_COUNTER
         hasStepDetector -> SensorType.STEP_DETECTOR
+        hasAccelerometer -> SensorType.ACCELEROMETER
         else -> SensorType.NONE
     }
