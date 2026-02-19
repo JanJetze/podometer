@@ -10,3 +10,7 @@
 local.properties
 app/release/
 app/build/
+
+.ohno
+.claude
+.mcp.json

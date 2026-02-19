@@ -10,4 +10,7 @@
     <!-- Content descriptions -->
     <string name="cd_open_settings">Open settings</string>
     <string name="cd_navigate_back">Navigate back</string>
+
+    <!-- Foreground service notification -->
+    <string name="notification_tracking_title">Podometer is tracking your steps</string>
 </resources>
