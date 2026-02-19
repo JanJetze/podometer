@@ -3,24 +3,23 @@ package com.podometer.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import com.podometer.MainActivity
-import com.podometer.R
 import com.podometer.data.repository.StepRepository
 import com.podometer.data.sensor.StepSensorManager
+import com.podometer.domain.model.ActivityState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
@@ -31,9 +30,9 @@ import javax.inject.Inject
  *
  * Lifecycle:
  * - [onCreate]: Creates the notification channel, starts itself as a foreground
- *   service with a persistent notification.
- * - [onStartCommand]: Starts sensor listening and launches a coroutine that
- *   collects step events and flushes hourly aggregates to [StepRepository].
+ *   service with a persistent notification built by [NotificationHelper].
+ * - [onStartCommand]: Starts sensor listening, launches the step-event collector,
+ *   and launches a periodic notification updater that fires every ~30 s.
  * - [onDestroy]: Flushes any remaining in-memory steps, stops sensor listening,
  *   and cancels the coroutine scope.
  * - [onBind]: Returns `null` — this is a started service, not a bound service.
@@ -50,19 +49,23 @@ class StepTrackingService : Service() {
     @Inject
     lateinit var stepRepository: StepRepository
 
+    @Inject
+    lateinit var notificationHelper: NotificationHelper
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private lateinit var accumulator: StepAccumulator
 
     private var collectorJob: Job? = null
+    private var notificationTickerJob: Job? = null
 
     // ─── Service lifecycle ────────────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForegroundWithNotification()
         accumulator = StepAccumulator(System.currentTimeMillis())
+        startForegroundWithNotification()
         Log.d(TAG, "Service created")
     }
 
@@ -70,6 +73,9 @@ class StepTrackingService : Service() {
         stepSensorManager.startListening()
         if (collectorJob == null || collectorJob?.isActive != true) {
             collectorJob = collectStepEvents()
+        }
+        if (notificationTickerJob == null || notificationTickerJob?.isActive != true) {
+            notificationTickerJob = launchNotificationTicker()
         }
         Log.d(TAG, "Service started, sensor listening")
         return START_STICKY
@@ -97,7 +103,7 @@ class StepTrackingService : Service() {
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
+            NotificationHelper.NOTIFICATION_CHANNEL_ID,
             NOTIFICATION_CHANNEL_NAME,
             NotificationManager.IMPORTANCE_LOW,
         )
@@ -106,23 +112,15 @@ class StepTrackingService : Service() {
     }
 
     private fun startForegroundWithNotification() {
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        val notification = notificationHelper.buildNotification(
+            steps = accumulator.totalStepsToday,
+            distanceKm = 0f,
+            activity = ActivityState.STILL,
+            style = NotificationStyle.MINIMAL,
         )
-
-        val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle(getString(R.string.notification_tracking_title))
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .build()
-
         ServiceCompat.startForeground(
             this,
-            NOTIFICATION_ID,
+            NotificationHelper.NOTIFICATION_ID,
             notification,
             ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
         )
@@ -145,12 +143,30 @@ class StepTrackingService : Service() {
         }
     }
 
+    // ─── Notification ticker ──────────────────────────────────────────────────
+
+    /**
+     * Coroutine that updates the foreground notification every [NOTIFICATION_UPDATE_INTERVAL_MS]
+     * milliseconds with the current step count. Runs until the service scope is cancelled.
+     */
+    private fun launchNotificationTicker(): Job = serviceScope.launch {
+        while (isActive) {
+            delay(NOTIFICATION_UPDATE_INTERVAL_MS)
+            notificationHelper.updateNotification(
+                steps = accumulator.totalStepsToday,
+                distanceKm = 0f,
+                activity = ActivityState.STILL,
+                style = NotificationStyle.MINIMAL,
+            )
+            Log.d(TAG, "Notification updated: ${accumulator.totalStepsToday} steps")
+        }
+    }
+
     // ─── Constants ───────────────────────────────────────────────────────────
 
     private companion object {
         private const val TAG = "StepTrackingService"
-        private const val NOTIFICATION_CHANNEL_ID = "step_tracking"
         private const val NOTIFICATION_CHANNEL_NAME = "Step Tracking"
-        private const val NOTIFICATION_ID = 1
+        private const val NOTIFICATION_UPDATE_INTERVAL_MS = 30_000L
     }
 }
