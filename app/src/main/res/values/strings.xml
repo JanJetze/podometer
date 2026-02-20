@@ -21,6 +21,18 @@
     <string name="activity_still">Still</string>
     <string name="cd_activity_currently">Currently %1$s</string>
 
+    <!-- Dashboard section headers -->
+    <string name="section_activity_timeline">Activity Timeline</string>
+    <string name="section_transition_log">Transition Log</string>
+    <string name="section_weekly_steps">Weekly Steps</string>
+    <string name="section_cycling_sessions">Cycling Sessions</string>
+
+    <!-- Dashboard placeholder text -->
+    <string name="placeholder_timeline">Timeline will appear here</string>
+    <string name="placeholder_transitions">No activity transitions yet</string>
+    <string name="placeholder_weekly">Week chart will appear here</string>
+    <string name="placeholder_cycling">No cycling detected today</string>
+
     <!-- Foreground service notification -->
     <string name="notification_tracking_title">Podometer is tracking your steps</string>
 </resources>
