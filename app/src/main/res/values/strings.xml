@@ -51,6 +51,14 @@
     <string name="cd_transition_item">Transition at %1$s: %2$s</string>
     <string name="cd_transition_override_options">Override options for transition at %1$s</string>
 
+    <!-- CyclingSessionList labels -->
+    <string name="cycling_session_range">%1$s – %2$s · %3$s</string>
+    <string name="cycling_session_ongoing">ongoing</string>
+    <string name="cycling_session_duration_format">%1$d min</string>
+    <string name="cycling_total_duration">Total: %1$s</string>
+    <string name="cycling_override_badge">Override</string>
+    <string name="cd_cycling_session_item">Cycling session from %1$s to %2$s, %3$d minutes</string>
+
     <!-- Foreground service notification -->
     <string name="notification_tracking_title">Podometer is tracking your steps</string>
 </resources>

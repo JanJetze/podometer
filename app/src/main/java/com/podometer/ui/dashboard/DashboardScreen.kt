@@ -141,9 +141,9 @@ fun DashboardScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Section: Cycling Sessions (placeholder — full implementation is a separate task)
+                // Section: Cycling Sessions
                 SectionHeader(title = stringResource(R.string.section_cycling_sessions))
-                PlaceholderSection(text = stringResource(R.string.placeholder_cycling))
+                CyclingSessionList(sessions = uiState.cyclingSessions)
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
