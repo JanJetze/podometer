@@ -283,9 +283,12 @@ class ActivityTimelineTest {
             nowMillis = dayEnd,
         )
 
-        // First segment from dayStart to transition (zero duration), second from transition to dayEnd
-        // The first segment may be empty (0 duration) but list should have the last segment correct
-        assertTrue("Should have at least one segment", segments.isNotEmpty())
+        // The transition is at dayStart, so the first segment (dayStart→dayStart) has zero duration
+        // and is omitted. Only the last segment (dayStart→dayEnd, WALKING) should be present.
+        assertEquals("Should have exactly 1 segment (zero-duration first segment is omitted)", 1, segments.size)
+        assertEquals(ActivityState.WALKING, segments[0].activity)
+        assertEquals(0f, segments[0].startFraction, 0.001f)
+        assertEquals(1f, segments[0].endFraction, 0.001f)
     }
 
     // ─── timelineContentDescription ───────────────────────────────────────────

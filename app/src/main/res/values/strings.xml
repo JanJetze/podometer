@@ -36,6 +36,7 @@
     <!-- ActivityTimeline accessibility -->
     <string name="cd_timeline_no_data">Activity timeline: no activity data available.</string>
     <string name="cd_timeline_summary">Activity timeline: %1$s</string>
+    <string name="cd_timeline_segment">%1$s from %2$d%% to %3$d%% of the day</string>
 
     <!-- Foreground service notification -->
     <string name="notification_tracking_title">Podometer is tracking your steps</string>
