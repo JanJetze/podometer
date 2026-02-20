@@ -55,6 +55,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    // material-icons-extended adds ~10 MB for the full icon set. Currently used only for
+    // DirectionsWalk and DirectionsBike in ActivityBadge, but the dashboard will need
+    // additional icons (timeline, charts, settings, etc.) in upcoming tasks. R8/ProGuard
+    // tree-shakes unused icons in release builds, so the release APK impact is minimal.
     implementation(libs.androidx.compose.material.icons.extended)
 
     // Activity

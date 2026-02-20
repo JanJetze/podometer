@@ -23,10 +23,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.podometer.R
 import com.podometer.domain.model.ActivityState
 import com.podometer.ui.theme.PodometerTheme
 
@@ -48,12 +50,12 @@ private val BadgeContentColor = Color.White
 // ─── Public extension helpers (pure functions, fully unit-testable) ────────────
 
 /**
- * Returns the human-readable display label for this [ActivityState].
+ * Returns the English display label for this [ActivityState].
  *
- * These strings intentionally do NOT use `stringResource` so they remain
- * testable on the JVM without a Compose runtime. The UI uses them directly;
- * the string resource `cd_activity_currently` is used only for the
- * accessibility content description built in [ActivityBadge].
+ * This function is intentionally a plain Kotlin function (no `@Composable`, no
+ * `stringResource`) so that it can be exercised in JVM unit tests without a
+ * Compose runtime. The [ActivityBadge] composable uses `stringResource()` directly
+ * for proper localisation; this function serves as a test helper only.
  *
  * @return "Walking", "Cycling", or "Still".
  */
@@ -64,7 +66,11 @@ fun ActivityState.displayText(): String = when (this) {
 }
 
 /**
- * Returns the TalkBack content description for this [ActivityState].
+ * Returns the English TalkBack content description for this [ActivityState].
+ *
+ * Like [displayText], this is a plain Kotlin function kept for JVM unit
+ * testability. The [ActivityBadge] composable uses `stringResource()` for
+ * the actual localised content description rendered at runtime.
  *
  * @return "Currently walking", "Currently cycling", or "Currently still".
  */
@@ -96,9 +102,13 @@ internal fun ActivityState.icon(): ImageVector = when (this) {
 /**
  * Chip/badge that displays the user's current activity state with an icon and text label.
  *
- * The badge animates its background and content colours smoothly (300 ms tween) whenever
- * [activity] changes. It is purely presentational — wire it to [DashboardUiState.currentActivity]
- * in the parent screen.
+ * The badge animates its background colour smoothly (300 ms tween) whenever [activity] changes.
+ * The content colour is always [BadgeContentColor] (white) and is therefore passed directly —
+ * animating a constant value would waste recomposition cycles for no visual benefit.
+ *
+ * Display text and accessibility description are sourced from string resources for proper
+ * localisation. The [displayText] and [contentDescriptionText] extension functions are kept
+ * as pure-Kotlin helpers for JVM unit tests only.
  *
  * Accessibility: the outer [Surface] carries a `contentDescription` of
  * "Currently walking" / "Currently cycling" / "Currently still" for TalkBack.
@@ -116,17 +126,19 @@ fun ActivityBadge(
         animationSpec = tween(durationMillis = 300),
         label = "badge_bg",
     )
-    val contentColor by animateColorAsState(
-        targetValue = BadgeContentColor,
-        animationSpec = tween(durationMillis = 300),
-        label = "badge_content",
-    )
 
-    val accessibilityDescription = activity.contentDescriptionText()
+    // Resolve localised strings from resources for proper i18n support.
+    val displayText = when (activity) {
+        ActivityState.WALKING -> stringResource(R.string.activity_walking)
+        ActivityState.CYCLING -> stringResource(R.string.activity_cycling)
+        ActivityState.STILL -> stringResource(R.string.activity_still)
+    }
+    val accessibilityDescription = stringResource(R.string.cd_activity_currently, displayText)
 
     Surface(
         color = backgroundColor,
-        contentColor = contentColor,
+        // BadgeContentColor (white) is constant — no need to animate it.
+        contentColor = BadgeContentColor,
         shape = RoundedCornerShape(16.dp),
         modifier = modifier.semantics {
             contentDescription = accessibilityDescription
@@ -143,7 +155,7 @@ fun ActivityBadge(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = activity.displayText(),
+                text = displayText,
                 style = MaterialTheme.typography.labelMedium,
             )
         }
