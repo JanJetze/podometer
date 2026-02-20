@@ -187,6 +187,46 @@ class PreferencesManagerTest {
         assertEquals(0.0008f, fakeStore.lastWritten!![key]!!, 0.0000001f)
     }
 
+    // ─── setStrideLengthKm: validation ───────────────────────────────────────
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `setStrideLengthKm rejects zero stride`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setStrideLengthKm(0f)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `setStrideLengthKm rejects negative stride`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setStrideLengthKm(-0.001f)
+    }
+
+    @Test
+    fun `setStrideLengthKm coerces value above maximum to 0_005f`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setStrideLengthKm(0.1f) // 100 m — unreasonable
+
+        val key = floatPreferencesKey("stride_length_km")
+        assertEquals(0.005f, fakeStore.lastWritten!![key]!!, 0.0000001f)
+    }
+
+    @Test
+    fun `setStrideLengthKm coerces value below minimum to 0_0001f`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setStrideLengthKm(0.00001f) // 1 cm — unreasonable
+
+        val key = floatPreferencesKey("stride_length_km")
+        assertEquals(0.0001f, fakeStore.lastWritten!![key]!!, 0.0000001f)
+    }
+
     // ─── Class existence ──────────────────────────────────────────────────────
 
     @Test

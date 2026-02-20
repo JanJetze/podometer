@@ -34,6 +34,12 @@ class PreferencesManager @Inject constructor(
 
         /** Default stride length: 75 cm = 0.00075 km. */
         const val DEFAULT_STRIDE_LENGTH_KM = 0.00075f
+
+        /** Minimum allowed stride length: 10 cm = 0.0001 km. */
+        const val MIN_STRIDE_LENGTH_KM = 0.0001f
+
+        /** Maximum allowed stride length: 5 m = 0.005 km. */
+        const val MAX_STRIDE_LENGTH_KM = 0.005f
     }
 
     // ─── Read ────────────────────────────────────────────────────────────────
@@ -69,11 +75,18 @@ class PreferencesManager @Inject constructor(
     /**
      * Persists the given [strideKm] as the user's stride length.
      *
+     * Values outside the reasonable range [[MIN_STRIDE_LENGTH_KM], [MAX_STRIDE_LENGTH_KM]]
+     * are coerced to the nearest bound. Zero or negative values are rejected outright.
+     *
      * @param strideKm Stride length in kilometres (e.g. 0.00075 for 75 cm).
+     *   Must be positive (> 0). Reasonable range: 0.0001 km (10 cm) to 0.005 km (5 m).
+     * @throws IllegalArgumentException if [strideKm] is zero or negative.
      */
     suspend fun setStrideLengthKm(strideKm: Float) {
+        require(strideKm > 0f) { "Stride length must be positive, got $strideKm" }
+        val coerced = strideKm.coerceIn(MIN_STRIDE_LENGTH_KM, MAX_STRIDE_LENGTH_KM)
         dataStore.edit { prefs ->
-            prefs[KEY_STRIDE_LENGTH_KM] = strideKm
+            prefs[KEY_STRIDE_LENGTH_KM] = coerced
         }
     }
 }

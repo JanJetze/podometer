@@ -8,7 +8,7 @@ package com.podometer.domain.model
  * @property goal          Daily step goal (default: 10,000).
  * @property progressPercent Percentage of goal achieved, capped at 100.
  * @property distanceKm    Approximate distance walked in kilometres,
- *                         computed using the default stride length (0.75 m).
+ *                         computed using the stride length from user preferences (default: 0.75 m).
  */
 data class StepData(
     val steps: Int,

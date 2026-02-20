@@ -26,7 +26,9 @@ import java.time.ZoneId
  *   the service starts.
  * @param strideLengthKm Stride length in kilometres used to compute
  *   [com.podometer.data.db.DailySummary.totalDistance]. Defaults to 0.00075 km
- *   (75 cm = 0.75 m).
+ *   (75 cm = 0.75 m). This value is fixed at construction time and does not
+ *   change for the lifetime of this accumulator instance — by design, the
+ *   service reads the preference once at session start and passes it here.
  */
 class StepAccumulator(
     initialHourTimestamp: Long,
