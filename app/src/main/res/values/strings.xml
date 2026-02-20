@@ -10,6 +10,10 @@
     <!-- Content descriptions -->
     <string name="cd_open_settings">Open settings</string>
     <string name="cd_navigate_back">Navigate back</string>
+    <string name="cd_today_steps">%1$d steps out of %2$d goal, %3$d percent complete</string>
+
+    <!-- TodayCard labels -->
+    <string name="today_distance_format">%1$.1f km</string>
 
     <!-- Foreground service notification -->
     <string name="notification_tracking_title">Podometer is tracking your steps</string>
