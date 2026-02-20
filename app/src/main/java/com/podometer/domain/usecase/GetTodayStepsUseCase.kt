@@ -1,36 +1,39 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.domain.usecase
 
+import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
 import com.podometer.domain.model.StepData
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 
 /**
  * Returns a [Flow] of [StepData] representing today's step-count progress.
  *
- * Combines the live step count from [StepRepository] with a hardcoded
- * default goal (10,000 steps) and default stride length (0.75 m) to
- * compute [StepData.progressPercent] and [StepData.distanceKm].
+ * Combines the live step count from [StepRepository] with the user-configured
+ * stride length from [PreferencesManager] to compute [StepData.progressPercent]
+ * and [StepData.distanceKm]. The daily goal is hardcoded at 10,000 steps.
  */
 class GetTodayStepsUseCase @Inject constructor(
     private val stepRepository: StepRepository,
+    private val preferencesManager: PreferencesManager,
 ) {
 
-    /** Default daily step goal. */
-    private val defaultGoal = 10_000
+    // ─── Constants ───────────────────────────────────────────────────────────
 
-    /** Default stride length in kilometres (0.75 m = 0.00075 km). */
-    private val strideKm = 0.00075f
+    private companion object {
+        /** Default daily step goal. */
+        const val DEFAULT_GOAL = 10_000
+    }
 
     operator fun invoke(): Flow<StepData> =
-        stepRepository.getTodaySteps().map { steps ->
-            val progressPercent = (steps.toFloat() / defaultGoal * 100f).coerceAtMost(100f)
+        stepRepository.getTodaySteps().combine(preferencesManager.strideLengthKm()) { steps, strideKm ->
+            val progressPercent = (steps.toFloat() / DEFAULT_GOAL * 100f).coerceAtMost(100f)
             val distanceKm = steps * strideKm
             StepData(
                 steps = steps,
-                goal = defaultGoal,
+                goal = DEFAULT_GOAL,
                 progressPercent = progressPercent,
                 distanceKm = distanceKm,
             )

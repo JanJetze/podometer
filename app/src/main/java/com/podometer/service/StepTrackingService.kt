@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
+import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
 import com.podometer.data.sensor.StepSensorManager
 import com.podometer.domain.model.ActivityState
@@ -19,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -52,6 +54,9 @@ class StepTrackingService : Service() {
     @Inject
     lateinit var notificationHelper: NotificationHelper
 
+    @Inject
+    lateinit var preferencesManager: PreferencesManager
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private lateinit var accumulator: StepAccumulator
@@ -64,7 +69,8 @@ class StepTrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        accumulator = StepAccumulator(System.currentTimeMillis())
+        val strideKm = runBlocking { preferencesManager.strideLengthKm().first() }
+        accumulator = StepAccumulator(System.currentTimeMillis(), strideLengthKm = strideKm)
         startForegroundWithNotification()
         Log.d(TAG, "Service created")
     }
@@ -147,18 +153,21 @@ class StepTrackingService : Service() {
 
     /**
      * Coroutine that updates the foreground notification every [NOTIFICATION_UPDATE_INTERVAL_MS]
-     * milliseconds with the current step count. Runs until the service scope is cancelled.
+     * milliseconds with the current step count and computed distance. Runs until the service
+     * scope is cancelled.
      */
     private fun launchNotificationTicker(): Job = serviceScope.launch {
         while (isActive) {
             delay(NOTIFICATION_UPDATE_INTERVAL_MS)
+            val strideKm = preferencesManager.strideLengthKm().first()
+            val distanceKm = accumulator.totalStepsToday * strideKm
             notificationHelper.updateNotification(
                 steps = accumulator.totalStepsToday,
-                distanceKm = 0f,
+                distanceKm = distanceKm,
                 activity = ActivityState.STILL,
                 style = NotificationStyle.MINIMAL,
             )
-            Log.d(TAG, "Notification updated: ${accumulator.totalStepsToday} steps")
+            Log.d(TAG, "Notification updated: ${accumulator.totalStepsToday} steps, $distanceKm km")
         }
     }
 

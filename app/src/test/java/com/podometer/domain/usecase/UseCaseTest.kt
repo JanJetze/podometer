@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.domain.usecase
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.preferencesOf
 import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.ActivityTransitionDao
 import com.podometer.data.db.CyclingSession
@@ -9,6 +12,7 @@ import com.podometer.data.db.DailySummary
 import com.podometer.data.db.HourlyStepAggregate
 import com.podometer.data.db.StepDao
 import com.podometer.data.repository.CyclingRepository
+import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
 import com.podometer.domain.model.ActivityState
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +31,20 @@ import org.junit.Test
  * computations without Android dependencies.
  */
 class UseCaseTest {
+
+    // ─── Fake DataStore ──────────────────────────────────────────────────────
+
+    private class FakeDataStore(
+        private val initial: Preferences = preferencesOf(),
+    ) : DataStore<Preferences> {
+        private var current: Preferences = initial
+        override val data: Flow<Preferences> get() = flowOf(current)
+        override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences {
+            val updated = transform(current)
+            current = updated
+            return updated
+        }
+    }
 
     // ─── Fake DAOs ───────────────────────────────────────────────────────────
 
@@ -90,6 +108,9 @@ class UseCaseTest {
     private fun cyclingRepo(sessions: List<CyclingSession> = emptyList()): CyclingRepository =
         CyclingRepository(FakeCyclingSessionDao(flowOf(sessions)))
 
+    private fun preferencesManager(): PreferencesManager =
+        PreferencesManager(FakeDataStore())
+
     // ─── ActivityState.fromString ────────────────────────────────────────────
 
     @Test
@@ -124,7 +145,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase emits StepData with default goal 10000`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 5000))
+        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 5000), preferencesManager())
 
         val result = useCase().first()
 
@@ -134,7 +155,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase computes progressPercent correctly`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 5000))
+        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 5000), preferencesManager())
 
         val result = useCase().first()
 
@@ -144,7 +165,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase caps progressPercent at 100`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 15_000))
+        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 15_000), preferencesManager())
 
         val result = useCase().first()
 
@@ -153,7 +174,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase computes distanceKm with default stride`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 1000))
+        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 1000), preferencesManager())
 
         val result = useCase().first()
 
@@ -162,8 +183,20 @@ class UseCaseTest {
     }
 
     @Test
+    fun `GetTodayStepsUseCase computes distanceKm with custom stride from preferences`() = runTest {
+        val pm = preferencesManager()
+        pm.setStrideLengthKm(0.001f)
+        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 1000), pm)
+
+        val result = useCase().first()
+
+        // 1000 steps * 0.001 km = 1.0 km
+        assertEquals(1.0f, result.distanceKm, 0.0001f)
+    }
+
+    @Test
     fun `GetTodayStepsUseCase emits zero StepData when steps are zero`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 0))
+        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 0), preferencesManager())
 
         val result = useCase().first()
 
@@ -174,7 +207,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase emits exactly 100 percent at goal steps`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 10_000))
+        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 10_000), preferencesManager())
 
         val result = useCase().first()
 
@@ -184,7 +217,7 @@ class UseCaseTest {
     @Test
     fun `GetTodayStepsUseCase maps null step count to 0 steps`() = runTest {
         // Null from DAO is mapped to 0 inside StepRepository.getTodaySteps()
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = null))
+        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = null), preferencesManager())
 
         val result = useCase().first()
 

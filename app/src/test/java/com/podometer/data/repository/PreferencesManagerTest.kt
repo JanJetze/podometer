@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -131,6 +132,59 @@ class PreferencesManagerTest {
         val value = manager.isAutoStartEnabled().first()
         assertFalse("Should reflect written false value", value)
         assertEquals(false, fakeStore.lastWritten!![key])
+    }
+
+    // ─── strideLengthKm: default value ───────────────────────────────────────
+
+    @Test
+    fun `strideLengthKm emits default 0_00075f when key is absent`() = runTest {
+        val fakeStore = FakeDataStore(initial = preferencesOf())
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.strideLengthKm().first()
+
+        assertEquals(0.00075f, result, 0.0000001f)
+    }
+
+    // ─── strideLengthKm: stored value ────────────────────────────────────────
+
+    @Test
+    fun `strideLengthKm emits stored custom value`() = runTest {
+        val key = floatPreferencesKey("stride_length_km")
+        val fakeStore = FakeDataStore(initial = preferencesOf(key to 0.0009f))
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.strideLengthKm().first()
+
+        assertEquals(0.0009f, result, 0.0000001f)
+    }
+
+    // ─── setStrideLengthKm ───────────────────────────────────────────────────
+
+    @Test
+    fun `setStrideLengthKm writes value under correct key`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setStrideLengthKm(0.001f)
+
+        val key = floatPreferencesKey("stride_length_km")
+        val written = fakeStore.lastWritten
+        assertNotNull("DataStore updateData must have been called", written)
+        assertEquals(0.001f, written!![key]!!, 0.0000001f)
+    }
+
+    @Test
+    fun `strideLengthKm uses key named stride_length_km`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setStrideLengthKm(0.0008f)
+
+        val key = floatPreferencesKey("stride_length_km")
+        val value = manager.strideLengthKm().first()
+        assertEquals(0.0008f, value, 0.0000001f)
+        assertEquals(0.0008f, fakeStore.lastWritten!![key]!!, 0.0000001f)
     }
 
     // ─── Class existence ──────────────────────────────────────────────────────

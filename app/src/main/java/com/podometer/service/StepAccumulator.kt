@@ -24,8 +24,14 @@ import java.time.ZoneId
  * @param initialHourTimestamp Epoch-millis for the start of the first hour
  *   bucket. Typically `System.currentTimeMillis()` rounded down to the hour when
  *   the service starts.
+ * @param strideLengthKm Stride length in kilometres used to compute
+ *   [com.podometer.data.db.DailySummary.totalDistance]. Defaults to 0.00075 km
+ *   (75 cm = 0.75 m).
  */
-class StepAccumulator(initialHourTimestamp: Long) {
+class StepAccumulator(
+    initialHourTimestamp: Long,
+    private val strideLengthKm: Float = DEFAULT_STRIDE_LENGTH_KM,
+) {
 
     /** Steps accumulated in the current (open) hour bucket. */
     var currentHourSteps: Int = 0
@@ -145,7 +151,7 @@ class StepAccumulator(initialHourTimestamp: Long) {
         val dailySummary = DailySummary(
             date = date,
             totalSteps = totalAfterFlush,
-            totalDistance = 0f,
+            totalDistance = totalAfterFlush * strideLengthKm,
             walkingMinutes = 0,
             cyclingMinutes = 0,
         )
@@ -157,6 +163,9 @@ class StepAccumulator(initialHourTimestamp: Long) {
     companion object {
         /** Default activity state used for new buckets. */
         const val DEFAULT_ACTIVITY = "WALKING"
+
+        /** Default stride length: 75 cm = 0.00075 km. */
+        const val DEFAULT_STRIDE_LENGTH_KM = 0.00075f
 
         /**
          * Truncates [epochMillis] to the start of its local hour.

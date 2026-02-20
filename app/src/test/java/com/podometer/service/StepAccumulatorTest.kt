@@ -511,6 +511,70 @@ class StepAccumulatorTest {
         assertEquals("CYCLING", result.aggregate.detectedActivity)
     }
 
+    // ─── Distance computation ─────────────────────────────────────────────────
+
+    @Test
+    fun `FlushResult dailySummary totalDistance uses default stride when not specified`() {
+        val hourStart = startOfHour(8)
+        val accumulator = StepAccumulator(hourStart)
+
+        accumulator.addSteps(delta = 1000, now = timeInHour(8, 30))
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+
+        // 1000 steps * 0.00075 km/step = 0.75 km
+        assertEquals(0.75f, result.dailySummary.totalDistance, 0.0001f)
+    }
+
+    @Test
+    fun `FlushResult dailySummary totalDistance uses custom stride length`() {
+        val hourStart = startOfHour(8)
+        val accumulator = StepAccumulator(hourStart, strideLengthKm = 0.001f)
+
+        accumulator.addSteps(delta = 1000, now = timeInHour(8, 30))
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+
+        // 1000 steps * 0.001 km/step = 1.0 km
+        assertEquals(1.0f, result.dailySummary.totalDistance, 0.0001f)
+    }
+
+    @Test
+    fun `explicit flush dailySummary totalDistance computed with default stride`() {
+        val hourStart = startOfHour(8)
+        val accumulator = StepAccumulator(hourStart)
+
+        accumulator.addSteps(delta = 500, now = timeInHour(8, 20))
+
+        val result = accumulator.flush(now = timeInHour(8, 50))!!
+
+        // 500 steps * 0.00075 km/step = 0.375 km
+        assertEquals(0.375f, result.dailySummary.totalDistance, 0.0001f)
+    }
+
+    @Test
+    fun `explicit flush dailySummary totalDistance computed with custom stride`() {
+        val hourStart = startOfHour(8)
+        val accumulator = StepAccumulator(hourStart, strideLengthKm = 0.0009f)
+
+        accumulator.addSteps(delta = 500, now = timeInHour(8, 20))
+
+        val result = accumulator.flush(now = timeInHour(8, 50))!!
+
+        // 500 steps * 0.0009 km/step = 0.45 km
+        assertEquals(0.45f, result.dailySummary.totalDistance, 0.0001f)
+    }
+
+    @Test
+    fun `totalDistance is zero when steps are zero`() {
+        val hourStart = startOfHour(8)
+        val accumulator = StepAccumulator(hourStart)
+
+        accumulator.addSteps(delta = 0, now = timeInHour(8, 20))
+        val result = accumulator.flush(now = timeInHour(8, 50))
+
+        // No steps means no flush
+        assertNull(result)
+    }
+
     // ─── Multi-hour scenario with activity and midnight ───────────────────────
 
     @Test
