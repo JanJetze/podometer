@@ -39,10 +39,14 @@ import com.podometer.R
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.TransitionEvent
 import com.podometer.ui.theme.PodometerTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+
+/** Snackbar auto-dismiss timeout in milliseconds (5 seconds per spec). */
+private const val SNACKBAR_TIMEOUT_MS = 5_000L
 
 // ─── Pure helper functions (unit-testable) ────────────────────────────────────
 
@@ -156,14 +160,20 @@ fun TransitionLog(
                     selectedTransition = null
                     onOverride(event.id, newActivity)
                     scope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = overriddenLabel,
-                            actionLabel = undoLabel,
-                            duration = SnackbarDuration.Short,
-                        )
-                        if (result == SnackbarResult.ActionPerformed) {
-                            onUndo()
+                        // Use Indefinite + manual dismiss to get exactly 5 seconds
+                        // (SnackbarDuration.Short is 4s, Long is 10s).
+                        val snackbarJob = launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = overriddenLabel,
+                                actionLabel = undoLabel,
+                                duration = SnackbarDuration.Indefinite,
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                onUndo()
+                            }
                         }
+                        delay(SNACKBAR_TIMEOUT_MS)
+                        snackbarHostState.currentSnackbarData?.dismiss()
                     }
                 },
             )
