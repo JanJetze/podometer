@@ -25,6 +25,9 @@ navigationCompose = "2.8.6"
 # Lifecycle
 lifecycle = "2.8.7"
 
+# DataStore
+datastore = "1.1.2"
+
 # Coroutines
 coroutines = "1.10.1"
 
@@ -71,6 +74,9 @@ hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", v
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# DataStore
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
