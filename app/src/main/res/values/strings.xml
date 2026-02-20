@@ -38,6 +38,19 @@
     <string name="cd_timeline_summary">Activity timeline: %1$s</string>
     <string name="cd_timeline_segment">%1$s from %2$d%% to %3$d%% of the day</string>
 
+    <!-- TransitionLog descriptions -->
+    <string name="transition_started_walking">Started walking</string>
+    <string name="transition_started_cycling">Started cycling</string>
+    <string name="transition_became_still">Became still</string>
+    <string name="transition_override_badge">Override</string>
+    <string name="transition_mark_as_walking">Mark as walking</string>
+    <string name="transition_mark_as_cycling">Mark as cycling</string>
+    <string name="transition_mark_as_still">Mark as still</string>
+    <string name="transition_overridden">Activity overridden</string>
+    <string name="transition_undo">Undo</string>
+    <string name="cd_transition_item">Transition at %1$s: %2$s</string>
+    <string name="cd_transition_override_options">Override options for transition at %1$s</string>
+
     <!-- Foreground service notification -->
     <string name="notification_tracking_title">Podometer is tracking your steps</string>
 </resources>

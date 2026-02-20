@@ -9,6 +9,8 @@ import com.podometer.domain.usecase.GetTodayTransitionsUseCase
 import com.podometer.domain.usecase.GetTodayTransitionsUseCaseImpl
 import com.podometer.domain.usecase.GetWeeklyStepsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCaseImpl
+import com.podometer.domain.usecase.OverrideActivityUseCase
+import com.podometer.domain.usecase.OverrideActivityUseCaseImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -43,4 +45,9 @@ abstract class UseCaseModule {
     @Binds
     @Singleton
     abstract fun bindGetTodayCyclingSessionsUseCase(impl: GetTodayCyclingSessionsUseCaseImpl): GetTodayCyclingSessionsUseCase
+
+    /** Binds [OverrideActivityUseCaseImpl] to the [OverrideActivityUseCase] interface. */
+    @Binds
+    @Singleton
+    abstract fun bindOverrideActivityUseCase(impl: OverrideActivityUseCaseImpl): OverrideActivityUseCase
 }

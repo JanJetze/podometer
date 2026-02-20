@@ -3,6 +3,7 @@ package com.podometer.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.CyclingSession
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
@@ -11,11 +12,13 @@ import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCase
 import com.podometer.domain.usecase.GetTodayStepsUseCase
 import com.podometer.domain.usecase.GetTodayTransitionsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCase
+import com.podometer.domain.usecase.OverrideActivityUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -63,6 +66,7 @@ class DashboardViewModel @Inject constructor(
     getWeeklySteps: GetWeeklyStepsUseCase,
     getTodayTransitions: GetTodayTransitionsUseCase,
     getTodayCyclingSessions: GetTodayCyclingSessionsUseCase,
+    private val overrideActivityUseCase: OverrideActivityUseCase,
 ) : ViewModel() {
 
     companion object {
@@ -93,4 +97,59 @@ class DashboardViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
         initialValue = DashboardUiState(),
     )
+
+    /**
+     * Stores the state of the transition before the most recent override so that
+     * [undoLastOverride] can revert it.
+     */
+    private var previousTransitionState: TransitionEvent? = null
+
+    /**
+     * Overrides an activity transition identified by [transitionId] with [newActivity].
+     *
+     * Finds the matching [TransitionEvent] in the current [uiState], maps it to the
+     * [ActivityTransition] DB entity, stores the previous state for undo, and calls
+     * [OverrideActivityUseCase].
+     *
+     * @param transitionId The id of the [TransitionEvent] to override.
+     * @param newActivity  The new [ActivityState] to assign as [ActivityTransition.toActivity].
+     */
+    fun overrideTransition(transitionId: Int, newActivity: ActivityState) {
+        val current = uiState.value.transitions.find { it.id == transitionId } ?: return
+        previousTransitionState = current
+        val dbEntity = ActivityTransition(
+            id = current.id,
+            timestamp = current.timestamp,
+            fromActivity = current.fromActivity.name,
+            toActivity = current.toActivity.name,
+            isManualOverride = current.isManualOverride,
+        )
+        viewModelScope.launch {
+            overrideActivityUseCase(dbEntity, newActivity)
+        }
+    }
+
+    /**
+     * Reverts the most recent override by restoring the previous [TransitionEvent] state.
+     *
+     * If no previous state is available (e.g. no override has been performed yet), this
+     * method is a no-op. After undoing, the stored previous state is cleared.
+     */
+    fun undoLastOverride() {
+        val previous = previousTransitionState ?: return
+        previousTransitionState = null
+        // Re-build the DB entity from the stored previous domain model so we can call the use case
+        // to restore the original toActivity. Note: isManualOverride will remain true after undo
+        // because OverrideActivityUseCase always sets it — this is an accepted trade-off.
+        val dbEntity = ActivityTransition(
+            id = previous.id,
+            timestamp = previous.timestamp,
+            fromActivity = previous.fromActivity.name,
+            toActivity = previous.toActivity.name,
+            isManualOverride = previous.isManualOverride,
+        )
+        viewModelScope.launch {
+            overrideActivityUseCase(dbEntity, previous.toActivity)
+        }
+    }
 }

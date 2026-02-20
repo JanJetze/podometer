@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
+import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.CyclingSession
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
@@ -10,6 +11,7 @@ import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCase
 import com.podometer.domain.usecase.GetTodayStepsUseCase
 import com.podometer.domain.usecase.GetTodayTransitionsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCase
+import com.podometer.domain.usecase.OverrideActivityUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -79,6 +81,14 @@ class DashboardViewModelTest {
         override fun invoke(): Flow<List<CyclingSession>> = flow
     }
 
+    private class FakeOverrideActivityUseCase : OverrideActivityUseCase {
+        val overridesCalled = mutableListOf<Pair<ActivityTransition, ActivityState>>()
+
+        override suspend fun invoke(transition: ActivityTransition, newActivity: ActivityState) {
+            overridesCalled.add(transition to newActivity)
+        }
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private fun buildViewModel(
@@ -86,11 +96,13 @@ class DashboardViewModelTest {
         weeklySteps: List<DaySummary> = emptyList(),
         transitions: List<TransitionEvent> = emptyList(),
         cyclingSessions: List<CyclingSession> = emptyList(),
+        overrideActivityUseCase: OverrideActivityUseCase = FakeOverrideActivityUseCase(),
     ): DashboardViewModel = DashboardViewModel(
         getTodaySteps = FakeGetTodayStepsUseCase(flowOf(stepData)),
         getWeeklySteps = FakeGetWeeklyStepsUseCase(flowOf(weeklySteps)),
         getTodayTransitions = FakeGetTodayTransitionsUseCase(flowOf(transitions)),
         getTodayCyclingSessions = FakeGetTodayCyclingSessionsUseCase(flowOf(cyclingSessions)),
+        overrideActivityUseCase = overrideActivityUseCase,
     )
 
     // ─── DashboardUiState default state ──────────────────────────────────────
@@ -277,6 +289,7 @@ class DashboardViewModelTest {
             getWeeklySteps = FakeGetWeeklyStepsUseCase(),
             getTodayTransitions = FakeGetTodayTransitionsUseCase(),
             getTodayCyclingSessions = FakeGetTodayCyclingSessionsUseCase(),
+            overrideActivityUseCase = FakeOverrideActivityUseCase(),
         )
 
         val firstState = viewModel.uiState.first { !it.isLoading }

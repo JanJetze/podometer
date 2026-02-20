@@ -391,7 +391,7 @@ class UseCaseTest {
         )
         val transitionDao = FakeActivityTransitionDao(flowOf(listOf(originalTransition)))
         val repo = StepRepository(FakeStepDao(), transitionDao)
-        val useCase = OverrideActivityUseCase(repo)
+        val useCase = OverrideActivityUseCaseImpl(repo)
 
         useCase(originalTransition, ActivityState.CYCLING)
 
@@ -414,7 +414,7 @@ class UseCaseTest {
         )
         val transitionDao = FakeActivityTransitionDao(flowOf(listOf(originalTransition)))
         val repo = StepRepository(FakeStepDao(), transitionDao)
-        val useCase = OverrideActivityUseCase(repo)
+        val useCase = OverrideActivityUseCaseImpl(repo)
 
         useCase(originalTransition, ActivityState.WALKING)
 
@@ -432,7 +432,7 @@ class UseCaseTest {
         )
         val transitionDao = FakeActivityTransitionDao(flowOf(listOf(originalTransition)))
         val repo = StepRepository(FakeStepDao(), transitionDao)
-        val useCase = OverrideActivityUseCase(repo)
+        val useCase = OverrideActivityUseCaseImpl(repo)
 
         useCase(originalTransition, ActivityState.WALKING)
 
