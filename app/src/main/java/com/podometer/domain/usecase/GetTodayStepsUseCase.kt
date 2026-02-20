@@ -8,6 +8,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 
+/** Functional interface for retrieving today's step data as a [Flow]. */
+fun interface GetTodayStepsUseCase {
+    operator fun invoke(): Flow<StepData>
+}
+
 /**
  * Returns a [Flow] of [StepData] representing today's step-count progress.
  *
@@ -15,10 +20,10 @@ import javax.inject.Inject
  * stride length from [PreferencesManager] to compute [StepData.progressPercent]
  * and [StepData.distanceKm]. The daily goal is hardcoded at 10,000 steps.
  */
-class GetTodayStepsUseCase @Inject constructor(
+class GetTodayStepsUseCaseImpl @Inject constructor(
     private val stepRepository: StepRepository,
     private val preferencesManager: PreferencesManager,
-) {
+) : GetTodayStepsUseCase {
 
     // ─── Constants ───────────────────────────────────────────────────────────
 
@@ -27,7 +32,7 @@ class GetTodayStepsUseCase @Inject constructor(
         const val DEFAULT_GOAL = 10_000
     }
 
-    operator fun invoke(): Flow<StepData> =
+    override operator fun invoke(): Flow<StepData> =
         stepRepository.getTodaySteps().combine(preferencesManager.strideLengthKm()) { steps, strideKm ->
             val progressPercent = (steps.toFloat() / DEFAULT_GOAL * 100f).coerceAtMost(100f)
             val distanceKm = steps * strideKm

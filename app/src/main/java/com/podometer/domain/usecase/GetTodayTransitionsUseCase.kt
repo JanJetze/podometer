@@ -8,6 +8,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
+/** Functional interface for retrieving today's activity transitions as a [Flow]. */
+fun interface GetTodayTransitionsUseCase {
+    operator fun invoke(): Flow<List<TransitionEvent>>
+}
+
 /**
  * Returns a [Flow] of [List<TransitionEvent>] for all activity transitions
  * detected today.
@@ -16,11 +21,11 @@ import javax.inject.Inject
  * [TransitionEvent] models, converting the string activity fields to
  * [ActivityState] enum values via [ActivityState.fromString].
  */
-class GetTodayTransitionsUseCase @Inject constructor(
+class GetTodayTransitionsUseCaseImpl @Inject constructor(
     private val stepRepository: StepRepository,
-) {
+) : GetTodayTransitionsUseCase {
 
-    operator fun invoke(): Flow<List<TransitionEvent>> =
+    override operator fun invoke(): Flow<List<TransitionEvent>> =
         stepRepository.getTodayTransitions().map { dbList ->
             dbList.map { db ->
                 TransitionEvent(

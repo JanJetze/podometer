@@ -14,23 +14,35 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
 
 /**
- * Placeholder Dashboard screen.
+ * Dashboard screen that displays today's step count and progress.
  *
- * The actual step-counter UI will be implemented in a separate task.
- * Navigation to Settings is exposed via [onNavigateToSettings].
+ * Accepts a [viewModel] (defaulting to a Hilt-provided instance) and collects
+ * its [DashboardViewModel.uiState] with [collectAsStateWithLifecycle]. The detailed
+ * dashboard UI (progress ring, cards, etc.) will be implemented in separate tasks;
+ * this screen currently shows the step count.
+ *
+ * @param onNavigateToSettings Callback invoked when the user taps the Settings icon.
+ * @param modifier             Optional [Modifier] applied to the root [Scaffold].
+ * @param viewModel            Hilt [DashboardViewModel]; override in previews/tests.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: DashboardViewModel = hiltViewModel(),
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -54,7 +66,11 @@ fun DashboardScreen(
                 .padding(innerPadding),
         ) {
             Text(
-                text = stringResource(R.string.screen_dashboard),
+                text = if (uiState.isLoading) {
+                    stringResource(R.string.screen_dashboard)
+                } else {
+                    uiState.todaySteps.toString()
+                },
                 style = MaterialTheme.typography.headlineMedium,
             )
         }

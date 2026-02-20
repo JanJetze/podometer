@@ -145,7 +145,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase emits StepData with default goal 10000`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 5000), preferencesManager())
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 5000), preferencesManager())
 
         val result = useCase().first()
 
@@ -155,7 +155,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase computes progressPercent correctly`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 5000), preferencesManager())
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 5000), preferencesManager())
 
         val result = useCase().first()
 
@@ -165,7 +165,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase caps progressPercent at 100`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 15_000), preferencesManager())
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 15_000), preferencesManager())
 
         val result = useCase().first()
 
@@ -174,7 +174,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase computes distanceKm with default stride`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 1000), preferencesManager())
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 1000), preferencesManager())
 
         val result = useCase().first()
 
@@ -186,7 +186,7 @@ class UseCaseTest {
     fun `GetTodayStepsUseCase computes distanceKm with custom stride from preferences`() = runTest {
         val pm = preferencesManager()
         pm.setStrideLengthKm(0.001f)
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 1000), pm)
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 1000), pm)
 
         val result = useCase().first()
 
@@ -196,7 +196,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase emits zero StepData when steps are zero`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 0), preferencesManager())
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 0), preferencesManager())
 
         val result = useCase().first()
 
@@ -207,7 +207,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase emits exactly 100 percent at goal steps`() = runTest {
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = 10_000), preferencesManager())
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 10_000), preferencesManager())
 
         val result = useCase().first()
 
@@ -217,7 +217,7 @@ class UseCaseTest {
     @Test
     fun `GetTodayStepsUseCase maps null step count to 0 steps`() = runTest {
         // Null from DAO is mapped to 0 inside StepRepository.getTodaySteps()
-        val useCase = GetTodayStepsUseCase(stepRepo(todaySteps = null), preferencesManager())
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = null), preferencesManager())
 
         val result = useCase().first()
 
@@ -237,7 +237,7 @@ class UseCaseTest {
                 cyclingMinutes = 20,
             ),
         )
-        val useCase = GetWeeklyStepsUseCase(stepRepo(weekly = dbSummaries))
+        val useCase = GetWeeklyStepsUseCaseImpl(stepRepo(weekly = dbSummaries))
 
         val result = useCase().first()
 
@@ -252,7 +252,7 @@ class UseCaseTest {
 
     @Test
     fun `GetWeeklyStepsUseCase returns empty list when repository is empty`() = runTest {
-        val useCase = GetWeeklyStepsUseCase(stepRepo(weekly = emptyList()))
+        val useCase = GetWeeklyStepsUseCaseImpl(stepRepo(weekly = emptyList()))
 
         val result = useCase().first()
 
@@ -266,7 +266,7 @@ class UseCaseTest {
             DailySummary("2026-02-11", 9_000, 6.75f, 80, 15),
             DailySummary("2026-02-12", 5_000, 3.75f, 45, 0),
         )
-        val useCase = GetWeeklyStepsUseCase(stepRepo(weekly = dbSummaries))
+        val useCase = GetWeeklyStepsUseCaseImpl(stepRepo(weekly = dbSummaries))
 
         val result = useCase().first()
 
@@ -290,7 +290,7 @@ class UseCaseTest {
             ),
         )
         val dao = FakeActivityTransitionDao(flowOf(dbTransitions))
-        val useCase = GetTodayTransitionsUseCase(StepRepository(FakeStepDao(), dao))
+        val useCase = GetTodayTransitionsUseCaseImpl(StepRepository(FakeStepDao(), dao))
 
         val result = useCase().first()
 
@@ -315,7 +315,7 @@ class UseCaseTest {
             ),
         )
         val dao = FakeActivityTransitionDao(flowOf(dbTransitions))
-        val useCase = GetTodayTransitionsUseCase(StepRepository(FakeStepDao(), dao))
+        val useCase = GetTodayTransitionsUseCaseImpl(StepRepository(FakeStepDao(), dao))
 
         val result = useCase().first()
 
@@ -326,7 +326,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayTransitionsUseCase returns empty list when no transitions`() = runTest {
-        val useCase = GetTodayTransitionsUseCase(stepRepo(transitions = emptyList()))
+        val useCase = GetTodayTransitionsUseCaseImpl(stepRepo(transitions = emptyList()))
 
         val result = useCase().first()
 
@@ -339,7 +339,7 @@ class UseCaseTest {
             ActivityTransition(id = 5, timestamp = 9_000L, fromActivity = "CYCLING", toActivity = "STILL", isManualOverride = true),
         )
         val dao = FakeActivityTransitionDao(flowOf(dbTransitions))
-        val useCase = GetTodayTransitionsUseCase(StepRepository(FakeStepDao(), dao))
+        val useCase = GetTodayTransitionsUseCaseImpl(StepRepository(FakeStepDao(), dao))
 
         val result = useCase().first()
 
@@ -358,7 +358,7 @@ class UseCaseTest {
         val sessions = listOf(
             CyclingSession(id = 1, startTime = 1_000L, endTime = 2_000L, durationMinutes = 16),
         )
-        val useCase = GetTodayCyclingSessionsUseCase(cyclingRepo(sessions))
+        val useCase = GetTodayCyclingSessionsUseCaseImpl(cyclingRepo(sessions))
 
         val result = useCase().first()
 
@@ -371,7 +371,7 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayCyclingSessionsUseCase returns empty list when no sessions`() = runTest {
-        val useCase = GetTodayCyclingSessionsUseCase(cyclingRepo(emptyList()))
+        val useCase = GetTodayCyclingSessionsUseCaseImpl(cyclingRepo(emptyList()))
 
         val result = useCase().first()
 
