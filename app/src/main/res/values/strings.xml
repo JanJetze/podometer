@@ -33,6 +33,10 @@
     <string name="placeholder_weekly">Week chart will appear here</string>
     <string name="placeholder_cycling">No cycling detected today</string>
 
+    <!-- ActivityTimeline accessibility -->
+    <string name="cd_timeline_no_data">Activity timeline: no activity data available.</string>
+    <string name="cd_timeline_summary">Activity timeline: %1$s</string>
+
     <!-- Foreground service notification -->
     <string name="notification_tracking_title">Podometer is tracking your steps</string>
 </resources>
