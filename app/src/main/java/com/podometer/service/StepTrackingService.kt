@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
+import com.podometer.data.sensor.AccelerometerSampler
 import com.podometer.data.sensor.StepSensorManager
 import com.podometer.domain.model.ActivityState
 import dagger.hilt.android.AndroidEntryPoint
@@ -49,6 +50,9 @@ class StepTrackingService : Service() {
     lateinit var stepSensorManager: StepSensorManager
 
     @Inject
+    lateinit var accelerometerSampler: AccelerometerSampler
+
+    @Inject
     lateinit var stepRepository: StepRepository
 
     @Inject
@@ -77,6 +81,7 @@ class StepTrackingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         stepSensorManager.startListening()
+        accelerometerSampler.startSampling()
         if (collectorJob == null || collectorJob?.isActive != true) {
             collectorJob = collectStepEvents()
         }
@@ -98,6 +103,7 @@ class StepTrackingService : Service() {
             }
         }
         stepSensorManager.stopListening()
+        accelerometerSampler.stopSampling()
         serviceScope.cancel()
         Log.d(TAG, "Service destroyed")
         super.onDestroy()
