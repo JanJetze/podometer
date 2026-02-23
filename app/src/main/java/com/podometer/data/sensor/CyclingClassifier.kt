@@ -20,15 +20,20 @@ import javax.inject.Singleton
  * A window is classified as a "still window" when:
  * - `magnitudeVariance <= stillVarianceThreshold` AND `stepFrequency ≈ 0`
  *
- * To reduce false positives the classifier requires [consecutiveWindowsRequired]
- * consecutive cycling windows before emitting a CYCLING transition.
+ * To reduce false positives the classifier requires:
+ * 1. At least [consecutiveWindowsRequired] consecutive cycling windows (minimum
+ *    stability check); AND
+ * 2. The elapsed time since the first consecutive cycling window is at least
+ *    [minCyclingDurationMs] (default 60 seconds).  This directly satisfies the
+ *    product spec: "step counter reports zero/very few steps for >60 seconds →
+ *    classify as cycling".
  *
  * ## State machine
  *
  * ```
- * STILL / WALKING  ──2+ cycling windows──►  CYCLING
- * CYCLING          ──non-cycling window──►  WALKING
- * WALKING / CYCLING ──still window──────►  STILL
+ * STILL / WALKING  ──2+ cycling windows & >=60 s──►  CYCLING
+ * CYCLING          ──non-cycling window──────────►  WALKING
+ * WALKING / CYCLING ──still window───────────────►  STILL
  * ```
  *
  * ## Thread safety
@@ -49,12 +54,17 @@ import javax.inject.Singleton
  *   still classifying a window as cycling. Cycling generates very few or no
  *   step events. Default: [DEFAULT_STEP_FREQ_THRESHOLD].
  * @param consecutiveWindowsRequired Number of back-to-back cycling windows
- *   required before a CYCLING transition is emitted. Prevents false positives
- *   from brief high-variance, low-step bursts. Default:
+ *   required before a CYCLING transition is emitted. This is the minimum
+ *   stability check; the primary gate is [minCyclingDurationMs]. Default:
  *   [DEFAULT_CONSECUTIVE_WINDOWS].
  * @param stillVarianceThreshold     Maximum variance below which the device is
  *   considered stationary (gravity-only noise). Default:
  *   [DEFAULT_STILL_VARIANCE_THRESHOLD].
+ * @param minCyclingDurationMs       Minimum elapsed time in milliseconds from
+ *   the first consecutive cycling window to when the CYCLING transition may be
+ *   emitted.  Satisfies the spec requirement: zero/very few steps for at least
+ *   60 seconds before classifying as cycling. Default:
+ *   [DEFAULT_MIN_CYCLING_DURATION_MS].
  */
 @Singleton
 class CyclingClassifier(
@@ -62,6 +72,7 @@ class CyclingClassifier(
     private val stepFrequencyThreshold: Double = DEFAULT_STEP_FREQ_THRESHOLD,
     private val consecutiveWindowsRequired: Int = DEFAULT_CONSECUTIVE_WINDOWS,
     private val stillVarianceThreshold: Double = DEFAULT_STILL_VARIANCE_THRESHOLD,
+    private val minCyclingDurationMs: Long = DEFAULT_MIN_CYCLING_DURATION_MS,
 ) {
 
     /**
@@ -77,11 +88,19 @@ class CyclingClassifier(
         stepFrequencyThreshold = DEFAULT_STEP_FREQ_THRESHOLD,
         consecutiveWindowsRequired = DEFAULT_CONSECUTIVE_WINDOWS,
         stillVarianceThreshold = DEFAULT_STILL_VARIANCE_THRESHOLD,
+        minCyclingDurationMs = DEFAULT_MIN_CYCLING_DURATION_MS,
     )
 
     // Internal state — protected by @Synchronized on each public method.
     private var currentState: ActivityState = ActivityState.STILL
     private var consecutiveCyclingWindows: Int = 0
+
+    /**
+     * Wall-clock timestamp (from [System.currentTimeMillis]) of the first
+     * cycling window in the current consecutive streak.  Reset to `0L` when
+     * the streak is broken or [reset] is called.
+     */
+    private var cyclingWindowStartTimeMs: Long = 0L
 
     // ─── Public API ───────────────────────────────────────────────────────────
 
@@ -97,22 +116,29 @@ class CyclingClassifier(
      * @param features       Feature vector computed from the accelerometer
      *   sliding window.
      * @param stepFrequency  Step cadence in Hz from [StepFrequencyTracker].
+     * @param currentTimeMs  Current wall-clock time in milliseconds, typically
+     *   `System.currentTimeMillis()`.  Used to enforce [minCyclingDurationMs].
      * @return [TransitionResult] describing the state change, or `null` if
      *   no transition occurred.
      */
     @Synchronized
-    fun evaluate(features: WindowFeatures, stepFrequency: Double): TransitionResult? {
+    fun evaluate(features: WindowFeatures, stepFrequency: Double, currentTimeMs: Long): TransitionResult? {
         val variance = features.magnitudeVariance
 
         // Determine what this window looks like
         val isStillWindow = variance <= stillVarianceThreshold && stepFrequency < stepFrequencyThreshold
         val isCyclingWindow = variance > varianceThreshold && stepFrequency < stepFrequencyThreshold
 
-        // Update consecutive cycling window count
+        // Update consecutive cycling window count and track when the streak started
         if (isCyclingWindow) {
+            if (consecutiveCyclingWindows == 0) {
+                // First window of a new streak — record when it started
+                cyclingWindowStartTimeMs = currentTimeMs
+            }
             consecutiveCyclingWindows++
         } else {
             consecutiveCyclingWindows = 0
+            cyclingWindowStartTimeMs = 0L
         }
 
         val previousState = currentState
@@ -127,8 +153,13 @@ class CyclingClassifier(
             }
         }
 
-        // Cycling transition: enough consecutive cycling windows and not already cycling
-        if (consecutiveCyclingWindows >= consecutiveWindowsRequired && currentState != ActivityState.CYCLING) {
+        // Cycling transition: enough consecutive cycling windows, duration gate
+        // satisfied, and not already cycling
+        val durationSatisfied = (currentTimeMs - cyclingWindowStartTimeMs) >= minCyclingDurationMs
+        if (consecutiveCyclingWindows >= consecutiveWindowsRequired
+            && durationSatisfied
+            && currentState != ActivityState.CYCLING
+        ) {
             currentState = ActivityState.CYCLING
             return TransitionResult(fromState = previousState, toState = ActivityState.CYCLING)
         }
@@ -164,6 +195,7 @@ class CyclingClassifier(
     fun reset() {
         currentState = ActivityState.STILL
         consecutiveCyclingWindows = 0
+        cyclingWindowStartTimeMs = 0L
     }
 
     // ─── Constants ────────────────────────────────────────────────────────────
@@ -191,8 +223,9 @@ class CyclingClassifier(
          * Default number of consecutive cycling windows required before the
          * CYCLING transition is emitted.
          *
-         * Two windows (~10 seconds at a 5-second evaluation period) prevents
-         * false positives from brief high-variance, low-step episodes.
+         * Two windows (~10 seconds at a 5-second evaluation period) provides
+         * minimum stability against brief high-variance, low-step episodes.
+         * The primary gate is [DEFAULT_MIN_CYCLING_DURATION_MS].
          */
         const val DEFAULT_CONSECUTIVE_WINDOWS = 2
 
@@ -203,5 +236,15 @@ class CyclingClassifier(
          * alone accounts for the signal.
          */
         const val DEFAULT_STILL_VARIANCE_THRESHOLD = 0.5
+
+        /**
+         * Default minimum elapsed duration of consecutive cycling windows
+         * before a CYCLING transition is emitted, in milliseconds.
+         *
+         * 60 000 ms = 60 seconds satisfies the product spec:
+         * "step counter reports zero/very few steps for >60 seconds →
+         * classify as cycling".
+         */
+        const val DEFAULT_MIN_CYCLING_DURATION_MS = 60_000L
     }
 }
