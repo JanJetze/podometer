@@ -300,4 +300,54 @@ class DashboardViewModelTest {
         val updatedState = viewModel.uiState.first { it.todaySteps == 3_000 }
         assertEquals(3_000, updatedState.todaySteps)
     }
+
+    // ─── Permission state ─────────────────────────────────────────────────────
+
+    @Test
+    fun `DashboardUiState default has permissionsDenied false`() {
+        val state = DashboardUiState()
+        assertFalse(state.permissionsDenied)
+    }
+
+    @Test
+    fun `refreshPermissions with true sets permissionsDenied to false`() = runTest {
+        val viewModel = buildViewModel()
+        viewModel.refreshPermissions(permissionsGranted = true)
+
+        val state = viewModel.uiState.first { !it.isLoading }
+        assertFalse(state.permissionsDenied)
+    }
+
+    @Test
+    fun `refreshPermissions with false sets permissionsDenied to true`() = runTest {
+        val viewModel = buildViewModel()
+        viewModel.refreshPermissions(permissionsGranted = false)
+
+        // After refresh with denied, permissionsDenied should be true
+        val state = viewModel.uiState.first { it.permissionsDenied }
+        assertTrue(state.permissionsDenied)
+    }
+
+    @Test
+    fun `refreshPermissions transitions from denied to granted`() = runTest {
+        val viewModel = buildViewModel()
+
+        // Initially denied
+        viewModel.refreshPermissions(permissionsGranted = false)
+        val deniedState = viewModel.uiState.first { it.permissionsDenied }
+        assertTrue(deniedState.permissionsDenied)
+
+        // Permissions become granted
+        viewModel.refreshPermissions(permissionsGranted = true)
+        val grantedState = viewModel.uiState.first { !it.permissionsDenied }
+        assertFalse(grantedState.permissionsDenied)
+    }
+
+    @Test
+    fun `permissionsDenied is false by default before refreshPermissions is called`() = runTest {
+        val viewModel = buildViewModel()
+
+        val state = viewModel.uiState.first { !it.isLoading }
+        assertFalse(state.permissionsDenied)
+    }
 }

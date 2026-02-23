@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.podometer.service.startTrackingServiceIfPermitted
 import com.podometer.ui.Screen
 import com.podometer.ui.dashboard.DashboardScreen
 import com.podometer.ui.onboarding.OnboardingScreen
@@ -21,6 +25,7 @@ import com.podometer.ui.onboarding.OnboardingViewModel
 import com.podometer.ui.settings.SettingsScreen
 import com.podometer.ui.settings.SettingsViewModel
 import com.podometer.ui.theme.PodometerTheme
+import com.podometer.util.areEssentialPermissionsGranted
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -66,8 +71,13 @@ class MainActivity : ComponentActivity() {
                 ) {
                     composable(Screen.Onboarding.route) {
                         OnboardingScreen(
-                            onPermissionsResult = {
+                            onPermissionsResult = { results ->
                                 onboardingViewModel.completeOnboarding()
+                                // Start the tracking service immediately if permissions are granted.
+                                // The Dashboard will re-check on resume and handle the denied case.
+                                if (areEssentialPermissionsGranted(results)) {
+                                    startTrackingServiceIfPermitted(this@MainActivity)
+                                }
                                 navController.navigate(Screen.Dashboard.route) {
                                     popUpTo(Screen.Onboarding.route) { inclusive = true }
                                 }
@@ -79,6 +89,16 @@ class MainActivity : ComponentActivity() {
                         DashboardScreen(
                             onNavigateToSettings = {
                                 navController.navigate(Screen.Settings.route)
+                            },
+                            onOpenSettings = {
+                                // Launch the system app details settings so the user can grant
+                                // the denied permissions and return to the Dashboard.
+                                val intent = Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                ).apply {
+                                    data = Uri.fromParts("package", packageName, null)
+                                }
+                                startActivity(intent)
                             },
                         )
                     }

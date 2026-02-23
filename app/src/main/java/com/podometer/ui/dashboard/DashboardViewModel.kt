@@ -15,10 +15,12 @@ import com.podometer.domain.usecase.GetTodayTransitionsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCase
 import com.podometer.domain.usecase.OverrideActivityUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -69,6 +71,11 @@ data class DashboardUiState(
  *
  * The [uiState] starts with [DashboardUiState.isLoading] = true and transitions to
  * `isLoading = false` as soon as all four flows emit their first values.
+ *
+ * Permission state is managed via [refreshPermissions]: the composable calls this function
+ * with the result of [com.podometer.util.checkEssentialPermissions] on every lifecycle resume.
+ * This keeps the ViewModel free of Android framework dependencies (no Context injected),
+ * making it straightforward to unit-test.
  */
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
@@ -84,13 +91,17 @@ class DashboardViewModel @Inject constructor(
         internal const val STOP_TIMEOUT_MS = 5_000L
     }
 
+    /** Tracks runtime permission state independently of the data flows. */
+    private val _permissionsDenied = MutableStateFlow(false)
+
     /** Combined UI state emitted to the Dashboard Compose screen. */
     val uiState: StateFlow<DashboardUiState> = combine(
         getTodaySteps(),
         getWeeklySteps(),
         getTodayTransitions(),
         getTodayCyclingSessions(),
-    ) { stepData, weekly, transitions, cycling ->
+        _permissionsDenied,
+    ) { stepData, weekly, transitions, cycling, permissionsDenied ->
         DashboardUiState(
             todaySteps = stepData.steps,
             dailyGoal = stepData.goal,
@@ -101,12 +112,27 @@ class DashboardViewModel @Inject constructor(
             weeklySteps = weekly,
             cyclingSessions = cycling,
             isLoading = false,
+            permissionsDenied = permissionsDenied,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
         initialValue = DashboardUiState(),
     )
+
+    /**
+     * Updates the permission state in [uiState].
+     *
+     * The composable calls this on every lifecycle resume with the result of
+     * [com.podometer.util.checkEssentialPermissions]. When [permissionsGranted] is false,
+     * [DashboardUiState.permissionsDenied] becomes true and the UI shows
+     * [PermissionRecoveryScreen].
+     *
+     * @param permissionsGranted True if ACTIVITY_RECOGNITION is currently granted.
+     */
+    fun refreshPermissions(permissionsGranted: Boolean) {
+        _permissionsDenied.update { !permissionsGranted }
+    }
 
     /**
      * Stores the state of the transition before the most recent override so that
