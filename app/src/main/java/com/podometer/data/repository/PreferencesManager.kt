@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -18,6 +20,8 @@ import javax.inject.Singleton
  * - The auto-start preference that controls whether
  *   [com.podometer.service.StepTrackingService] is started automatically on boot.
  * - The stride length preference used for distance estimation.
+ * - The daily step goal preference for the progress ring on the dashboard.
+ * - The notification style preference controlling the foreground notification detail level.
  */
 @Singleton
 class PreferencesManager @Inject constructor(
@@ -40,6 +44,16 @@ class PreferencesManager @Inject constructor(
 
         /** Maximum allowed stride length: 5 m = 0.005 km. */
         const val MAX_STRIDE_LENGTH_KM = 0.005f
+
+        val KEY_DAILY_STEP_GOAL = intPreferencesKey("daily_step_goal")
+
+        /** Default daily step goal. */
+        const val DEFAULT_DAILY_STEP_GOAL = 10_000
+
+        val KEY_NOTIFICATION_STYLE = stringPreferencesKey("notification_style")
+
+        /** Default notification style: minimal. */
+        const val DEFAULT_NOTIFICATION_STYLE = "minimal"
     }
 
     // ─── Read ────────────────────────────────────────────────────────────────
@@ -61,6 +75,24 @@ class PreferencesManager @Inject constructor(
     fun strideLengthKm(): Flow<Float> =
         dataStore.data.map { prefs ->
             prefs[KEY_STRIDE_LENGTH_KM] ?: DEFAULT_STRIDE_LENGTH_KM
+        }
+
+    /**
+     * Emits the user's daily step goal.
+     * Defaults to [DEFAULT_DAILY_STEP_GOAL] (10,000 steps) when no value has been stored yet.
+     */
+    fun dailyStepGoal(): Flow<Int> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_DAILY_STEP_GOAL] ?: DEFAULT_DAILY_STEP_GOAL
+        }
+
+    /**
+     * Emits the user's preferred notification style as a string ("minimal" or "detailed").
+     * Defaults to [DEFAULT_NOTIFICATION_STYLE] when no value has been stored yet.
+     */
+    fun notificationStyle(): Flow<String> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_NOTIFICATION_STYLE] ?: DEFAULT_NOTIFICATION_STYLE
         }
 
     // ─── Write ───────────────────────────────────────────────────────────────
@@ -87,6 +119,30 @@ class PreferencesManager @Inject constructor(
         val coerced = strideKm.coerceIn(MIN_STRIDE_LENGTH_KM, MAX_STRIDE_LENGTH_KM)
         dataStore.edit { prefs ->
             prefs[KEY_STRIDE_LENGTH_KM] = coerced
+        }
+    }
+
+    /**
+     * Persists the given [goal] as the user's daily step goal.
+     *
+     * @param goal Daily step goal. Must be a positive integer.
+     */
+    suspend fun setDailyStepGoal(goal: Int) {
+        dataStore.edit { prefs ->
+            prefs[KEY_DAILY_STEP_GOAL] = goal
+        }
+    }
+
+    /**
+     * Persists the given [style] as the user's notification style preference.
+     *
+     * Expected values: "minimal" or "detailed". Other values are stored as-is.
+     *
+     * @param style The notification style string ("minimal" or "detailed").
+     */
+    suspend fun setNotificationStyle(style: String) {
+        dataStore.edit { prefs ->
+            prefs[KEY_NOTIFICATION_STYLE] = style
         }
     }
 }

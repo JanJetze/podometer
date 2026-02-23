@@ -6,7 +6,9 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -237,5 +239,129 @@ class PreferencesManagerTest {
             "PreferencesManager must be in com.podometer.data.repository",
             clazz.name == "com.podometer.data.repository.PreferencesManager",
         )
+    }
+
+    // ─── dailyStepGoal: default value ────────────────────────────────────────
+
+    @Test
+    fun `dailyStepGoal emits 10000 by default when key is absent`() = runTest {
+        val fakeStore = FakeDataStore(initial = preferencesOf())
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.dailyStepGoal().first()
+
+        assertEquals(10_000, result)
+    }
+
+    // ─── dailyStepGoal: stored value ─────────────────────────────────────────
+
+    @Test
+    fun `dailyStepGoal emits stored custom value`() = runTest {
+        val key = intPreferencesKey("daily_step_goal")
+        val fakeStore = FakeDataStore(initial = preferencesOf(key to 8_000))
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.dailyStepGoal().first()
+
+        assertEquals(8_000, result)
+    }
+
+    // ─── setDailyStepGoal ────────────────────────────────────────────────────
+
+    @Test
+    fun `setDailyStepGoal writes value under correct key`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setDailyStepGoal(12_000)
+
+        val key = intPreferencesKey("daily_step_goal")
+        val written = fakeStore.lastWritten
+        assertNotNull("DataStore updateData must have been called", written)
+        assertEquals(12_000, written!![key])
+    }
+
+    @Test
+    fun `setDailyStepGoal round-trips through read`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setDailyStepGoal(5_000)
+
+        val result = manager.dailyStepGoal().first()
+        assertEquals(5_000, result)
+    }
+
+    @Test
+    fun `setDailyStepGoal uses key named daily_step_goal`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setDailyStepGoal(7_500)
+
+        val key = intPreferencesKey("daily_step_goal")
+        assertEquals(7_500, fakeStore.lastWritten!![key])
+    }
+
+    // ─── notificationStyle: default value ────────────────────────────────────
+
+    @Test
+    fun `notificationStyle emits minimal by default when key is absent`() = runTest {
+        val fakeStore = FakeDataStore(initial = preferencesOf())
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.notificationStyle().first()
+
+        assertEquals("minimal", result)
+    }
+
+    // ─── notificationStyle: stored value ─────────────────────────────────────
+
+    @Test
+    fun `notificationStyle emits stored detailed value`() = runTest {
+        val key = stringPreferencesKey("notification_style")
+        val fakeStore = FakeDataStore(initial = preferencesOf(key to "detailed"))
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.notificationStyle().first()
+
+        assertEquals("detailed", result)
+    }
+
+    // ─── setNotificationStyle ─────────────────────────────────────────────────
+
+    @Test
+    fun `setNotificationStyle writes value under correct key`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setNotificationStyle("detailed")
+
+        val key = stringPreferencesKey("notification_style")
+        val written = fakeStore.lastWritten
+        assertNotNull("DataStore updateData must have been called", written)
+        assertEquals("detailed", written!![key])
+    }
+
+    @Test
+    fun `setNotificationStyle round-trips through read`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setNotificationStyle("detailed")
+
+        val result = manager.notificationStyle().first()
+        assertEquals("detailed", result)
+    }
+
+    @Test
+    fun `setNotificationStyle uses key named notification_style`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setNotificationStyle("minimal")
+
+        val key = stringPreferencesKey("notification_style")
+        assertEquals("minimal", fakeStore.lastWritten!![key])
     }
 }

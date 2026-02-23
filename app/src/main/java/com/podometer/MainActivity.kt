@@ -53,13 +53,17 @@ class MainActivity : ComponentActivity() {
 
                     composable(Screen.Settings.route) {
                         val viewModel: SettingsViewModel = hiltViewModel()
-                        val exportState by viewModel.exportState.collectAsStateWithLifecycle()
+                        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
                         SettingsScreen(
-                            exportState = exportState,
+                            uiState = uiState,
                             onNavigateBack = {
                                 navController.popBackStack()
                             },
+                            onSetDailyStepGoal = viewModel::setDailyStepGoal,
+                            onSetStrideLengthCm = viewModel::setStrideLengthCm,
+                            onSetAutoStartEnabled = viewModel::setAutoStartEnabled,
+                            onSetNotificationStyle = viewModel::setNotificationStyle,
                             onExportData = viewModel::exportData,
                             onResetExportState = viewModel::resetExportState,
                         )

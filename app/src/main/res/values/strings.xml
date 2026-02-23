@@ -92,4 +92,38 @@
     <string name="settings_export_error">Export failed</string>
     <string name="settings_export_file_name">podometer_export.json</string>
     <string name="cd_settings_export_button">Export all app data to a JSON file</string>
+
+    <!-- Settings: Goals section -->
+    <string name="settings_section_goals">Goals</string>
+    <string name="settings_daily_step_goal_title">Daily step goal</string>
+    <string name="settings_daily_step_goal_description">Target number of steps per day</string>
+    <string name="settings_step_goal_dialog_title">Set daily step goal</string>
+    <string name="settings_step_goal_dialog_label">Steps (1–100,000)</string>
+    <string name="settings_step_goal_dialog_confirm">Set</string>
+    <string name="settings_step_goal_dialog_cancel">Cancel</string>
+
+    <!-- Settings: Calibration section -->
+    <string name="settings_section_calibration">Calibration</string>
+    <string name="settings_stride_length_title">Stride length</string>
+    <string name="settings_stride_length_description">Used to estimate walking distance</string>
+    <string name="settings_stride_length_value">%1$d cm</string>
+
+    <!-- Settings: Tracking section -->
+    <string name="settings_section_tracking">Tracking</string>
+    <string name="settings_auto_start_title">Auto-start on boot</string>
+    <string name="settings_auto_start_description">Start tracking automatically when the device restarts</string>
+    <string name="settings_notification_style_title">Notification style</string>
+    <string name="settings_notification_style_description">Level of detail shown in the persistent notification</string>
+    <string name="settings_notification_style_minimal">Minimal</string>
+    <string name="settings_notification_style_detailed">Detailed</string>
+
+    <!-- Settings: About section -->
+    <string name="settings_section_about">About</string>
+    <string name="settings_about_version_title">Version</string>
+    <string name="settings_about_version_value">1.0.0</string>
+    <string name="settings_about_license_title">License</string>
+    <string name="settings_about_license_value">GNU General Public License v3.0 or later</string>
+    <string name="settings_about_source_title">Source code</string>
+    <string name="settings_about_source_url">https://github.com/podometer/podometer</string>
+    <string name="cd_settings_about_source_link">Open source code repository</string>
 </resources>
