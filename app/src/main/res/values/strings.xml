@@ -65,6 +65,22 @@
     <string name="cd_weekly_chart_day_today">%1$s (today): %2$d steps</string>
     <string name="cd_weekly_chart_day_no_data">%1$s: no data</string>
 
+    <!-- EmptyStates: first launch empty state -->
+    <string name="empty_first_launch_message">Start walking! Your steps will appear here.</string>
+
+    <!-- EmptyStates: sensor notices -->
+    <string name="sensor_notice_accelerometer">Using accelerometer for step detection. Accuracy may vary.</string>
+    <string name="sensor_notice_none">No step sensor available on this device.</string>
+
+    <!-- EmptyStates: permissions recovery screen -->
+    <string name="permissions_required_title">Permissions Required</string>
+    <string name="permissions_required_message">Podometer needs the Activity Recognition permission to count your steps. Please grant permission in your device settings to continue.</string>
+    <string name="permissions_button_open_settings">Open App Settings</string>
+
+    <!-- EmptyStates: content descriptions -->
+    <string name="cd_sensor_notice">Sensor notice</string>
+    <string name="cd_permissions_recovery">Permissions required screen</string>
+
     <!-- Foreground service notification -->
     <string name="notification_tracking_title">Podometer is tracking your steps</string>
 </resources>

@@ -102,4 +102,64 @@ class EmptyStatesTest {
             clazz.name.startsWith("com.podometer.ui.dashboard"),
         )
     }
+
+    // ─── String resource key existence checks ────────────────────────────────
+
+    /**
+     * Verifies that the R.string class contains all string keys used by EmptyStates composables.
+     * These tests fail if the key is missing from strings.xml and therefore from the generated
+     * R.string class.
+     */
+    private fun assertStringKeyExists(keyName: String) {
+        val rString = Class.forName("com.podometer.R\$string")
+        val field = try {
+            rString.getField(keyName)
+        } catch (e: NoSuchFieldException) {
+            null
+        }
+        assertTrue(
+            "R.string.$keyName must exist — add it to strings.xml",
+            field != null,
+        )
+    }
+
+    @Test
+    fun `R_string_empty_first_launch_message key exists`() {
+        assertStringKeyExists("empty_first_launch_message")
+    }
+
+    @Test
+    fun `R_string_sensor_notice_accelerometer key exists`() {
+        assertStringKeyExists("sensor_notice_accelerometer")
+    }
+
+    @Test
+    fun `R_string_sensor_notice_none key exists`() {
+        assertStringKeyExists("sensor_notice_none")
+    }
+
+    @Test
+    fun `R_string_permissions_required_title key exists`() {
+        assertStringKeyExists("permissions_required_title")
+    }
+
+    @Test
+    fun `R_string_permissions_required_message key exists`() {
+        assertStringKeyExists("permissions_required_message")
+    }
+
+    @Test
+    fun `R_string_permissions_button_open_settings key exists`() {
+        assertStringKeyExists("permissions_button_open_settings")
+    }
+
+    @Test
+    fun `R_string_cd_sensor_notice key exists`() {
+        assertStringKeyExists("cd_sensor_notice")
+    }
+
+    @Test
+    fun `R_string_cd_permissions_recovery key exists`() {
+        assertStringKeyExists("cd_permissions_recovery")
+    }
 }

@@ -24,9 +24,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.podometer.R
 import com.podometer.data.sensor.SensorType
 import com.podometer.ui.theme.PodometerTheme
 
@@ -65,7 +67,7 @@ fun FirstLaunchEmptyState(modifier: Modifier = Modifier) {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Start walking! Your steps will appear here.",
+                text = stringResource(R.string.empty_first_launch_message),
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -103,7 +105,7 @@ fun SensorNotice(
         SensorType.ACCELEROMETER -> {
             SensorNoticeBanner(
                 icon = Icons.Filled.Info,
-                message = "Using accelerometer for step detection. Accuracy may vary.",
+                message = stringResource(R.string.sensor_notice_accelerometer),
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = modifier,
@@ -112,7 +114,7 @@ fun SensorNotice(
         SensorType.NONE -> {
             SensorNoticeBanner(
                 icon = Icons.Filled.Warning,
-                message = "No step sensor available on this device.",
+                message = stringResource(R.string.sensor_notice_none),
                 containerColor = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer,
                 modifier = modifier,
@@ -206,14 +208,13 @@ fun PermissionRecoveryScreen(
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "Permissions Required",
+            text = stringResource(R.string.permissions_required_title),
             style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "Podometer needs the Activity Recognition permission to count your steps. " +
-                "Please grant permission in your device settings to continue.",
+            text = stringResource(R.string.permissions_required_message),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -226,7 +227,7 @@ fun PermissionRecoveryScreen(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.size(8.dp))
-            Text(text = "Open App Settings")
+            Text(text = stringResource(R.string.permissions_button_open_settings))
         }
     }
 }
