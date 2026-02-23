@@ -29,20 +29,9 @@ import androidx.compose.ui.unit.dp
 import com.podometer.R
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.TransitionEvent
+import com.podometer.ui.theme.ActivityColors
+import com.podometer.ui.theme.LocalActivityColors
 import com.podometer.ui.theme.PodometerTheme
-
-// ─── Activity colour constants ────────────────────────────────────────────────
-// Same values as in ActivityBadge.kt — redefined here to keep components independent.
-// A future refactor can extract these to a shared theme location.
-
-/** Colour for walking segments in the timeline. */
-private val WalkingColor = Color(0xFF4CAF50)
-
-/** Colour for cycling segments in the timeline. */
-private val CyclingColor = Color(0xFF2196F3)
-
-/** Colour for still/no-data segments in the timeline. */
-private val StillColor = Color(0xFF9E9E9E)
 
 /** Semi-transparent dark colour for transition marker lines. */
 private val MarkerColor = Color(0x80000000)
@@ -208,13 +197,17 @@ fun timelineContentDescription(segments: List<TimelineSegment>): String {
     return "Activity timeline: ${parts.joinToString("; ")}."
 }
 
-// ─── Internal colour helpers ──────────────────────────────────────────────────
+// ─── Internal colour helper ───────────────────────────────────────────────────
 
-/** Returns the timeline bar colour for this [ActivityState]. */
-private fun ActivityState.timelineColor(): Color = when (this) {
-    ActivityState.WALKING -> WalkingColor
-    ActivityState.CYCLING -> CyclingColor
-    ActivityState.STILL -> StillColor
+/**
+ * Returns the timeline bar colour for this [ActivityState] from the provided [ActivityColors].
+ *
+ * @param colors The [ActivityColors] sourced from [LocalActivityColors].
+ */
+private fun ActivityState.timelineColor(colors: ActivityColors): Color = when (this) {
+    ActivityState.WALKING -> colors.walking
+    ActivityState.CYCLING -> colors.cycling
+    ActivityState.STILL -> colors.still
 }
 
 // ─── Composable ───────────────────────────────────────────────────────────────
@@ -226,6 +219,9 @@ private fun ActivityState.timelineColor(): Color = when (this) {
  * - Green for [ActivityState.WALKING]
  * - Blue for [ActivityState.CYCLING]
  * - Gray for [ActivityState.STILL]
+ *
+ * Activity colours are sourced from [LocalActivityColors] (provided by [PodometerTheme]) so
+ * they adapt correctly to light/dark theme without any hardcoded colour values.
  *
  * Thin vertical marker lines are drawn at every activity transition boundary.
  * Six time labels (6am, 9am, 12pm, 3pm, 6pm, 9pm) are displayed below the bar.
@@ -267,11 +263,14 @@ fun ActivityTimeline(
         stringResource(R.string.cd_timeline_summary, parts.joinToString("; "))
     }
 
+    // Resolve activity colours from theme before passing to Canvas-based sub-composable.
+    val activityColors = LocalActivityColors.current
+
     Column(
         modifier = modifier
             .semantics { contentDescription = accessibilityText },
     ) {
-        ActivityTimelineBar(segments = segments)
+        ActivityTimelineBar(segments = segments, activityColors = activityColors)
         ActivityTimelineLabels()
     }
 }
@@ -282,10 +281,11 @@ fun ActivityTimeline(
  * The entire bar is clipped to a rounded rectangle before drawing segments, so all segment
  * colours are naturally contained within rounded bounds.
  *
- * @param segments List of [TimelineSegment]s to draw.
+ * @param segments       List of [TimelineSegment]s to draw.
+ * @param activityColors The [ActivityColors] to use for segment colours (resolved before Canvas).
  */
 @Composable
-private fun ActivityTimelineBar(segments: List<TimelineSegment>) {
+private fun ActivityTimelineBar(segments: List<TimelineSegment>, activityColors: ActivityColors) {
     val density = LocalDensity.current
     val cornerRadiusDp = 4.dp
     val markerWidthDp = 2.dp
@@ -318,7 +318,7 @@ private fun ActivityTimelineBar(segments: List<TimelineSegment>) {
 
             if (segments.isEmpty()) {
                 // Draw a single gray bar if no segments
-                drawRect(color = StillColor, size = barSize)
+                drawRect(color = activityColors.still, size = barSize)
                 return@clipPath
             }
 
@@ -329,7 +329,7 @@ private fun ActivityTimelineBar(segments: List<TimelineSegment>) {
                 val segWidth = (segRight - segLeft).coerceAtLeast(0f)
                 if (segWidth > 0f) {
                     drawRect(
-                        color = seg.activity.timelineColor(),
+                        color = seg.activity.timelineColor(activityColors),
                         topLeft = Offset(segLeft, 0f),
                         size = Size(segWidth, barHeight),
                     )
@@ -398,7 +398,7 @@ private fun PreviewActivityTimelineAllWalking() {
         dayEndMillis = dayEnd,
         nowMillis = dayEnd,
     )
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         ActivityTimeline(
             segments = segments,
             modifier = Modifier.padding(16.dp),
@@ -450,7 +450,7 @@ private fun PreviewActivityTimelineMixed() {
         dayEndMillis = dayEnd,
         nowMillis = 18L * hour,
     )
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         ActivityTimeline(
             segments = segments,
             modifier = Modifier.padding(16.dp),
@@ -470,7 +470,7 @@ private fun PreviewActivityTimelineEmpty() {
         dayEndMillis = dayEnd,
         nowMillis = 12L * 60 * 60 * 1000L,
     )
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         ActivityTimeline(
             segments = segments,
             modifier = Modifier.padding(16.dp),

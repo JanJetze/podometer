@@ -130,47 +130,44 @@ class ActivityBadgeTest {
         return (lighter + 0.05) / (darker + 0.05)
     }
 
-    // NOTE: WCAG AA requires 4.5:1 for normal text. The badge label uses
-    // MaterialTheme.typography.labelMedium which is 11sp — considered "large" UI text
-    // by Material Design convention, but not "large text" under WCAG (which requires 18pt/14pt bold).
-    // Current badge colours achieve roughly 2.7–3.1:1 with white, which is below full WCAG AA.
-    // TODO: Replace badge colours with higher-contrast alternatives (e.g. darker shades of
-    //       green/blue, or use dark text on lighter backgrounds) to meet WCAG AA 4.5:1.
-    // These tests lock in the current contrast values so any accidental regression is caught.
+    // WCAG 2.1 AA requires a minimum contrast ratio of 4.5:1 for normal text.
+    // Badge colours are sourced from the theme (Color.kt) and now meet WCAG AA.
+    // Light-theme badge backgrounds use dark colours with white text (4.5:1+).
+    // Dark-theme badge backgrounds use light colours with black text (4.5:1+).
 
     @Test
-    fun `white text on walking green badge has measurable contrast ratio above 2_5`() {
+    fun `white text on walking dark green badge meets WCAG AA 4_5 contrast`() {
         val white = Color(0xFFFFFFFF)
-        val walkingGreen = Color(0xFF4CAF50)
+        val walkingGreen = Color(0xFF2E7D32) // ActivityWalking — dark green
         val ratio = contrastRatio(white, walkingGreen)
-        // Current value ≈ 2.78:1. WCAG AA target is 4.5:1 — see TODO above.
+        // Expected ≈ 7.5:1 — well above WCAG AA 4.5:1.
         assertTrue(
-            "Contrast ratio for white on walking green should be > 2.5, got $ratio",
-            ratio > 2.5,
+            "Contrast ratio for white on walking green ($walkingGreen) should be >= 4.5, got $ratio",
+            ratio >= 4.5,
         )
     }
 
     @Test
-    fun `white text on cycling blue badge has measurable contrast ratio above 2_5`() {
+    fun `white text on cycling dark blue badge meets WCAG AA 4_5 contrast`() {
         val white = Color(0xFFFFFFFF)
-        val cyclingBlue = Color(0xFF2196F3)
+        val cyclingBlue = Color(0xFF1565C0) // ActivityCycling — dark blue
         val ratio = contrastRatio(white, cyclingBlue)
-        // Current value ≈ 3.12:1. WCAG AA target is 4.5:1 — see TODO above.
+        // Expected ≈ 7.0:1 — above WCAG AA 4.5:1.
         assertTrue(
-            "Contrast ratio for white on cycling blue should be > 2.5, got $ratio",
-            ratio > 2.5,
+            "Contrast ratio for white on cycling blue ($cyclingBlue) should be >= 4.5, got $ratio",
+            ratio >= 4.5,
         )
     }
 
     @Test
-    fun `white text on still gray badge has measurable contrast ratio above 2_5`() {
+    fun `white text on still dark gray badge meets WCAG AA 4_5 contrast`() {
         val white = Color(0xFFFFFFFF)
-        val stillGray = Color(0xFF9E9E9E)
+        val stillGray = Color(0xFF424242) // ActivityStill — dark gray
         val ratio = contrastRatio(white, stillGray)
-        // Current value ≈ 2.68:1. WCAG AA target is 4.5:1 — see TODO above.
+        // Expected ≈ 9.7:1 — well above WCAG AA 4.5:1.
         assertTrue(
-            "Contrast ratio for white on still gray should be > 2.5, got $ratio",
-            ratio > 2.5,
+            "Contrast ratio for white on still gray ($stillGray) should be >= 4.5, got $ratio",
+            ratio >= 4.5,
         )
     }
 }

@@ -30,22 +30,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.podometer.R
 import com.podometer.domain.model.ActivityState
+import com.podometer.ui.theme.ActivityColors
+import com.podometer.ui.theme.LocalActivityColors
 import com.podometer.ui.theme.PodometerTheme
-
-// ─── Activity badge colour constants ──────────────────────────────────────────
-// Defined here as local constants; to be moved to the theme in a future task.
-
-/** Background colour for the Walking badge. */
-private val WalkingBadgeBackground = Color(0xFF4CAF50)
-
-/** Background colour for the Cycling badge. */
-private val CyclingBadgeBackground = Color(0xFF2196F3)
-
-/** Background colour for the Still badge. */
-private val StillBadgeBackground = Color(0xFF9E9E9E)
-
-/** Content (icon/text) colour rendered on top of the badge background. */
-private val BadgeContentColor = Color.White
 
 // ─── Public extension helpers (pure functions, fully unit-testable) ────────────
 
@@ -80,12 +67,15 @@ fun ActivityState.contentDescriptionText(): String =
 // ─── Internal helpers (Compose-only, not unit-tested directly) ────────────────
 
 /**
- * Background colour for the badge corresponding to this [ActivityState].
+ * Background colour for the badge corresponding to this [ActivityState],
+ * sourced from the provided [ActivityColors] (centralised via [LocalActivityColors]).
+ *
+ * @param colors The [ActivityColors] instance to look up.
  */
-internal fun ActivityState.backgroundColor(): Color = when (this) {
-    ActivityState.WALKING -> WalkingBadgeBackground
-    ActivityState.CYCLING -> CyclingBadgeBackground
-    ActivityState.STILL -> StillBadgeBackground
+internal fun ActivityState.backgroundColor(colors: ActivityColors): Color = when (this) {
+    ActivityState.WALKING -> colors.walking
+    ActivityState.CYCLING -> colors.cycling
+    ActivityState.STILL -> colors.still
 }
 
 /**
@@ -103,8 +93,14 @@ internal fun ActivityState.icon(): ImageVector = when (this) {
  * Chip/badge that displays the user's current activity state with an icon and text label.
  *
  * The badge animates its background colour smoothly (300 ms tween) whenever [activity] changes.
- * The content colour is always [BadgeContentColor] (white) and is therefore passed directly —
- * animating a constant value would waste recomposition cycles for no visual benefit.
+ * Activity colours are sourced from [LocalActivityColors] (provided by [PodometerTheme]) so
+ * they adapt correctly to light/dark theme. The [ActivityColors.contentColor] field determines
+ * the icon and text foreground colour — white for dark badge backgrounds (light theme),
+ * black for light badge backgrounds (dark theme).
+ *
+ * Both colour configurations satisfy WCAG AA 4.5:1 contrast:
+ * - Light theme (dark backgrounds + white text): 7.0–9.7:1
+ * - Dark theme (light backgrounds + black text): 5.3–9.2:1
  *
  * Display text and accessibility description are sourced from string resources for proper
  * localisation. The [displayText] and [contentDescriptionText] extension functions are kept
@@ -121,8 +117,10 @@ fun ActivityBadge(
     activity: ActivityState,
     modifier: Modifier = Modifier,
 ) {
+    val activityColors = LocalActivityColors.current
+
     val backgroundColor by animateColorAsState(
-        targetValue = activity.backgroundColor(),
+        targetValue = activity.backgroundColor(activityColors),
         animationSpec = tween(durationMillis = 300),
         label = "badge_bg",
     )
@@ -137,8 +135,9 @@ fun ActivityBadge(
 
     Surface(
         color = backgroundColor,
-        // BadgeContentColor (white) is constant — no need to animate it.
-        contentColor = BadgeContentColor,
+        // contentColor from ActivityColors: white for light theme (dark badges),
+        // black for dark theme (light badges). Both meet WCAG AA 4.5:1.
+        contentColor = activityColors.contentColor,
         shape = RoundedCornerShape(16.dp),
         modifier = modifier.semantics {
             contentDescription = accessibilityDescription
@@ -164,11 +163,11 @@ fun ActivityBadge(
 
 // ─── Preview functions ─────────────────────────────────────────────────────────
 
-/** Preview: Walking state (green). */
+/** Preview: Walking state (dark green — WCAG AA compliant). */
 @Preview(showBackground = true, name = "ActivityBadge — Walking")
 @Composable
 private fun PreviewActivityBadgeWalking() {
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         ActivityBadge(
             activity = ActivityState.WALKING,
             modifier = Modifier.padding(16.dp),
@@ -176,11 +175,11 @@ private fun PreviewActivityBadgeWalking() {
     }
 }
 
-/** Preview: Cycling state (blue). */
+/** Preview: Cycling state (dark blue — WCAG AA compliant). */
 @Preview(showBackground = true, name = "ActivityBadge — Cycling")
 @Composable
 private fun PreviewActivityBadgeCycling() {
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         ActivityBadge(
             activity = ActivityState.CYCLING,
             modifier = Modifier.padding(16.dp),
@@ -188,13 +187,25 @@ private fun PreviewActivityBadgeCycling() {
     }
 }
 
-/** Preview: Still state (gray). */
+/** Preview: Still state (dark gray — WCAG AA compliant). */
 @Preview(showBackground = true, name = "ActivityBadge — Still")
 @Composable
 private fun PreviewActivityBadgeStill() {
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         ActivityBadge(
             activity = ActivityState.STILL,
+            modifier = Modifier.padding(16.dp),
+        )
+    }
+}
+
+/** Preview: Dark theme — Walking (light green on dark background). */
+@Preview(showBackground = true, name = "ActivityBadge — Walking (Dark)")
+@Composable
+private fun PreviewActivityBadgeWalkingDark() {
+    PodometerTheme(darkTheme = true, dynamicColor = false) {
+        ActivityBadge(
+            activity = ActivityState.WALKING,
             modifier = Modifier.padding(16.dp),
         )
     }

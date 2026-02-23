@@ -28,13 +28,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.podometer.R
 import com.podometer.ui.theme.PodometerTheme
 import java.util.Locale
@@ -55,22 +52,6 @@ fun formatDistance(distanceKm: Float): String =
  * @return Value in [0f, 1f].
  */
 fun clampProgress(progress: Float): Float = progress.coerceIn(0f, 1f)
-
-/**
- * Hero text style for the step count — 36sp bold, satisfying the 32sp+ requirement.
- */
-private val heroTextStyle = TextStyle(
-    fontSize = 36.sp,
-    fontWeight = FontWeight.Bold,
-)
-
-/**
- * Text style for the percentage label inside the progress ring.
- */
-private val percentTextStyle = TextStyle(
-    fontSize = 14.sp,
-    fontWeight = FontWeight.Medium,
-)
 
 /**
  * Today card displaying the user's step count, circular progress ring, distance estimate,
@@ -141,7 +122,10 @@ fun TodayCard(
  * - A **progress** arc in [MaterialTheme.colorScheme.primary] swept from the top (-90°)
  *   clockwise by `progress * 360°`.
  *
- * [content] is displayed centred inside the ring (step count + percentage text).
+ * Content inside the ring:
+ * - Hero step count number using [MaterialTheme.typography.displaySmall] (36sp bold),
+ *   satisfying the 32sp+ hero text requirement.
+ * - Percentage label using [MaterialTheme.typography.bodyMedium].
  *
  * Progress animates smoothly via [animateFloatAsState] with a 600 ms duration when
  * the [progress] value changes.
@@ -214,14 +198,16 @@ private fun ProgressRing(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Hero step count — displaySmall (36sp bold) from PodometerTypography;
+            // satisfies the 32sp+ hero text requirement from the Material 3 scale.
             Text(
                 text = steps.toString(),
-                style = heroTextStyle,
+                style = MaterialTheme.typography.displaySmall,
                 textAlign = TextAlign.Center,
             )
             Text(
                 text = "${progressPercent.toInt()}%",
-                style = percentTextStyle,
+                style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
             )
         }
@@ -234,7 +220,7 @@ private fun ProgressRing(
 @Preview(showBackground = true, name = "TodayCard — 50% progress")
 @Composable
 private fun PreviewTodayCardHalfway() {
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         TodayCard(
             steps = 5_000,
             goal = 10_000,
@@ -249,7 +235,7 @@ private fun PreviewTodayCardHalfway() {
 @Preview(showBackground = true, name = "TodayCard — 100% goal")
 @Composable
 private fun PreviewTodayCardGoalAchieved() {
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         TodayCard(
             steps = 10_000,
             goal = 10_000,
@@ -264,7 +250,7 @@ private fun PreviewTodayCardGoalAchieved() {
 @Preview(showBackground = true, name = "TodayCard — zero steps")
 @Composable
 private fun PreviewTodayCardZero() {
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         TodayCard(
             steps = 0,
             goal = 10_000,
@@ -279,7 +265,7 @@ private fun PreviewTodayCardZero() {
 @Preview(showBackground = true, name = "TodayCard — over goal")
 @Composable
 private fun PreviewTodayCardOverGoal() {
-    PodometerTheme {
+    PodometerTheme(dynamicColor = false) {
         TodayCard(
             steps = 13_500,
             goal = 10_000,
