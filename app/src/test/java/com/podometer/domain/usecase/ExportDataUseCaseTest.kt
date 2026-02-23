@@ -82,6 +82,8 @@ class ExportDataUseCaseTest {
         override suspend fun deleteSession(session: CyclingSession) = Unit
 
         override suspend fun getAllSessions(): List<CyclingSession> = sessions
+
+        override suspend fun getOngoingSession(): CyclingSession? = null
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

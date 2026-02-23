@@ -44,4 +44,15 @@ interface CyclingSessionDao {
      */
     @Query("SELECT * FROM cycling_sessions ORDER BY startTime ASC")
     suspend fun getAllSessions(): List<CyclingSession>
+
+    /**
+     * Returns the most recent [CyclingSession] where [CyclingSession.endTime]
+     * is `null` (i.e. the session is still ongoing), or `null` if there is
+     * no such session.
+     *
+     * Used on service start to recover from an app restart that occurred
+     * during an active cycling session.
+     */
+    @Query("SELECT * FROM cycling_sessions WHERE endTime IS NULL ORDER BY startTime DESC LIMIT 1")
+    suspend fun getOngoingSession(): CyclingSession?
 }

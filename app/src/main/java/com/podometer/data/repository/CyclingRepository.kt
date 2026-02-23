@@ -50,6 +50,16 @@ class CyclingRepository @Inject constructor(
     suspend fun getAllSessions(): List<CyclingSession> =
         cyclingSessionDao.getAllSessions()
 
+    /**
+     * Returns the most recent ongoing [CyclingSession] (one with a null
+     * [CyclingSession.endTime]), or `null` if there is no such session.
+     *
+     * Used by [com.podometer.service.StepTrackingService] on startup to
+     * recover from an app restart that occurred during an active cycling session.
+     */
+    suspend fun getOngoingSession(): CyclingSession? =
+        cyclingSessionDao.getOngoingSession()
+
     // ─── Helper ──────────────────────────────────────────────────────────────
 
     private fun getTodayStartMillis(): Long =

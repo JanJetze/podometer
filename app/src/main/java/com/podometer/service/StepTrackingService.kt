@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.podometer.data.db.ActivityTransition
+import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
 import com.podometer.data.sensor.AccelerometerSampler
@@ -45,6 +46,14 @@ import javax.inject.Inject
  *
  * Step accumulation is delegated to [StepAccumulator], which is pure Kotlin and
  * therefore unit-testable without the Android framework.
+ *
+ * Cycling session persistence is delegated to [CyclingSessionManager] (pure Kotlin)
+ * with DB operations via [CyclingRepository]. When a cycling session is active,
+ * step accumulation is paused while step-frequency tracking continues (so the
+ * classifier can detect when cycling ends).
+ *
+ * On service start, any orphaned ongoing cycling session (from a previous service
+ * kill) is closed with the current time.
  */
 @AndroidEntryPoint
 class StepTrackingService : Service() {
@@ -65,6 +74,9 @@ class StepTrackingService : Service() {
     lateinit var stepRepository: StepRepository
 
     @Inject
+    lateinit var cyclingRepository: CyclingRepository
+
+    @Inject
     lateinit var notificationHelper: NotificationHelper
 
     @Inject
@@ -73,6 +85,8 @@ class StepTrackingService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private lateinit var accumulator: StepAccumulator
+
+    private val cyclingSessionManager = CyclingSessionManager()
 
     private var collectorJob: Job? = null
     private var notificationTickerJob: Job? = null
@@ -101,6 +115,7 @@ class StepTrackingService : Service() {
         if (classifierJob == null || classifierJob?.isActive != true) {
             classifierJob = launchClassifier()
         }
+        closeOrphanedSession()
         Log.d(TAG, "Service started, sensor listening")
         return START_STICKY
     }
@@ -120,6 +135,7 @@ class StepTrackingService : Service() {
         accelerometerSampler.stopSampling()
         stepFrequencyTracker.reset()
         cyclingClassifier.reset()
+        cyclingSessionManager.reset()
         serviceScope.cancel()
         Log.d(TAG, "Service destroyed")
         super.onDestroy()
@@ -161,8 +177,16 @@ class StepTrackingService : Service() {
             // Record each step arrival for frequency tracking.  We record once
             // per delta step so that burst events from TYPE_STEP_COUNTER are
             // each individually timestamped, giving a realistic frequency estimate.
+            // Step frequency tracking continues even while cycling — the classifier
+            // needs it to detect when cycling ends and walking resumes.
             val nowMs = System.currentTimeMillis()
             repeat(delta) { stepFrequencyTracker.recordStep(nowMs) }
+
+            // Skip step accumulation while cycling is active.
+            if (cyclingSessionManager.isStepCountingPaused) {
+                Log.d(TAG, "Step counting paused (cycling) — ignoring $delta steps")
+                return@collect
+            }
 
             val flushResult = accumulator.addSteps(delta)
             if (flushResult != null) {
@@ -181,8 +205,19 @@ class StepTrackingService : Service() {
 
     /**
      * Coroutine that periodically evaluates accelerometer and step-frequency
-     * features, detects activity transitions, persists them, and updates the
-     * accumulator's current activity.
+     * features, detects activity transitions, persists them, updates the
+     * accumulator's current activity, and manages the cycling session lifecycle.
+     *
+     * When a transition **to** [ActivityState.CYCLING] is detected:
+     * 1. A new [com.podometer.data.db.CyclingSession] is created and inserted.
+     * 2. [CyclingSessionManager.setOngoingSessionId] is called with the
+     *    DB-generated id, which activates step-count pausing.
+     *
+     * When a transition **from** [ActivityState.CYCLING] is detected:
+     * 1. [CyclingSessionManager.endSession] computes the session duration and
+     *    returns the entity to update.
+     * 2. The session row is updated in the database.
+     * 3. Step-count pausing is lifted automatically.
      *
      * Runs every [CLASSIFIER_INTERVAL_MS] (~5 seconds) until the service
      * scope is cancelled.
@@ -199,6 +234,21 @@ class StepTrackingService : Service() {
             Log.d(TAG, "Activity transition: ${transition.fromState} → ${transition.toState}")
             accumulator.setActivity(transition.toState.name)
 
+            // Cycling session lifecycle
+            if (transition.toState == ActivityState.CYCLING) {
+                val session = cyclingSessionManager.startSession(now)
+                val insertedId = cyclingRepository.insertSession(session)
+                cyclingSessionManager.setOngoingSessionId(insertedId.toInt())
+                Log.d(TAG, "Cycling session started, db id=$insertedId")
+            }
+            if (transition.fromState == ActivityState.CYCLING) {
+                val endedSession = cyclingSessionManager.endSession(now)
+                if (endedSession != null) {
+                    cyclingRepository.updateSession(endedSession)
+                    Log.d(TAG, "Cycling session ended, duration=${endedSession.durationMinutes} min")
+                }
+            }
+
             stepRepository.insertTransition(
                 ActivityTransition(
                     timestamp = System.currentTimeMillis(),
@@ -207,6 +257,27 @@ class StepTrackingService : Service() {
                     isManualOverride = false,
                 ),
             )
+        }
+    }
+
+    // ─── App restart recovery ─────────────────────────────────────────────────
+
+    /**
+     * Closes any orphaned cycling session left open from a previous service
+     * kill (i.e. a [com.podometer.data.db.CyclingSession] row with a null
+     * [com.podometer.data.db.CyclingSession.endTime]).
+     *
+     * Run once in [onStartCommand] before the classifier loop begins.
+     */
+    private fun closeOrphanedSession() {
+        serviceScope.launch {
+            val ongoing = cyclingRepository.getOngoingSession() ?: return@launch
+            val nowMs = System.currentTimeMillis()
+            val durationMs = nowMs - ongoing.startTime
+            val durationMinutes = ((durationMs + 30_000L) / 60_000L).toInt()
+            val closed = ongoing.copy(endTime = nowMs, durationMinutes = durationMinutes)
+            cyclingRepository.updateSession(closed)
+            Log.d(TAG, "Closed orphaned cycling session id=${ongoing.id}, duration=${durationMinutes} min")
         }
     }
 

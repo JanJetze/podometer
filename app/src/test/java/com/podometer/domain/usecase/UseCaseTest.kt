@@ -93,6 +93,8 @@ class UseCaseTest {
         override suspend fun updateSession(session: CyclingSession) = Unit
         override suspend fun deleteSession(session: CyclingSession) = Unit
         override suspend fun getAllSessions(): List<CyclingSession> = emptyList()
+
+        override suspend fun getOngoingSession(): CyclingSession? = null
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
