@@ -9,9 +9,11 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
+import com.podometer.data.db.ActivityTransition
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
 import com.podometer.data.sensor.AccelerometerSampler
+import com.podometer.data.sensor.CyclingClassifier
 import com.podometer.data.sensor.StepFrequencyTracker
 import com.podometer.data.sensor.StepSensorManager
 import com.podometer.domain.model.ActivityState
@@ -57,6 +59,9 @@ class StepTrackingService : Service() {
     lateinit var stepFrequencyTracker: StepFrequencyTracker
 
     @Inject
+    lateinit var cyclingClassifier: CyclingClassifier
+
+    @Inject
     lateinit var stepRepository: StepRepository
 
     @Inject
@@ -71,6 +76,7 @@ class StepTrackingService : Service() {
 
     private var collectorJob: Job? = null
     private var notificationTickerJob: Job? = null
+    private var classifierJob: Job? = null
 
     // ─── Service lifecycle ────────────────────────────────────────────────────
 
@@ -92,6 +98,9 @@ class StepTrackingService : Service() {
         if (notificationTickerJob == null || notificationTickerJob?.isActive != true) {
             notificationTickerJob = launchNotificationTicker()
         }
+        if (classifierJob == null || classifierJob?.isActive != true) {
+            classifierJob = launchClassifier()
+        }
         Log.d(TAG, "Service started, sensor listening")
         return START_STICKY
     }
@@ -106,9 +115,11 @@ class StepTrackingService : Service() {
                 Log.d(TAG, "Final flush on destroy: ${result.aggregate.stepCountDelta} steps")
             }
         }
+        classifierJob?.cancel()
         stepSensorManager.stopListening()
         accelerometerSampler.stopSampling()
         stepFrequencyTracker.reset()
+        cyclingClassifier.reset()
         serviceScope.cancel()
         Log.d(TAG, "Service destroyed")
         super.onDestroy()
@@ -166,25 +177,58 @@ class StepTrackingService : Service() {
         }
     }
 
+    // ─── Cycling classifier ───────────────────────────────────────────────────
+
+    /**
+     * Coroutine that periodically evaluates accelerometer and step-frequency
+     * features, detects activity transitions, persists them, and updates the
+     * accumulator's current activity.
+     *
+     * Runs every [CLASSIFIER_INTERVAL_MS] (~5 seconds) until the service
+     * scope is cancelled.
+     */
+    private fun launchClassifier(): Job = serviceScope.launch {
+        while (isActive) {
+            delay(CLASSIFIER_INTERVAL_MS)
+            val features = accelerometerSampler.sampleBuffer.computeWindowFeatures()
+                ?: continue // not enough samples yet
+            val stepFreq = stepFrequencyTracker.computeStepFrequency()
+            val transition = cyclingClassifier.evaluate(features, stepFreq) ?: continue
+
+            Log.d(TAG, "Activity transition: ${transition.fromState} → ${transition.toState}")
+            accumulator.setActivity(transition.toState.name)
+
+            stepRepository.insertTransition(
+                ActivityTransition(
+                    timestamp = System.currentTimeMillis(),
+                    fromActivity = transition.fromState.name,
+                    toActivity = transition.toState.name,
+                    isManualOverride = false,
+                ),
+            )
+        }
+    }
+
     // ─── Notification ticker ──────────────────────────────────────────────────
 
     /**
      * Coroutine that updates the foreground notification every [NOTIFICATION_UPDATE_INTERVAL_MS]
-     * milliseconds with the current step count and computed distance. Runs until the service
-     * scope is cancelled.
+     * milliseconds with the current step count, computed distance, and detected
+     * activity state. Runs until the service scope is cancelled.
      */
     private fun launchNotificationTicker(): Job = serviceScope.launch {
         while (isActive) {
             delay(NOTIFICATION_UPDATE_INTERVAL_MS)
             val strideKm = preferencesManager.strideLengthKm().first()
             val distanceKm = accumulator.totalStepsToday * strideKm
+            val currentActivity = cyclingClassifier.getCurrentState()
             notificationHelper.updateNotification(
                 steps = accumulator.totalStepsToday,
                 distanceKm = distanceKm,
-                activity = ActivityState.STILL,
+                activity = currentActivity,
                 style = NotificationStyle.MINIMAL,
             )
-            Log.d(TAG, "Notification updated: ${accumulator.totalStepsToday} steps, $distanceKm km")
+            Log.d(TAG, "Notification updated: ${accumulator.totalStepsToday} steps, $distanceKm km, activity=$currentActivity")
         }
     }
 
@@ -194,5 +238,13 @@ class StepTrackingService : Service() {
         private const val TAG = "StepTrackingService"
         private const val NOTIFICATION_CHANNEL_NAME = "Step Tracking"
         private const val NOTIFICATION_UPDATE_INTERVAL_MS = 30_000L
+
+        /**
+         * Classifier evaluation interval in milliseconds (~5 seconds).
+         *
+         * At SENSOR_DELAY_NORMAL (~5 Hz) this gives ~25 new accelerometer
+         * samples per evaluation — sufficient for a stable variance estimate.
+         */
+        private const val CLASSIFIER_INTERVAL_MS = 5_000L
     }
 }
