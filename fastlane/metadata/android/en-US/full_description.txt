@@ -20,7 +20,7 @@ Privacy by Design
 - No INTERNET permission — the app cannot make network requests
 - No account required — no sign-up, no login
 - All data stored locally using Room and DataStore
-- Only requires ACTIVITY_RECOGNITION and FOREGROUND_SERVICE permissions
+- Minimal permissions: activity recognition, body sensors, foreground service, and notifications — nothing else
 
 Material 3 Interface
 Built with Jetpack Compose and Material 3, Podometer provides a clean, modern interface that respects your system theme and display settings.

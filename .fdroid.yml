@@ -6,8 +6,9 @@ Categories:
 
 License: GPL-3.0-or-later
 
-SourceCode: https://github.com/example/podometer
-IssueTracker: https://github.com/example/podometer/issues
+# TODO: Replace with actual repository URL before F-Droid submission
+SourceCode: https://github.com/OWNER/podometer
+IssueTracker: https://github.com/OWNER/podometer/issues
 
 Name: Podometer
 AutoName: Podometer
