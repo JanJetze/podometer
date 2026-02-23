@@ -43,6 +43,8 @@ class CyclingRepositoryTest {
         override suspend fun deleteSession(session: CyclingSession) {
             deletedSession = session
         }
+
+        override suspend fun getAllSessions(): List<CyclingSession> = emptyList()
     }
 
     // ─── getTodaySessions ────────────────────────────────────────────────────

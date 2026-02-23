@@ -6,13 +6,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.podometer.ui.dashboard.DashboardScreen
 import com.podometer.ui.Screen
+import com.podometer.ui.dashboard.DashboardScreen
 import com.podometer.ui.settings.SettingsScreen
+import com.podometer.ui.settings.SettingsViewModel
 import com.podometer.ui.theme.PodometerTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -48,10 +52,16 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(Screen.Settings.route) {
+                        val viewModel: SettingsViewModel = hiltViewModel()
+                        val exportState by viewModel.exportState.collectAsStateWithLifecycle()
+
                         SettingsScreen(
+                            exportState = exportState,
                             onNavigateBack = {
                                 navController.popBackStack()
                             },
+                            onExportData = viewModel::exportData,
+                            onResetExportState = viewModel::resetExportState,
                         )
                     }
                 }

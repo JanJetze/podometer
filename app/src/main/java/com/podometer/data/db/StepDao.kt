@@ -51,4 +51,18 @@ interface StepDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDailySummary(summary: DailySummary)
+
+    /**
+     * Returns all [DailySummary] rows ordered by date ascending.
+     * One-shot suspend query intended for data export — not a [Flow].
+     */
+    @Query("SELECT * FROM daily_summaries ORDER BY date ASC")
+    suspend fun getAllDailySummaries(): List<DailySummary>
+
+    /**
+     * Returns all [HourlyStepAggregate] rows ordered by timestamp ascending.
+     * One-shot suspend query intended for data export — not a [Flow].
+     */
+    @Query("SELECT * FROM hourly_step_aggregates ORDER BY timestamp ASC")
+    suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate>
 }

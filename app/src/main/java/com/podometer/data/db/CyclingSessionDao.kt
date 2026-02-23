@@ -37,4 +37,11 @@ interface CyclingSessionDao {
     /** Deletes a [CyclingSession] row (matched by primary key). */
     @Delete
     suspend fun deleteSession(session: CyclingSession)
+
+    /**
+     * Returns all [CyclingSession] rows ordered by start time ascending.
+     * One-shot suspend query intended for data export — not a [Flow].
+     */
+    @Query("SELECT * FROM cycling_sessions ORDER BY startTime ASC")
+    suspend fun getAllSessions(): List<CyclingSession>
 }

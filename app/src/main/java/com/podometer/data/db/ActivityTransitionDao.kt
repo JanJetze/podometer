@@ -30,4 +30,11 @@ interface ActivityTransitionDao {
     /** Updates an existing [ActivityTransition] row (matched by primary key). */
     @Update
     suspend fun updateTransition(transition: ActivityTransition)
+
+    /**
+     * Returns all [ActivityTransition] rows ordered by timestamp ascending.
+     * One-shot suspend query intended for data export — not a [Flow].
+     */
+    @Query("SELECT * FROM activity_transitions ORDER BY timestamp ASC")
+    suspend fun getAllTransitions(): List<ActivityTransition>
 }

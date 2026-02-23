@@ -64,6 +64,8 @@ class UseCaseTest {
 
         override suspend fun insertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
         override suspend fun upsertDailySummary(summary: DailySummary) = Unit
+        override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
+        override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = emptyList()
     }
 
     private class FakeActivityTransitionDao(
@@ -79,6 +81,8 @@ class UseCaseTest {
         override suspend fun updateTransition(transition: ActivityTransition) {
             updatedTransition = transition
         }
+
+        override suspend fun getAllTransitions(): List<ActivityTransition> = emptyList()
     }
 
     private class FakeCyclingSessionDao(
@@ -88,6 +92,7 @@ class UseCaseTest {
         override suspend fun insertSession(session: CyclingSession): Long = 0L
         override suspend fun updateSession(session: CyclingSession) = Unit
         override suspend fun deleteSession(session: CyclingSession) = Unit
+        override suspend fun getAllSessions(): List<CyclingSession> = emptyList()
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

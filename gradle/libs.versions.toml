@@ -31,6 +31,9 @@ datastore = "1.1.2"
 # Coroutines
 coroutines = "1.10.1"
 
+# Serialization
+kotlinxSerialization = "1.7.3"
+
 # Core
 coreKtx = "1.15.0"
 
@@ -83,6 +86,7 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -96,3 +100,4 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

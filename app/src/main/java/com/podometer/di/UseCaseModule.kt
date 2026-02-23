@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.di
 
+import android.os.Build
+import com.podometer.domain.usecase.ExportDataUseCase
 import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCase
 import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCaseImpl
 import com.podometer.domain.usecase.GetTodayStepsUseCase
@@ -11,8 +13,11 @@ import com.podometer.domain.usecase.GetWeeklyStepsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCaseImpl
 import com.podometer.domain.usecase.OverrideActivityUseCase
 import com.podometer.domain.usecase.OverrideActivityUseCaseImpl
+import com.podometer.data.repository.CyclingRepository
+import com.podometer.data.repository.StepRepository
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -50,4 +55,24 @@ abstract class UseCaseModule {
     @Binds
     @Singleton
     abstract fun bindOverrideActivityUseCase(impl: OverrideActivityUseCaseImpl): OverrideActivityUseCase
+
+    companion object {
+        /**
+         * Provides [ExportDataUseCase] with the device model string resolved at runtime.
+         *
+         * Using a [Provides] function in the companion object allows mixing [Binds]
+         * (in the abstract class) with [Provides] (in the companion object) within
+         * the same Hilt module.
+         */
+        @Provides
+        @Singleton
+        fun provideExportDataUseCase(
+            stepRepository: StepRepository,
+            cyclingRepository: CyclingRepository,
+        ): ExportDataUseCase = ExportDataUseCase(
+            stepRepository = stepRepository,
+            cyclingRepository = cyclingRepository,
+            deviceModel = Build.MODEL,
+        )
+    }
 }

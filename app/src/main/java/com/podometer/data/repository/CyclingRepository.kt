@@ -43,6 +43,13 @@ class CyclingRepository @Inject constructor(
         cyclingSessionDao.deleteSession(session)
     }
 
+    /**
+     * Returns all cycling sessions ordered by start time ascending.
+     * One-shot suspend function intended for data export.
+     */
+    suspend fun getAllSessions(): List<CyclingSession> =
+        cyclingSessionDao.getAllSessions()
+
     // ─── Helper ──────────────────────────────────────────────────────────────
 
     private fun getTodayStartMillis(): Long =

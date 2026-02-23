@@ -76,6 +76,27 @@ class StepRepository @Inject constructor(
         activityTransitionDao.updateTransition(transition)
     }
 
+    /**
+     * Returns all daily summaries ordered by date ascending.
+     * One-shot suspend function intended for data export.
+     */
+    suspend fun getAllDailySummaries(): List<DailySummary> =
+        stepDao.getAllDailySummaries()
+
+    /**
+     * Returns all hourly step aggregates ordered by timestamp ascending.
+     * One-shot suspend function intended for data export.
+     */
+    suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> =
+        stepDao.getAllHourlyAggregates()
+
+    /**
+     * Returns all activity transitions ordered by timestamp ascending.
+     * One-shot suspend function intended for data export.
+     */
+    suspend fun getAllTransitions(): List<ActivityTransition> =
+        activityTransitionDao.getAllTransitions()
+
     // ─── Helper ──────────────────────────────────────────────────────────────
 
     /** Returns the epoch-millisecond timestamp for midnight at the start of today. */

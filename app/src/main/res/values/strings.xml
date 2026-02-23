@@ -83,4 +83,13 @@
 
     <!-- Foreground service notification -->
     <string name="notification_tracking_title">Podometer is tracking your steps</string>
+
+    <!-- Settings screen -->
+    <string name="settings_section_data">Data</string>
+    <string name="settings_export_button">Export Data</string>
+    <string name="settings_export_progress">Exporting data…</string>
+    <string name="settings_export_success">Data exported successfully</string>
+    <string name="settings_export_error">Export failed</string>
+    <string name="settings_export_file_name">podometer_export.json</string>
+    <string name="cd_settings_export_button">Export all app data to a JSON file</string>
 </resources>
