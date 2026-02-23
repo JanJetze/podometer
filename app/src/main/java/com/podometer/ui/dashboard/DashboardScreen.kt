@@ -135,9 +135,14 @@ fun DashboardScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Section: Weekly Steps (placeholder — full implementation is a separate task)
+                // Section: Weekly Steps
                 SectionHeader(title = stringResource(R.string.section_weekly_steps))
-                PlaceholderSection(text = stringResource(R.string.placeholder_weekly))
+                WeeklyStepChart(
+                    daySummaries = uiState.weeklySteps,
+                    goal = uiState.dailyGoal,
+                    todayDate = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE),
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
