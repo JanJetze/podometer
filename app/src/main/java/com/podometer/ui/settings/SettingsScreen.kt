@@ -197,3 +197,17 @@ private fun SettingsScreenSuccessPreview() {
         )
     }
 }
+
+/** Preview: Settings screen when export failed with an error message (snackbar would appear). */
+@Preview(showBackground = true, name = "Settings - Export Error")
+@Composable
+private fun SettingsScreenErrorPreview() {
+    PodometerTheme {
+        SettingsScreen(
+            exportState = ExportState.Error("Cannot open output stream for URI"),
+            onNavigateBack = {},
+            onExportData = {},
+            onResetExportState = {},
+        )
+    }
+}

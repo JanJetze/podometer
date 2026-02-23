@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import javax.inject.Inject
 
 /**
@@ -70,8 +71,10 @@ class SettingsViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     val exportData = exportDataUseCase.buildExportData()
                     val jsonString = exportDataUseCase.serializeToJson(exportData)
-                    context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                        outputStream.write(jsonString.toByteArray(Charsets.UTF_8))
+                    val outputStream = context.contentResolver.openOutputStream(uri)
+                        ?: throw IOException("Cannot open output stream for URI")
+                    outputStream.use { stream ->
+                        stream.write(jsonString.toByteArray(Charsets.UTF_8))
                     }
                 }
                 _exportState.value = ExportState.Success
