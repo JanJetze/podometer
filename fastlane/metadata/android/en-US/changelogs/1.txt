@@ -1,0 +1,9 @@
+Initial release.
+
+- Step counting via hardware step sensor with accelerometer fallback
+- Automatic cycling detection using accelerometer pattern analysis
+- Activity timeline with walking and cycling segment visualization
+- Weekly activity charts
+- JSON data export
+- Foreground service with persistent step-count notification
+- No network access — all data stored locally on device

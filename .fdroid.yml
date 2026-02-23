@@ -1,0 +1,37 @@
+# F-Droid build metadata for Podometer.
+# See https://f-droid.org/docs/Build_Metadata_Reference/ for full reference.
+
+Categories:
+  - Sports & Health
+
+License: GPL-3.0-or-later
+
+SourceCode: https://github.com/example/podometer
+IssueTracker: https://github.com/example/podometer/issues
+
+Name: Podometer
+AutoName: Podometer
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 1
+    commit: v1.0.0
+    subdir: app
+    gradle:
+      - release
+    prebuild: docker build -f ../Containerfile -t podometer-builder ..
+    build: >
+      docker run --rm
+      -v "$PWD/..":/workspace
+      -w /workspace
+      -e RELEASE_KEYSTORE_PATH=/workspace/release.jks
+      -e RELEASE_KEYSTORE_PASSWORD=$$KEYSTORE_PASS$$
+      -e RELEASE_KEY_ALIAS=$$KEY_ALIAS$$
+      -e RELEASE_KEY_PASSWORD=$$KEY_PASS$$
+      podometer-builder
+      ./gradlew assembleRelease
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.0
+CurrentVersionCode: 1
