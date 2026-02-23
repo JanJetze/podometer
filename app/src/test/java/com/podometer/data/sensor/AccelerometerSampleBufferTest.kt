@@ -425,6 +425,7 @@ class AccelerometerSampleBufferTest {
             magnitudeVariance = 0.25,
             sampleCount = 10,
             windowDurationMs = 2000L,
+            zeroCrossingRate = 1.5,
         )
         val f2 = f1.copy(sampleCount = 20)
         assertEquals(9.81, f2.magnitudeMean, DELTA)
@@ -439,6 +440,63 @@ class AccelerometerSampleBufferTest {
         val features = buffer.computeWindowFeatures()!!
         val stdSquared = features.magnitudeStd * features.magnitudeStd
         assertEquals(stdSquared, features.magnitudeVariance, 1e-10)
+    }
+
+    // ─── Zero-crossing rate ───────────────────────────────────────────────────
+
+    @Test
+    fun `zeroCrossingRate is zero for constant signal`() {
+        // All samples the same → mean equals every value → zero sign changes
+        val minSamples = AccelerometerSampleBuffer.MIN_SAMPLES
+        for (i in 0 until minSamples) {
+            buffer.addSample(9.81, i * SENSOR_DELAY_NORMAL_NS)
+        }
+        val features = buffer.computeWindowFeatures()!!
+        assertEquals(0.0, features.zeroCrossingRate, DELTA)
+    }
+
+    @Test
+    fun `zeroCrossingRate is high for perfectly alternating signal`() {
+        // Alternating 8.0/12.0 → mean=10 → centred signal alternates +2/-2
+        // N=10 samples → 9 consecutive pairs → 9 sign changes
+        // Duration = (10-1) * 200ms = 1800ms = 1.8s
+        // ZCR = 9 / 1.8 = 5.0 crossings/second
+        val count = AccelerometerSampleBuffer.MIN_SAMPLES // 10 (even)
+        for (i in 0 until count) {
+            val mag = if (i % 2 == 0) 8.0 else 12.0
+            buffer.addSample(mag, i * SENSOR_DELAY_NORMAL_NS)
+        }
+        val features = buffer.computeWindowFeatures()!!
+        // 9 crossings over 1.8 seconds = 5.0 Hz
+        assertEquals(5.0, features.zeroCrossingRate, DELTA)
+    }
+
+    @Test
+    fun `zeroCrossingRate for known signal with predictable crossings`() {
+        // Signal: [10, 11, 9, 11, 9, 11, 9, 11, 9, 11] → mean = 10.1
+        // Centred: [-0.1, 0.9, -1.1, 0.9, -1.1, 0.9, -1.1, 0.9, -1.1, 0.9]
+        // Sign pattern: -, +, -, +, -, +, -, +, -, +  → 9 sign changes
+        // Duration = 9 * 200ms = 1800ms = 1.8s → ZCR = 9 / 1.8 = 5.0
+        val values = doubleArrayOf(10.0, 11.0, 9.0, 11.0, 9.0, 11.0, 9.0, 11.0, 9.0, 11.0)
+        for (i in values.indices) {
+            buffer.addSample(values[i], i * SENSOR_DELAY_NORMAL_NS)
+        }
+        val features = buffer.computeWindowFeatures()!!
+        // mean = (10+11+9+11+9+11+9+11+9+11)/10 = 101/10 = 10.1
+        // centred first sample is negative, rest alternate
+        assertEquals(5.0, features.zeroCrossingRate, DELTA)
+    }
+
+    @Test
+    fun `zeroCrossingRate returns zero when window duration is zero`() {
+        // All samples have same timestamp → durationMs = 0 → ZCR should be 0 not NaN/Inf
+        val minSamples = AccelerometerSampleBuffer.MIN_SAMPLES
+        for (i in 0 until minSamples) {
+            buffer.addSample(if (i % 2 == 0) 8.0 else 12.0, 1_000_000_000L)
+        }
+        val features = buffer.computeWindowFeatures()!!
+        // Duration is 0 ms → ZCR should be 0.0 (no division by zero)
+        assertEquals(0.0, features.zeroCrossingRate, DELTA)
     }
 
     // ─── Defensive: non-monotonic timestamps ──────────────────────────────────

@@ -14,6 +14,11 @@ import kotlin.math.sqrt
  * @param magnitudeVariance  Population variance of magnitudes (m/s²)². Equals [magnitudeStd]².
  * @param sampleCount        Number of samples in the window.
  * @param windowDurationMs   Duration from oldest to newest sample in the window (milliseconds).
+ * @param zeroCrossingRate   Number of times the mean-centred signal changes sign per second.
+ *                           Used as a proxy for dominant frequency: high ZCR indicates a
+ *                           rapidly oscillating signal (walking), near-zero ZCR indicates a
+ *                           slowly varying signal (cycling or still). Zero when
+ *                           [windowDurationMs] is zero or there is only one sample.
  */
 data class WindowFeatures(
     val magnitudeMean: Double,
@@ -21,6 +26,7 @@ data class WindowFeatures(
     val magnitudeVariance: Double,
     val sampleCount: Int,
     val windowDurationMs: Long,
+    val zeroCrossingRate: Double,
 )
 
 /**
@@ -111,17 +117,36 @@ class AccelerometerSampleBuffer(val capacity: Int = DEFAULT_CAPACITY) {
         }
         val mean = sum / n
 
-        // Pass 2: population variance.
+        // Pass 2: population variance and zero-crossing count.
+        //
+        // Zero-crossing rate (ZCR): count the number of times the mean-centred
+        // signal changes sign between consecutive samples, then normalise by the
+        // window duration in seconds.  A sign change is detected when the product
+        // of two adjacent centred values is strictly negative (one positive, one
+        // negative).  Samples exactly equal to the mean (centred value == 0.0)
+        // do not count as a crossing — this matches the standard ZCR definition
+        // and avoids inflating ZCR for flat or nearly flat signals.
         var varianceSum = 0.0
+        var zeroCrossings = 0
+        var prevCentred = magnitudes[startIdx] - mean
         for (i in 0 until n) {
             val idx = (startIdx + i) % capacity
-            val diff = magnitudes[idx] - mean
-            varianceSum += diff * diff
+            val centred = magnitudes[idx] - mean
+            varianceSum += centred * centred
+            if (i > 0 && prevCentred * centred < 0.0) {
+                zeroCrossings++
+            }
+            prevCentred = centred
         }
         val variance = varianceSum / n
         val std = sqrt(variance)
 
         val durationMs = maxOf((newestTs - oldestTs) / 1_000_000L, 0L)
+        val zeroCrossingRate = if (durationMs > 0L) {
+            zeroCrossings.toDouble() / (durationMs / 1_000.0)
+        } else {
+            0.0
+        }
 
         return WindowFeatures(
             magnitudeMean = mean,
@@ -129,6 +154,7 @@ class AccelerometerSampleBuffer(val capacity: Int = DEFAULT_CAPACITY) {
             magnitudeVariance = variance,
             sampleCount = n,
             windowDurationMs = durationMs,
+            zeroCrossingRate = zeroCrossingRate,
         )
     }
 

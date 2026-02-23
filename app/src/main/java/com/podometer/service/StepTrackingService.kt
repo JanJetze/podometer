@@ -12,6 +12,7 @@ import androidx.core.app.ServiceCompat
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
 import com.podometer.data.sensor.AccelerometerSampler
+import com.podometer.data.sensor.StepFrequencyTracker
 import com.podometer.data.sensor.StepSensorManager
 import com.podometer.domain.model.ActivityState
 import dagger.hilt.android.AndroidEntryPoint
@@ -51,6 +52,9 @@ class StepTrackingService : Service() {
 
     @Inject
     lateinit var accelerometerSampler: AccelerometerSampler
+
+    @Inject
+    lateinit var stepFrequencyTracker: StepFrequencyTracker
 
     @Inject
     lateinit var stepRepository: StepRepository
@@ -104,6 +108,7 @@ class StepTrackingService : Service() {
         }
         stepSensorManager.stopListening()
         accelerometerSampler.stopSampling()
+        stepFrequencyTracker.reset()
         serviceScope.cancel()
         Log.d(TAG, "Service destroyed")
         super.onDestroy()
@@ -142,6 +147,12 @@ class StepTrackingService : Service() {
 
     private fun collectStepEvents(): Job = serviceScope.launch {
         stepSensorManager.stepEvents.collect { delta ->
+            // Record each step arrival for frequency tracking.  We record once
+            // per delta step so that burst events from TYPE_STEP_COUNTER are
+            // each individually timestamped, giving a realistic frequency estimate.
+            val nowMs = System.currentTimeMillis()
+            repeat(delta) { stepFrequencyTracker.recordStep(nowMs) }
+
             val flushResult = accumulator.addSteps(delta)
             if (flushResult != null) {
                 stepRepository.insertHourlyAggregate(flushResult.aggregate)
