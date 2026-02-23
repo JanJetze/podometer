@@ -303,6 +303,24 @@ class PreferencesManagerTest {
         assertEquals(7_500, fakeStore.lastWritten!![key])
     }
 
+    // ─── setDailyStepGoal: validation ────────────────────────────────────────
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `setDailyStepGoal rejects zero`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setDailyStepGoal(0)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `setDailyStepGoal rejects negative value`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setDailyStepGoal(-1_000)
+    }
+
     // ─── notificationStyle: default value ────────────────────────────────────
 
     @Test

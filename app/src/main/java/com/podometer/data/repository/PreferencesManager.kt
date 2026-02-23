@@ -125,9 +125,11 @@ class PreferencesManager @Inject constructor(
     /**
      * Persists the given [goal] as the user's daily step goal.
      *
-     * @param goal Daily step goal. Must be a positive integer.
+     * @param goal Daily step goal. Must be a positive integer (> 0).
+     * @throws IllegalArgumentException if [goal] is zero or negative.
      */
     suspend fun setDailyStepGoal(goal: Int) {
+        require(goal > 0) { "Daily step goal must be positive, got $goal" }
         dataStore.edit { prefs ->
             prefs[KEY_DAILY_STEP_GOAL] = goal
         }

@@ -55,6 +55,9 @@ import androidx.compose.ui.unit.dp
 import com.podometer.R
 import com.podometer.ui.theme.PodometerTheme
 
+private const val NOTIFICATION_STYLE_MINIMAL = "minimal"
+private const val NOTIFICATION_STYLE_DETAILED = "detailed"
+
 /**
  * Settings screen allowing the user to configure preferences across five sections:
  * Goals, Calibration, Tracking, Data, and About.
@@ -195,10 +198,10 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_notification_style_title),
                 description = stringResource(R.string.settings_notification_style_description),
                 selected = uiState.notificationStyle,
-                options = listOf("minimal", "detailed"),
+                options = listOf(NOTIFICATION_STYLE_MINIMAL, NOTIFICATION_STYLE_DETAILED),
                 optionLabel = { style ->
                     when (style) {
-                        "detailed" -> stringResource(R.string.settings_notification_style_detailed)
+                        NOTIFICATION_STYLE_DETAILED -> stringResource(R.string.settings_notification_style_detailed)
                         else -> stringResource(R.string.settings_notification_style_minimal)
                     }
                 },
@@ -587,42 +590,6 @@ private fun StepGoalDialog(
     )
 }
 
-// ─── Legacy overload for backward compatibility ───────────────────────────────
-
-/**
- * Legacy overload of [SettingsScreen] accepting only [exportState] and callbacks.
- *
- * This overload exists to maintain backward compatibility with callers that have
- * not yet been updated to use [SettingsUiState]. It constructs a [SettingsUiState]
- * with defaults for all non-export fields and delegates to the primary overload.
- *
- * @param exportState The current state of the export operation.
- * @param onNavigateBack Called when the user presses the back navigation button.
- * @param onExportData Called with the SAF URI when the user has selected a save location.
- * @param onResetExportState Called to reset the export state after showing a result.
- * @param modifier Optional [Modifier] for the root [Scaffold].
- */
-@Composable
-fun SettingsScreen(
-    exportState: ExportState,
-    onNavigateBack: () -> Unit,
-    onExportData: (Uri) -> Unit,
-    onResetExportState: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    SettingsScreen(
-        uiState = SettingsUiState(exportState = exportState),
-        onNavigateBack = onNavigateBack,
-        onSetDailyStepGoal = {},
-        onSetStrideLengthCm = {},
-        onSetAutoStartEnabled = {},
-        onSetNotificationStyle = {},
-        onExportData = onExportData,
-        onResetExportState = onResetExportState,
-        modifier = modifier,
-    )
-}
-
 // ─── Previews ────────────────────────────────────────────────────────────────
 
 /** Preview: Settings screen in idle state — all sections visible. */
@@ -635,7 +602,7 @@ private fun SettingsScreenIdlePreview() {
                 dailyStepGoal = 10_000,
                 strideLengthCm = 75,
                 autoStartEnabled = true,
-                notificationStyle = "minimal",
+                notificationStyle = NOTIFICATION_STYLE_MINIMAL,
                 exportState = ExportState.Idle,
             ),
             onNavigateBack = {},
@@ -677,7 +644,7 @@ private fun SettingsScreenDetailedPreview() {
                 dailyStepGoal = 8_000,
                 strideLengthCm = 90,
                 autoStartEnabled = false,
-                notificationStyle = "detailed",
+                notificationStyle = NOTIFICATION_STYLE_DETAILED,
                 exportState = ExportState.Idle,
             ),
             onNavigateBack = {},
@@ -697,8 +664,12 @@ private fun SettingsScreenDetailedPreview() {
 private fun SettingsScreenSuccessPreview() {
     PodometerTheme {
         SettingsScreen(
-            exportState = ExportState.Success,
+            uiState = SettingsUiState(exportState = ExportState.Success),
             onNavigateBack = {},
+            onSetDailyStepGoal = {},
+            onSetStrideLengthCm = {},
+            onSetAutoStartEnabled = {},
+            onSetNotificationStyle = {},
             onExportData = {},
             onResetExportState = {},
         )
@@ -711,8 +682,12 @@ private fun SettingsScreenSuccessPreview() {
 private fun SettingsScreenErrorPreview() {
     PodometerTheme {
         SettingsScreen(
-            exportState = ExportState.Error("Cannot open output stream for URI"),
+            uiState = SettingsUiState(exportState = ExportState.Error("Cannot open output stream for URI")),
             onNavigateBack = {},
+            onSetDailyStepGoal = {},
+            onSetStrideLengthCm = {},
+            onSetAutoStartEnabled = {},
+            onSetNotificationStyle = {},
             onExportData = {},
             onResetExportState = {},
         )
