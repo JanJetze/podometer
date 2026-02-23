@@ -7,6 +7,19 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Lock all dependency configurations so every build resolves the same artifact versions.
+// Lockfiles are stored in app/gradle.lockfile and must be committed to version control.
+// To regenerate: ./gradlew app:dependencies --write-locks
+dependencyLocking {
+    lockAllConfigurations()
+}
+
+// Reproducible archives — required by F-Droid to produce a bit-for-bit identical APK.
+tasks.withType<AbstractArchiveTask>().configureEach {
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
+
 android {
     namespace = "com.podometer"
     compileSdk = 35
