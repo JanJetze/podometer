@@ -60,6 +60,16 @@ class CyclingRepository @Inject constructor(
     suspend fun getOngoingSession(): CyclingSession? =
         cyclingSessionDao.getOngoingSession()
 
+    /**
+     * Returns the [CyclingSession] whose time range covers [timestamp], or `null` if
+     * no such session exists.
+     *
+     * Used by the manual override use case to locate the session to delete when a user
+     * reclassifies a cycling transition to a non-cycling activity.
+     */
+    suspend fun getSessionCoveringTimestamp(timestamp: Long): CyclingSession? =
+        cyclingSessionDao.getSessionCoveringTimestamp(timestamp)
+
     // ─── Helper ──────────────────────────────────────────────────────────────
 
     private fun getTodayStartMillis(): Long =

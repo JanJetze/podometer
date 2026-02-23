@@ -47,6 +47,8 @@ class CyclingRepositoryTest {
         override suspend fun getAllSessions(): List<CyclingSession> = emptyList()
 
         override suspend fun getOngoingSession(): CyclingSession? = null
+
+        override suspend fun getSessionCoveringTimestamp(timestamp: Long): CyclingSession? = null
     }
 
     // ─── getTodaySessions ────────────────────────────────────────────────────

@@ -84,6 +84,8 @@ class ExportDataUseCaseTest {
         override suspend fun getAllSessions(): List<CyclingSession> = sessions
 
         override suspend fun getOngoingSession(): CyclingSession? = null
+
+        override suspend fun getSessionCoveringTimestamp(timestamp: Long): CyclingSession? = null
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

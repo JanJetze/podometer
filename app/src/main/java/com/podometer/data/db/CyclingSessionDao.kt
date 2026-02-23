@@ -55,4 +55,20 @@ interface CyclingSessionDao {
      */
     @Query("SELECT * FROM cycling_sessions WHERE endTime IS NULL ORDER BY startTime DESC LIMIT 1")
     suspend fun getOngoingSession(): CyclingSession?
+
+    /**
+     * Returns the [CyclingSession] whose time range covers [timestamp], or `null` if
+     * no such session exists.
+     *
+     * A session covers a timestamp when [CyclingSession.startTime] <= [timestamp] AND
+     * ([CyclingSession.endTime] IS NULL OR [CyclingSession.endTime] >= [timestamp]).
+     *
+     * Used by the manual override use case to find which session to delete when the user
+     * reclassifies a cycling transition back to a non-cycling activity.
+     */
+    @Query(
+        "SELECT * FROM cycling_sessions WHERE startTime <= :timestamp " +
+            "AND (endTime IS NULL OR endTime >= :timestamp) LIMIT 1",
+    )
+    suspend fun getSessionCoveringTimestamp(timestamp: Long): CyclingSession?
 }
