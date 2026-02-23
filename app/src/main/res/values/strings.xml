@@ -81,6 +81,18 @@
     <string name="cd_sensor_notice">Sensor notice</string>
     <string name="cd_permissions_recovery">Permissions required screen</string>
 
+    <!-- Onboarding screen -->
+    <string name="onboarding_tagline">Private step counting. No cloud. No tracking.</string>
+    <string name="onboarding_permission_sensors_title">Step counting sensor</string>
+    <string name="onboarding_permission_sensors_description">Reads the on-device pedometer to count your steps accurately without draining the battery.</string>
+    <string name="onboarding_permission_activity_title">Activity recognition</string>
+    <string name="onboarding_permission_activity_description">Detects whether you are walking, cycling, or still so your steps are logged correctly.</string>
+    <string name="onboarding_permission_notifications_title">Step count notification</string>
+    <string name="onboarding_permission_notifications_description">Shows a persistent notification with your live step count so you can glance at your progress without opening the app.</string>
+    <string name="onboarding_privacy_callout">No internet. No tracking. No Google Play Services.</string>
+    <string name="onboarding_get_started">Get Started</string>
+    <string name="cd_onboarding_app_logo">Podometer app logo</string>
+
     <!-- Foreground service notification -->
     <string name="notification_tracking_title">Podometer is tracking your steps</string>
 

@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -15,6 +16,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.podometer.ui.Screen
 import com.podometer.ui.dashboard.DashboardScreen
+import com.podometer.ui.onboarding.OnboardingScreen
+import com.podometer.ui.onboarding.OnboardingViewModel
 import com.podometer.ui.settings.SettingsScreen
 import com.podometer.ui.settings.SettingsViewModel
 import com.podometer.ui.theme.PodometerTheme
@@ -24,9 +27,16 @@ import dagger.hilt.android.AndroidEntryPoint
  * Single-Activity entry point for Podometer.
  *
  * Annotated with @AndroidEntryPoint to enable Hilt injection in this activity.
- * Hosts the Compose NavHost with Dashboard (start destination) and Settings routes.
- * The PodometerTheme wraps all content so every screen inherits the Material 3 colour
- * scheme and typography.
+ * Hosts the Compose NavHost with Onboarding (conditional start destination),
+ * Dashboard, and Settings routes.
+ *
+ * On first launch [OnboardingViewModel.startDestination] emits
+ * [Screen.Onboarding.route]; on subsequent launches it emits [Screen.Dashboard.route].
+ * The NavHost is only composed once the destination is known (non-null) to avoid a
+ * flash of the wrong screen.
+ *
+ * The PodometerTheme wraps all content so every screen inherits the Material 3
+ * colour scheme and typography.
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -36,13 +46,35 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PodometerTheme {
+                val onboardingViewModel: OnboardingViewModel = hiltViewModel()
+                val startDestination by onboardingViewModel.startDestination
+                    .collectAsStateWithLifecycle()
+
+                // Wait until the DataStore preference has been read before rendering
+                // the NavHost to avoid a brief flash of the wrong screen.
+                if (startDestination == null) {
+                    Box(modifier = Modifier.fillMaxSize())
+                    return@PodometerTheme
+                }
+
                 val navController = rememberNavController()
 
                 NavHost(
                     navController = navController,
-                    startDestination = Screen.Dashboard.route,
+                    startDestination = startDestination!!,
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    composable(Screen.Onboarding.route) {
+                        OnboardingScreen(
+                            onPermissionsResult = {
+                                onboardingViewModel.completeOnboarding()
+                                navController.navigate(Screen.Dashboard.route) {
+                                    popUpTo(Screen.Onboarding.route) { inclusive = true }
+                                }
+                            },
+                        )
+                    }
+
                     composable(Screen.Dashboard.route) {
                         DashboardScreen(
                             onNavigateToSettings = {

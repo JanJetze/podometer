@@ -22,6 +22,7 @@ import javax.inject.Singleton
  * - The stride length preference used for distance estimation.
  * - The daily step goal preference for the progress ring on the dashboard.
  * - The notification style preference controlling the foreground notification detail level.
+ * - The onboarding-complete flag that determines the app start destination.
  */
 @Singleton
 class PreferencesManager @Inject constructor(
@@ -54,6 +55,11 @@ class PreferencesManager @Inject constructor(
 
         /** Default notification style: minimal. */
         const val DEFAULT_NOTIFICATION_STYLE = "minimal"
+
+        val KEY_ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
+
+        /** Default onboarding complete: false (show onboarding on first launch). */
+        const val DEFAULT_ONBOARDING_COMPLETE = false
     }
 
     // ─── Read ────────────────────────────────────────────────────────────────
@@ -93,6 +99,15 @@ class PreferencesManager @Inject constructor(
     fun notificationStyle(): Flow<String> =
         dataStore.data.map { prefs ->
             prefs[KEY_NOTIFICATION_STYLE] ?: DEFAULT_NOTIFICATION_STYLE
+        }
+
+    /**
+     * Emits whether the user has completed the onboarding flow.
+     * Defaults to `false` on first launch so the onboarding screen is shown.
+     */
+    fun isOnboardingComplete(): Flow<Boolean> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_ONBOARDING_COMPLETE] ?: DEFAULT_ONBOARDING_COMPLETE
         }
 
     // ─── Write ───────────────────────────────────────────────────────────────
@@ -145,6 +160,20 @@ class PreferencesManager @Inject constructor(
     suspend fun setNotificationStyle(style: String) {
         dataStore.edit { prefs ->
             prefs[KEY_NOTIFICATION_STYLE] = style
+        }
+    }
+
+    /**
+     * Persists the given [complete] flag as the onboarding completion status.
+     *
+     * Set to `true` after the user completes or dismisses the onboarding flow to
+     * prevent the onboarding screen from appearing on subsequent app launches.
+     *
+     * @param complete `true` if onboarding has been completed; `false` to reset it.
+     */
+    suspend fun setOnboardingComplete(complete: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[KEY_ONBOARDING_COMPLETE] = complete
         }
     }
 }
