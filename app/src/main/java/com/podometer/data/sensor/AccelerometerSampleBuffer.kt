@@ -60,6 +60,9 @@ class AccelerometerSampleBuffer(val capacity: Int = DEFAULT_CAPACITY) {
      * When the buffer is full, the oldest sample is silently overwritten (FIFO
      * eviction).
      *
+     * Non-finite values (NaN, +Infinity, -Infinity) are silently discarded to
+     * prevent propagation of corrupt sensor readings into feature computation.
+     *
      * @param magnitude   Acceleration vector magnitude in m/s², typically
      *                    `sqrt(x² + y² + z²)` from the raw sensor event.
      * @param timestampNs Monotonic event timestamp in nanoseconds
@@ -67,6 +70,7 @@ class AccelerometerSampleBuffer(val capacity: Int = DEFAULT_CAPACITY) {
      */
     @Synchronized
     fun addSample(magnitude: Double, timestampNs: Long) {
+        if (!magnitude.isFinite()) return
         magnitudes[head] = magnitude
         timestamps[head] = timestampNs
         head = (head + 1) % capacity
@@ -117,7 +121,7 @@ class AccelerometerSampleBuffer(val capacity: Int = DEFAULT_CAPACITY) {
         val variance = varianceSum / n
         val std = sqrt(variance)
 
-        val durationMs = (newestTs - oldestTs) / 1_000_000L
+        val durationMs = maxOf((newestTs - oldestTs) / 1_000_000L, 0L)
 
         return WindowFeatures(
             magnitudeMean = mean,

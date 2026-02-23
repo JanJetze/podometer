@@ -90,12 +90,16 @@ class AccelerometerSampler @Inject constructor(
      * The magnitude computation (`sqrt(x² + y² + z²)`) is the only arithmetic
      * on the hot path; all other work (buffer indexing) is O(1) with no heap
      * allocations.
+     *
+     * Non-finite sensor values (NaN or Infinity, which can arise from hardware
+     * faults on some devices) are discarded before reaching the buffer.
      */
     override fun onSensorChanged(event: SensorEvent) {
         val x = event.values[0].toDouble()
         val y = event.values[1].toDouble()
         val z = event.values[2].toDouble()
         val magnitude = sqrt(x * x + y * y + z * z)
+        if (!magnitude.isFinite()) return
         sampleBuffer.addSample(magnitude, event.timestamp)
     }
 

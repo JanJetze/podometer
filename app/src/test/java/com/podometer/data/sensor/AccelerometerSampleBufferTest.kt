@@ -440,4 +440,89 @@ class AccelerometerSampleBufferTest {
         val stdSquared = features.magnitudeStd * features.magnitudeStd
         assertEquals(stdSquared, features.magnitudeVariance, 1e-10)
     }
+
+    // ─── Defensive: non-monotonic timestamps ──────────────────────────────────
+
+    @Test
+    fun `windowDurationMs is non-negative when timestamps are non-monotonic`() {
+        // Simulate a device that delivers timestamps out of order: newest first,
+        // then a stale (older) timestamp arrives.  newestTs - oldestTs would be
+        // negative without the maxOf clamp, producing a negative duration.
+        val minSamples = AccelerometerSampleBuffer.MIN_SAMPLES
+        val baseTs = 5_000_000_000L // 5 s in nanoseconds
+        // Add MIN_SAMPLES - 1 samples with a high timestamp …
+        for (i in 0 until minSamples - 1) {
+            buffer.addSample(9.81, baseTs + i * SENSOR_DELAY_NORMAL_NS)
+        }
+        // … then add one sample with a much older timestamp (non-monotonic)
+        buffer.addSample(9.81, 1_000L) // tiny timestamp, older than all others
+        val features = buffer.computeWindowFeatures()!!
+        assertTrue(
+            "windowDurationMs must be >= 0 even for non-monotonic timestamps, " +
+                "but was ${features.windowDurationMs}",
+            features.windowDurationMs >= 0L,
+        )
+    }
+
+    // ─── Defensive: NaN / Infinity sensor values ──────────────────────────────
+
+    @Test
+    fun `addSample with NaN magnitude is rejected and does not enter buffer`() {
+        // Pre-fill with valid samples so computeWindowFeatures can return a result.
+        val minSamples = AccelerometerSampleBuffer.MIN_SAMPLES
+        for (i in 0 until minSamples) {
+            buffer.addSample(9.81, i * SENSOR_DELAY_NORMAL_NS)
+        }
+        // Attempt to add a NaN sample.
+        buffer.addSample(Double.NaN, minSamples * SENSOR_DELAY_NORMAL_NS)
+
+        val features = buffer.computeWindowFeatures()!!
+        // Mean and variance must still be finite — NaN must not have entered.
+        assertTrue(
+            "magnitudeMean must be finite after NaN addSample, but was ${features.magnitudeMean}",
+            features.magnitudeMean.isFinite(),
+        )
+        assertTrue(
+            "magnitudeVariance must be finite after NaN addSample, but was ${features.magnitudeVariance}",
+            features.magnitudeVariance.isFinite(),
+        )
+    }
+
+    @Test
+    fun `addSample with positive Infinity magnitude is rejected and does not enter buffer`() {
+        val minSamples = AccelerometerSampleBuffer.MIN_SAMPLES
+        for (i in 0 until minSamples) {
+            buffer.addSample(9.81, i * SENSOR_DELAY_NORMAL_NS)
+        }
+        buffer.addSample(Double.POSITIVE_INFINITY, minSamples * SENSOR_DELAY_NORMAL_NS)
+
+        val features = buffer.computeWindowFeatures()!!
+        assertTrue(
+            "magnitudeMean must be finite after Infinity addSample, but was ${features.magnitudeMean}",
+            features.magnitudeMean.isFinite(),
+        )
+        assertTrue(
+            "magnitudeVariance must be finite after Infinity addSample, but was ${features.magnitudeVariance}",
+            features.magnitudeVariance.isFinite(),
+        )
+    }
+
+    @Test
+    fun `addSample with negative Infinity magnitude is rejected and does not enter buffer`() {
+        val minSamples = AccelerometerSampleBuffer.MIN_SAMPLES
+        for (i in 0 until minSamples) {
+            buffer.addSample(9.81, i * SENSOR_DELAY_NORMAL_NS)
+        }
+        buffer.addSample(Double.NEGATIVE_INFINITY, minSamples * SENSOR_DELAY_NORMAL_NS)
+
+        val features = buffer.computeWindowFeatures()!!
+        assertTrue(
+            "magnitudeMean must be finite after -Infinity addSample, but was ${features.magnitudeMean}",
+            features.magnitudeMean.isFinite(),
+        )
+        assertTrue(
+            "magnitudeVariance must be finite after -Infinity addSample, but was ${features.magnitudeVariance}",
+            features.magnitudeVariance.isFinite(),
+        )
+    }
 }
