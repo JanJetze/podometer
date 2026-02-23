@@ -8,6 +8,7 @@ import com.podometer.data.db.CyclingSession
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.model.TransitionEvent
+import com.podometer.data.sensor.SensorType
 import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCase
 import com.podometer.domain.usecase.GetTodayStepsUseCase
 import com.podometer.domain.usecase.GetTodayTransitionsUseCase
@@ -38,6 +39,13 @@ import javax.inject.Inject
  * @property cyclingSessions  Cycling sessions recorded today.
  * @property isLoading        True while the initial data is loading; false once all
  *                            flows have emitted at least one value.
+ * @property sensorType       The type of step-counting sensor currently in use.
+ *                            Defaults to [SensorType.STEP_COUNTER]. When
+ *                            [SensorType.ACCELEROMETER] or [SensorType.NONE], the UI
+ *                            shows a degraded-mode notice.
+ * @property permissionsDenied True when the user has denied all required permissions.
+ *                             When true, the UI shows a full-screen recovery prompt
+ *                             directing the user to system app settings.
  */
 data class DashboardUiState(
     val todaySteps: Int = 0,
@@ -49,6 +57,8 @@ data class DashboardUiState(
     val weeklySteps: List<DaySummary> = emptyList(),
     val cyclingSessions: List<CyclingSession> = emptyList(),
     val isLoading: Boolean = true,
+    val sensorType: SensorType = SensorType.STEP_COUNTER,
+    val permissionsDenied: Boolean = false,
 )
 
 /**

@@ -200,8 +200,9 @@ private fun ProgressRing(
         ) {
             // Hero step count — displaySmall (36sp bold) from PodometerTypography;
             // satisfies the 32sp+ hero text requirement from the Material 3 scale.
+            // formatStepCount() adds locale-aware thousands separators (e.g. "10,000").
             Text(
-                text = steps.toString(),
+                text = formatStepCount(steps),
                 style = MaterialTheme.typography.displaySmall,
                 textAlign = TextAlign.Center,
             )

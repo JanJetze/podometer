@@ -34,21 +34,29 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
+import com.podometer.data.sensor.SensorType
 
 /**
  * Dashboard screen displaying today's activity summary in a scrollable layout.
  *
  * Collects [DashboardViewModel.uiState] reactively. While [DashboardUiState.isLoading]
- * is true, a centred [CircularProgressIndicator] is shown. Once data is available, the
- * screen renders a scrollable [Column] with:
- *  - [ActivityBadge] showing the current activity state
- *  - [TodayCard] showing steps, progress ring, and distance
- *  - Placeholder sections for Activity Timeline, Transition Log, Weekly Steps,
- *    and Cycling Sessions (full implementations are separate tasks)
+ * is true, a centred [CircularProgressIndicator] is shown. Once data is available:
+ *
+ * - When [DashboardUiState.permissionsDenied] is true, a [PermissionRecoveryScreen] is
+ *   shown full-screen, hiding the normal dashboard content.
+ * - Otherwise, the screen renders a scrollable [Column] with:
+ *   - Optional [SensorNotice] when the sensor is [SensorType.ACCELEROMETER] or [SensorType.NONE].
+ *   - [ActivityBadge] showing the current activity state.
+ *   - [FirstLaunchEmptyState] when `todaySteps == 0 && transitions.isEmpty()`, OR
+ *     [TodayCard] showing steps, progress ring, and distance when there is activity.
+ *   - Activity Timeline, Transition Log, Weekly Steps, Cycling Sessions sections.
  *
  * Pull-to-refresh is not needed — all data flows are reactive.
  *
  * @param onNavigateToSettings Callback invoked when the user taps the settings gear icon.
+ * @param onOpenSettings       Callback invoked when the user taps "Open App Settings" on the
+ *                             [PermissionRecoveryScreen]. The caller should launch the system
+ *                             app details settings intent.
  * @param modifier             Optional [Modifier] applied to the root [Scaffold].
  * @param viewModel            Hilt [DashboardViewModel]; override in previews/tests.
  */
@@ -57,6 +65,7 @@ import com.podometer.R
 fun DashboardScreen(
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenSettings: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -88,6 +97,12 @@ fun DashboardScreen(
             ) {
                 CircularProgressIndicator()
             }
+        } else if (uiState.permissionsDenied) {
+            // Full-screen recovery: guide the user to grant permissions in system settings.
+            PermissionRecoveryScreen(
+                onOpenSettings = onOpenSettings,
+                modifier = Modifier.padding(innerPadding),
+            )
         } else {
             Column(
                 modifier = Modifier
@@ -97,6 +112,17 @@ fun DashboardScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.Top,
             ) {
+                // Sensor degraded-mode notice (shown when sensor is not the preferred type)
+                if (uiState.sensorType == SensorType.ACCELEROMETER ||
+                    uiState.sensorType == SensorType.NONE
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SensorNotice(
+                        sensorType = uiState.sensorType,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
                 // Activity badge — centred below the app bar
                 ActivityBadge(
                     activity = uiState.currentActivity,
@@ -105,14 +131,19 @@ fun DashboardScreen(
                         .padding(vertical = 8.dp),
                 )
 
-                // Today card — full-width hero card with progress ring
-                TodayCard(
-                    steps = uiState.todaySteps,
-                    goal = uiState.dailyGoal,
-                    progressPercent = uiState.progressPercent,
-                    distanceKm = uiState.distanceKm,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                // Today card or first-launch empty state
+                val isFirstLaunch = uiState.todaySteps == 0 && uiState.transitions.isEmpty()
+                if (isFirstLaunch) {
+                    FirstLaunchEmptyState(modifier = Modifier.fillMaxWidth())
+                } else {
+                    TodayCard(
+                        steps = uiState.todaySteps,
+                        goal = uiState.dailyGoal,
+                        progressPercent = uiState.progressPercent,
+                        distanceKm = uiState.distanceKm,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
