@@ -101,6 +101,7 @@ class StepAccumulator(
                 bucketTimestamp = currentHourTimestamp,
                 bucketSteps = currentHourSteps,
                 totalAfterFlush = totalStepsToday,
+                summaryDate = currentDate,
             )
 
             // Detect midnight: if the new timestamp is on a different day, reset the
@@ -140,6 +141,7 @@ class StepAccumulator(
             bucketTimestamp = currentHourTimestamp,
             bucketSteps = currentHourSteps,
             totalAfterFlush = totalStepsToday,
+            summaryDate = currentDate,
         )
         currentHourSteps = 0
         return result
@@ -147,19 +149,32 @@ class StepAccumulator(
 
     // ─── Private helpers ─────────────────────────────────────────────────────
 
+    /**
+     * Builds a [FlushResult] for the bucket identified by [bucketTimestamp].
+     *
+     * @param bucketTimestamp Epoch-millis for the start of the hour bucket being
+     *   flushed. Used exclusively for the [HourlyStepAggregate] timestamp.
+     * @param bucketSteps Total steps recorded during the bucket.
+     * @param totalAfterFlush Running total of steps today at the moment of flush.
+     * @param summaryDate The calendar date that [totalAfterFlush] belongs to. This
+     *   is passed explicitly from the tracked [currentDate] field rather than being
+     *   derived from [bucketTimestamp] so that the daily summary's date remains
+     *   independent of the hourly aggregate's timestamp. The two can theoretically
+     *   diverge at hour boundaries that also cross midnight.
+     */
     private fun buildFlushResult(
         bucketTimestamp: Long,
         bucketSteps: Int,
         totalAfterFlush: Int,
+        summaryDate: LocalDate,
     ): FlushResult {
         val aggregate = HourlyStepAggregate(
             timestamp = bucketTimestamp,
             stepCountDelta = bucketSteps,
             detectedActivity = currentActivity,
         )
-        val date = toLocalDate(bucketTimestamp).toString()
         val dailySummary = DailySummary(
-            date = date,
+            date = summaryDate.toString(),
             totalSteps = totalAfterFlush,
             totalDistance = totalAfterFlush * strideLengthKm,
             walkingMinutes = 0,

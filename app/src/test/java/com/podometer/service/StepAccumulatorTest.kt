@@ -424,6 +424,42 @@ class StepAccumulatorTest {
         assertEquals(35, flushResult.dailySummary.totalSteps)
     }
 
+    // ─── DailySummary date comes from tracked currentDate, not bucket timestamp ──
+
+    @Test
+    fun `flush result daily summary date comes from tracked date not bucket timestamp`() {
+        // This test documents the explicit intent: the DailySummary date must reflect
+        // the authoritative currentDate field (which tracks which day totalStepsToday
+        // belongs to), not toLocalDate(bucketTimestamp).
+        //
+        // Scenario: start on day 0 at 23:00, accumulate steps, then flush just before
+        // midnight via an hour-boundary crossing — the flushed summary must carry
+        // the old-day date ("2026-01-01").  A subsequent flush mid-hour on day 1 must
+        // carry the new-day date ("2026-01-02").
+
+        val day0Hour23 = epochForDayAndHour(dayOffset = 0, hour = 23)
+        val accumulator = StepAccumulator(day0Hour23)
+
+        accumulator.addSteps(delta = 300, now = epochForDayAndHour(0, 23, 30))
+
+        // Crossing midnight flushes the 23:00 bucket — summary date must be old day.
+        val oldDayFlush = accumulator.addSteps(delta = 15, now = epochForDayAndHour(1, 0, 5))!!
+        assertEquals(
+            "DailySummary date should be the old day (from tracked currentDate)",
+            "2026-01-01",
+            oldDayFlush.dailySummary.date,
+        )
+
+        // Add more steps on day 1, then flush explicitly.
+        accumulator.addSteps(delta = 20, now = epochForDayAndHour(1, 0, 30))
+        val newDayFlush = accumulator.flush(now = epochForDayAndHour(1, 0, 50))!!
+        assertEquals(
+            "DailySummary date should be the new day (from tracked currentDate)",
+            "2026-01-02",
+            newDayFlush.dailySummary.date,
+        )
+    }
+
     // ─── Activity tracking per bucket ────────────────────────────────────────
 
     @Test
