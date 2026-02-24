@@ -3,9 +3,8 @@ package com.podometer.data.repository
 
 import com.podometer.data.db.CyclingSession
 import com.podometer.data.db.CyclingSessionDao
+import com.podometer.util.DateTimeUtils
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
-import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -72,9 +71,10 @@ class CyclingRepository @Inject constructor(
 
     // ─── Helper ──────────────────────────────────────────────────────────────
 
-    private fun getTodayStartMillis(): Long =
-        LocalDate.now()
-            .atStartOfDay(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli()
+    /**
+     * Returns the epoch-millisecond timestamp for midnight at the start of today.
+     *
+     * Delegates to [DateTimeUtils.todayStartMillis].
+     */
+    private fun getTodayStartMillis(): Long = DateTimeUtils.todayStartMillis()
 }

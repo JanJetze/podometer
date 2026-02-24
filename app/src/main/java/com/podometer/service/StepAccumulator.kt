@@ -3,9 +3,8 @@ package com.podometer.service
 
 import com.podometer.data.db.DailySummary
 import com.podometer.data.db.HourlyStepAggregate
-import java.time.Instant
+import com.podometer.util.DateTimeUtils
 import java.time.LocalDate
-import java.time.ZoneId
 
 /**
  * Pure accumulator for step events; holds no Android-framework references so it
@@ -196,22 +195,18 @@ class StepAccumulator(
          * Truncates [epochMillis] to the start of its local hour.
          *
          * Example: 08:37:22.456 → 08:00:00.000
+         *
+         * Delegates to [DateTimeUtils.truncateToHour].
          */
-        fun truncateToHour(epochMillis: Long): Long {
-            val zone = ZoneId.systemDefault()
-            return Instant.ofEpochMilli(epochMillis)
-                .atZone(zone)
-                .let { zdt ->
-                    zdt.withMinute(0).withSecond(0).withNano(0).toInstant().toEpochMilli()
-                }
-        }
+        fun truncateToHour(epochMillis: Long): Long =
+            DateTimeUtils.truncateToHour(epochMillis)
 
         /**
          * Converts [epochMillis] to the local [LocalDate].
+         *
+         * Delegates to [DateTimeUtils.toLocalDate].
          */
         private fun toLocalDate(epochMillis: Long): LocalDate =
-            Instant.ofEpochMilli(epochMillis)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
+            DateTimeUtils.toLocalDate(epochMillis)
     }
 }

@@ -6,10 +6,9 @@ import com.podometer.data.db.ActivityTransitionDao
 import com.podometer.data.db.DailySummary
 import com.podometer.data.db.HourlyStepAggregate
 import com.podometer.data.db.StepDao
+import com.podometer.util.DateTimeUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import java.time.LocalDate
-import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -127,10 +126,10 @@ class StepRepository @Inject constructor(
 
     // ─── Helper ──────────────────────────────────────────────────────────────
 
-    /** Returns the epoch-millisecond timestamp for midnight at the start of today. */
-    fun getTodayStartMillis(): Long =
-        LocalDate.now()
-            .atStartOfDay(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli()
+    /**
+     * Returns the epoch-millisecond timestamp for midnight at the start of today.
+     *
+     * Delegates to [DateTimeUtils.todayStartMillis].
+     */
+    fun getTodayStartMillis(): Long = DateTimeUtils.todayStartMillis()
 }
