@@ -98,6 +98,16 @@ class StepTrackingService : Service() {
     private var classifierJob: Job? = null
     private var orphanCleanupJob: Job? = null
 
+    /**
+     * Timestamp (ms) of the most recently processed step event.  Used by
+     * [collectStepEvents] to spread burst step timestamps evenly over the
+     * elapsed interval so that [StepFrequencyTracker] receives distinct
+     * timestamps even when the sensor delivers multiple steps at once.
+     *
+     * Reset to `0L` in [onDestroy] alongside the other sensor state.
+     */
+    private var lastStepEventMs: Long = 0L
+
     // ─── Service lifecycle ────────────────────────────────────────────────────
 
     override fun onCreate() {
@@ -161,6 +171,7 @@ class StepTrackingService : Service() {
         classifierJob?.cancel()
         stepSensorManager.stopListening()
         accelerometerSampler.stopSampling()
+        lastStepEventMs = 0L
         stepFrequencyTracker.reset()
         cyclingClassifier.reset()
         cyclingSessionManager.reset()
@@ -202,13 +213,20 @@ class StepTrackingService : Service() {
 
     private fun collectStepEvents(): Job = serviceScope.launch {
         stepSensorManager.stepEvents.collect { delta ->
-            // Record each step arrival for frequency tracking.  We record once
-            // per delta step so that burst events from TYPE_STEP_COUNTER are
-            // each individually timestamped, giving a realistic frequency estimate.
+            // Spread burst step-counter events evenly across the elapsed interval
+            // so that StepFrequencyTracker receives distinct timestamps.
+            // TYPE_STEP_COUNTER can deliver multiple steps at once; recording them
+            // all at the same instant causes computeStepFrequency() to return 0.0
+            // (zero duration), which prevents the cycling classifier from detecting
+            // walking during burst events.
             // Step frequency tracking continues even while cycling — the classifier
             // needs it to detect when cycling ends and walking resumes.
             val nowMs = System.currentTimeMillis()
-            repeat(delta) { stepFrequencyTracker.recordStep(nowMs) }
+            val timestamps = spreadTimestamps(lastStepEventMs, nowMs, delta)
+            for (ts in timestamps) {
+                stepFrequencyTracker.recordStep(ts)
+            }
+            lastStepEventMs = nowMs
 
             // Skip step accumulation while cycling is active.
             if (cyclingSessionManager.isStepCountingPaused) {
@@ -400,6 +418,47 @@ class StepTrackingService : Service() {
          * samples per evaluation — sufficient for a stable variance estimate.
          */
         private const val CLASSIFIER_INTERVAL_MS = 5_000L
+
+        /**
+         * Distributes [delta] step events evenly between [lastEventMs] and [nowMs],
+         * returning a [LongArray] of size [delta] with strictly ascending timestamps.
+         *
+         * Android's TYPE_STEP_COUNTER sensor delivers steps in batches.  Without
+         * spreading, all steps in a burst would share the same timestamp, causing
+         * [com.podometer.data.sensor.StepFrequencyTracker.computeStepFrequency] to
+         * return `0.0` (zero duration between oldest and newest).  By distributing
+         * the timestamps across the elapsed interval the tracker produces a realistic
+         * cadence estimate for the cycling classifier.
+         *
+         * Algorithm:
+         * - The span to spread across is `nowMs - lastEventMs`, coerced to at least
+         *   `delta` milliseconds so that every step gets a unique timestamp even when
+         *   the sensor fires twice in rapid succession.
+         * - When [lastEventMs] is `0L` (first ever event) the same coercion applies,
+         *   so no burst is lost on start-up.
+         * - Step `i` (0-based) is placed at `nowMs - (delta - 1 - i) * intervalMs`,
+         *   which guarantees the last step lands exactly on [nowMs].
+         * - When [delta] is 1 the single timestamp is always [nowMs] (unchanged
+         *   compared with the previous implementation).
+         *
+         * This function is pure Kotlin with no Android dependencies and is therefore
+         * unit-testable directly on the JVM.
+         *
+         * @param lastEventMs Wall-clock time of the previous step event, or `0L` if
+         *   no prior event has been recorded in this service session.
+         * @param nowMs       Wall-clock time of the current event (`System.currentTimeMillis()`).
+         * @param delta       Number of steps to spread (must be >= 1).
+         * @return A [LongArray] of size [delta] with strictly ascending timestamps
+         *         whose last element equals [nowMs].
+         */
+        @VisibleForTesting
+        internal fun spreadTimestamps(lastEventMs: Long, nowMs: Long, delta: Int): LongArray {
+            if (delta == 1) return longArrayOf(nowMs)
+            val rawSpan = if (lastEventMs > 0L) nowMs - lastEventMs else 0L
+            val spanMs = rawSpan.coerceAtLeast(delta.toLong())
+            val intervalMs = spanMs / delta
+            return LongArray(delta) { i -> nowMs - (delta - 1 - i) * intervalMs }
+        }
 
         /**
          * Runs [block] inside [runBlocking] and returns its result. If [block]
