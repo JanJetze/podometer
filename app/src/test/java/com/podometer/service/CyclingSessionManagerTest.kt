@@ -65,6 +65,14 @@ class CyclingSessionManagerTest {
     }
 
     @Test
+    fun `isStepCountingPaused is true immediately after startSession (before setOngoingSessionId)`() {
+        // This is the race-window fix: step counting must be paused as soon as
+        // startSession() is called, not only after setOngoingSessionId() returns.
+        manager.startSession(1_000_000L)
+        assertTrue(manager.isStepCountingPaused)
+    }
+
+    @Test
     fun `isStepCountingPaused is true after startSession and setOngoingSessionId`() {
         manager.startSession(1_000_000L)
         manager.setOngoingSessionId(42)
@@ -75,6 +83,23 @@ class CyclingSessionManagerTest {
     fun `isStepCountingPaused is false after endSession`() {
         manager.startSession(1_000_000L)
         manager.setOngoingSessionId(42)
+        manager.endSession(2_000_000L)
+        assertFalse(manager.isStepCountingPaused)
+    }
+
+    @Test
+    fun `isStepCountingPaused is false after reset`() {
+        manager.startSession(1_000_000L)
+        manager.reset()
+        assertFalse(manager.isStepCountingPaused)
+    }
+
+    @Test
+    fun `isStepCountingPaused is false after endSession called without setOngoingSessionId`() {
+        // Edge case: startSession called, DB insert happens, but endSession fires
+        // before setOngoingSessionId — sessionActive must still be cleared.
+        manager.startSession(1_000_000L)
+        // endSession returns null (no ongoingSessionId), but sessionActive should still reset
         manager.endSession(2_000_000L)
         assertFalse(manager.isStepCountingPaused)
     }
