@@ -31,9 +31,10 @@ import javax.inject.Singleton
  * ## State machine
  *
  * ```
- * STILL / WALKING  ──2+ cycling windows & >=60 s──►  CYCLING
- * CYCLING          ──non-cycling window──────────►  WALKING
- * WALKING / CYCLING ──still window───────────────►  STILL
+ * STILL / WALKING  ──2+ cycling windows & >=60 s──────────────────►  CYCLING
+ * STILL            ──non-still, non-cycling window────────────────►  WALKING
+ * CYCLING          ──non-still, non-cycling window────────────────►  WALKING
+ * WALKING / CYCLING ──still window──────────────────────────────►  STILL
  * ```
  *
  * ## Thread safety
@@ -164,10 +165,18 @@ class CyclingClassifier(
             return TransitionResult(fromState = previousState, toState = ActivityState.CYCLING)
         }
 
-        // Walking transition: non-cycling window while currently cycling
-        if (!isCyclingWindow && currentState == ActivityState.CYCLING) {
+        // Walking transition:
+        //   - From CYCLING: any non-cycling, non-still window (variance drop or steps resuming)
+        //   - From STILL: requires step activity (stepFrequency >= stepFrequencyThreshold) to
+        //     distinguish purposeful walking from ambiguous low-motion gap-zone windows
+        val isWalkingTransition = !isCyclingWindow && !isStillWindow && when (currentState) {
+            ActivityState.CYCLING -> true
+            ActivityState.STILL -> stepFrequency >= stepFrequencyThreshold
+            ActivityState.WALKING -> false
+        }
+        if (isWalkingTransition) {
             currentState = ActivityState.WALKING
-            return TransitionResult(fromState = ActivityState.CYCLING, toState = ActivityState.WALKING)
+            return TransitionResult(fromState = previousState, toState = ActivityState.WALKING)
         }
 
         // No state change

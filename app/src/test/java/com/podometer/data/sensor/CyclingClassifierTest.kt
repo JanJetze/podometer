@@ -107,18 +107,54 @@ class CyclingClassifierTest {
     @Test
     fun `walking - high step frequency prevents cycling detection even with high variance`() {
         // High variance but WALKING_STEP_FREQ is above stepFrequencyThreshold → not a cycling window
+        // With the STILL → WALKING fix, this should now produce a WALKING transition
         val result = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0)
-        assertNull("Walking step freq should block cycling detection", result)
-        assertEquals(ActivityState.STILL, classifier.getCurrentState())
+        assertNotNull("Walking step freq from STILL should trigger WALKING transition", result)
+        assertEquals(ActivityState.STILL, result!!.fromState)
+        assertEquals(ActivityState.WALKING, result.toState)
+        assertEquals(ActivityState.WALKING, classifier.getCurrentState())
     }
 
     @Test
     fun `walking - consecutive windows with walking step freq do not trigger cycling`() {
-        repeat(5) { i ->
+        // First window: STILL → WALKING transition
+        val firstResult = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0)
+        assertNotNull("First walking window should trigger STILL → WALKING transition", firstResult)
+        assertEquals(ActivityState.WALKING, firstResult!!.toState)
+
+        // Subsequent windows: no cycling transition (walking step freq blocks it), no duplicate WALKING
+        for (i in 1 until 5) {
             val result = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0 + i * WINDOW_INTERVAL_MS)
             assertNull("No cycling transition when walking step freq present", result)
         }
-        assertEquals(ActivityState.STILL, classifier.getCurrentState())
+        assertEquals(ActivityState.WALKING, classifier.getCurrentState())
+    }
+
+    // ─── STILL → WALKING transition ──────────────────────────────────────────
+
+    @Test
+    fun `still to walking - walking window from STILL transitions to WALKING`() {
+        // High variance + high step frequency = walking (not cycling, not still)
+        val result = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0)
+        assertNotNull("Walking window from STILL should emit a WALKING transition", result)
+        assertEquals(ActivityState.STILL, result!!.fromState)
+        assertEquals(ActivityState.WALKING, result.toState)
+        assertEquals(ActivityState.WALKING, classifier.getCurrentState())
+    }
+
+    @Test
+    fun `still to walking - no duplicate transition when already WALKING`() {
+        // First window triggers STILL → WALKING
+        val result1 = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0)
+        assertNotNull(result1)
+        assertEquals(ActivityState.WALKING, result1!!.toState)
+
+        // Subsequent walking windows must not emit another transition
+        val result2 = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0 + WINDOW_INTERVAL_MS)
+        assertNull("No duplicate transition when already WALKING", result2)
+        val result3 = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0 + 2 * WINDOW_INTERVAL_MS)
+        assertNull("No duplicate transition when already WALKING", result3)
+        assertEquals(ActivityState.WALKING, classifier.getCurrentState())
     }
 
     // ─── Consecutive windows requirement ──────────────────────────────────────
@@ -145,18 +181,20 @@ class CyclingClassifierTest {
 
     @Test
     fun `non-cycling window between cycling windows resets consecutive count`() {
-        // First cycling window
+        // First cycling window — state stays STILL (only 1 of 2 required)
         classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T0)
 
-        // Non-cycling interruption (walking step freq)
+        // Non-cycling interruption (walking step freq) — triggers STILL → WALKING
         classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T_30S)
+        assertEquals(ActivityState.WALKING, classifier.getCurrentState())
 
-        // Second cycling window — should NOT trigger (count was reset)
+        // Second cycling window (first after reset) — count=1, not enough for 2 required
         val result = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T_61S)
-        assertNull("Consecutive count reset by non-cycling window", result)
-        assertEquals(ActivityState.STILL, classifier.getCurrentState())
+        assertNull("Consecutive count reset by non-cycling window; only 1 window so far", result)
+        // State is WALKING (cycling check not satisfied yet, no walking transition since it's a cycling window)
+        assertEquals(ActivityState.WALKING, classifier.getCurrentState())
 
-        // Third cycling window — first of a new consecutive pair (no duration gate with minCyclingDurationMs=0)
+        // Third cycling window — second consecutive cycling window, triggers WALKING → CYCLING
         val result2 = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T_65S)
         assertNotNull("Second consecutive cycling window triggers cycling", result2)
         assertEquals(ActivityState.CYCLING, result2!!.toState)
@@ -387,18 +425,23 @@ class CyclingClassifierTest {
             consecutiveWindowsRequired = 2,
             minCyclingDurationMs = 60_000L,
         )
-        // Build up 55 s of cycling windows
+        // Build up 55 s of cycling windows (12 windows at t=0,5,...,55 s)
+        // Duration gate not yet satisfied (55 s < 60 s required), so state stays STILL
         for (i in 0 until 12) {
             durationClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, i * WINDOW_INTERVAL_MS)
         }
-        // Interruption at t=55 s
+        assertEquals(ActivityState.STILL, durationClassifier.getCurrentState())
+
+        // Interruption at t=55 s with walking step freq — triggers STILL → WALKING
         durationClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 55_000L)
+        assertEquals(ActivityState.WALKING, durationClassifier.getCurrentState())
 
         // New streak starts at T=60 s; second window 5 s later is only 5 s from new start
         durationClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, 60_000L)
         val result = durationClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, 65_000L)
         assertNull("After streak reset, new streak spanning 5 s must not satisfy 60-second gate", result)
-        assertEquals(ActivityState.STILL, durationClassifier.getCurrentState())
+        // State is WALKING: consecutive cycling windows insufficient duration, no cycling transition
+        assertEquals(ActivityState.WALKING, durationClassifier.getCurrentState())
     }
 
     @Test
