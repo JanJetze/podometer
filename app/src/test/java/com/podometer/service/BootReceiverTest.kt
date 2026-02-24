@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.service
 
+import kotlin.coroutines.cancellation.CancellationException
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -67,5 +68,14 @@ class BootReceiverTest {
             "Should default to true (fail-open) for any Exception subtype",
             result,
         )
+    }
+
+    // ─── coroutine cancellation ───────────────────────────────────────────────
+
+    @Test(expected = CancellationException::class)
+    fun `resolveAutoStartEnabled rethrows CancellationException`() {
+        BootReceiver.resolveAutoStartEnabled {
+            throw CancellationException("cancelled")
+        }
     }
 }

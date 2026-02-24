@@ -5,8 +5,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.podometer.data.repository.PreferencesManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
@@ -47,23 +49,31 @@ class BootReceiver : BroadcastReceiver() {
         context.startForegroundService(serviceIntent)
     }
 
+    // Companion is `internal` rather than `private` to allow direct unit-test access from
+    // the same module. @VisibleForTesting marks the intent; production callers should not
+    // rely on this symbol.
     internal companion object {
         const val TAG = "BootReceiver"
 
         /**
          * Reads the auto-start preference via [readPreference] and returns its value.
          *
-         * If [readPreference] throws any [Exception] (e.g. DataStore I/O failure,
-         * coroutine cancellation), the exception is caught, an error is logged,
-         * and `true` is returned so that step tracking is not silently lost on
-         * boot (fail-open policy).
+         * If [readPreference] throws any non-cancellation [Exception] (e.g. DataStore
+         * I/O failure), the exception is caught, an error is logged, and `true` is
+         * returned so that step tracking is not silently lost on boot (fail-open policy).
+         *
+         * [CancellationException] is always rethrown so that coroutine cancellation
+         * signals are never swallowed.
          *
          * @param readPreference A lambda that returns the stored auto-start preference value.
-         * @return The preference value, or `true` when [readPreference] throws.
+         * @return The preference value, or `true` when [readPreference] throws a non-cancellation exception.
          */
+        @VisibleForTesting
         fun resolveAutoStartEnabled(readPreference: () -> Boolean): Boolean {
             return try {
                 readPreference()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to read auto-start preference, defaulting to enabled", e)
                 true
