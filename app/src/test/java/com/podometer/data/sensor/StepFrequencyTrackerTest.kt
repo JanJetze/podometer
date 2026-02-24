@@ -30,7 +30,7 @@ class StepFrequencyTrackerTest {
 
     @Test
     fun `computeStepFrequency returns zero for empty tracker`() {
-        assertEquals(0.0, tracker.computeStepFrequency(), DELTA)
+        assertEquals(0.0, tracker.computeStepFrequency(currentTimeMs = 0L), DELTA)
     }
 
     @Test
@@ -38,7 +38,7 @@ class StepFrequencyTrackerTest {
         tracker.recordStep(1_000L)
         tracker.recordStep(2_000L)
         tracker.reset()
-        assertEquals(0.0, tracker.computeStepFrequency(), DELTA)
+        assertEquals(0.0, tracker.computeStepFrequency(currentTimeMs = 2_000L), DELTA)
     }
 
     // ─── Known step rates ─────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ class StepFrequencyTrackerTest {
             tracker.recordStep(startMs + i * 1_000L)
         }
         // frequency = (count - 1) / durationSeconds = 10 / 10.0 = 1.0
-        assertEquals(1.0, tracker.computeStepFrequency(), DELTA)
+        assertEquals(1.0, tracker.computeStepFrequency(currentTimeMs = 10_000L), DELTA)
     }
 
     @Test
@@ -60,7 +60,7 @@ class StepFrequencyTrackerTest {
         for (i in 0..10) {
             tracker.recordStep(i * 500L)
         }
-        assertEquals(2.0, tracker.computeStepFrequency(), DELTA)
+        assertEquals(2.0, tracker.computeStepFrequency(currentTimeMs = 5_000L), DELTA)
     }
 
     @Test
@@ -70,14 +70,14 @@ class StepFrequencyTrackerTest {
         tracker.recordStep(1_000L)
         tracker.recordStep(3_000L)
         val expected = 2.0 / 3.0
-        assertEquals(expected, tracker.computeStepFrequency(), DELTA)
+        assertEquals(expected, tracker.computeStepFrequency(currentTimeMs = 3_000L), DELTA)
     }
 
     @Test
     fun `computeStepFrequency returns zero for single step event`() {
         // Only one timestamp → no duration can be measured → 0.0 Hz
         tracker.recordStep(1_000L)
-        assertEquals(0.0, tracker.computeStepFrequency(), DELTA)
+        assertEquals(0.0, tracker.computeStepFrequency(currentTimeMs = 1_000L), DELTA)
     }
 
     // ─── Window expiry ────────────────────────────────────────────────────────
@@ -97,11 +97,11 @@ class StepFrequencyTrackerTest {
         tracker.recordStep(nowMs - 1_000L)
         tracker.recordStep(nowMs)
 
-        // computeStepFrequency uses the most recent timestamp as "now" reference
+        // computeStepFrequency uses currentTimeMs as "now" reference
         // Only the last two steps are within the window:
         // count = 2, oldest = nowMs-1000, newest = nowMs → duration = 1s
         // frequency = (2-1) / 1.0 = 1.0 Hz
-        assertEquals(1.0, tracker.computeStepFrequency(), DELTA)
+        assertEquals(1.0, tracker.computeStepFrequency(currentTimeMs = nowMs), DELTA)
     }
 
     @Test
@@ -121,7 +121,7 @@ class StepFrequencyTrackerTest {
         shortTracker.recordStep(100_000L)
 
         // Only the last step remains in the window → single timestamp → 0.0 Hz
-        assertEquals(0.0, shortTracker.computeStepFrequency(), DELTA)
+        assertEquals(0.0, shortTracker.computeStepFrequency(currentTimeMs = 100_000L), DELTA)
     }
 
     @Test
@@ -135,7 +135,38 @@ class StepFrequencyTrackerTest {
             shortTracker.recordStep(i * 500L)
         }
         // 4 intervals of 500ms → 4 steps over 2.0s → 2.0 Hz
-        assertEquals(2.0, shortTracker.computeStepFrequency(), DELTA)
+        assertEquals(2.0, shortTracker.computeStepFrequency(currentTimeMs = 2_000L), DELTA)
+    }
+
+    // ─── Wall-clock window bug fix ────────────────────────────────────────────
+
+    @Test
+    fun `steps older than window relative to wall-clock time return zero frequency after pause`() {
+        // Steps at t=0s, 1s, 2s with a 30s window.
+        // Calling with currentTimeMs=60_000 means cutoff is at 30_000ms.
+        // All recorded steps (0, 1000, 2000) are older than 30_000ms → outside window → 0.0 Hz.
+        // With the old bug (cutoff = newestTs - windowMs = 2000 - 30000 = -28000), all steps
+        // would be inside the window and a non-zero frequency would be returned.
+        val shortTracker = StepFrequencyTracker(capacity = StepFrequencyTracker.DEFAULT_CAPACITY, windowMs = 30_000L)
+        shortTracker.recordStep(0L)
+        shortTracker.recordStep(1_000L)
+        shortTracker.recordStep(2_000L)
+
+        // 58 seconds after the last step: all steps are well outside the 30s window
+        assertEquals(0.0, shortTracker.computeStepFrequency(currentTimeMs = 60_000L), DELTA)
+    }
+
+    @Test
+    fun `steps within window relative to wall-clock time return correct frequency`() {
+        // Steps at t=0s, 1s, 2s with 30s window. currentTimeMs=2_000 → cutoff=-28_000.
+        // All three steps are within the window.
+        // 2 intervals over 2s → 1.0 Hz.
+        val shortTracker = StepFrequencyTracker(capacity = StepFrequencyTracker.DEFAULT_CAPACITY, windowMs = 30_000L)
+        shortTracker.recordStep(0L)
+        shortTracker.recordStep(1_000L)
+        shortTracker.recordStep(2_000L)
+
+        assertEquals(1.0, shortTracker.computeStepFrequency(currentTimeMs = 2_000L), DELTA)
     }
 
     // ─── Reset ────────────────────────────────────────────────────────────────
@@ -150,7 +181,7 @@ class StepFrequencyTrackerTest {
         tracker.recordStep(10_500L)
         tracker.recordStep(11_000L)
         // 2 intervals of 500ms → 2 steps over 1.0s → 2.0 Hz
-        assertEquals(2.0, tracker.computeStepFrequency(), DELTA)
+        assertEquals(2.0, tracker.computeStepFrequency(currentTimeMs = 11_000L), DELTA)
     }
 
     // ─── Thread safety ────────────────────────────────────────────────────────
@@ -172,7 +203,7 @@ class StepFrequencyTrackerTest {
         val reader = thread(start = true) {
             try {
                 for (i in 0 until 1_000) {
-                    tracker.computeStepFrequency() // result discarded; must not crash
+                    tracker.computeStepFrequency(currentTimeMs = i * 1_000L) // result discarded; must not crash
                 }
             } catch (e: Throwable) {
                 synchronized(exceptions) { exceptions.add(e) }

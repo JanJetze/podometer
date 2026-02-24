@@ -19,8 +19,8 @@ import javax.inject.Singleton
  *  1. [recordStep] stores the step timestamp in a circular ring buffer. If the
  *     buffer is full the oldest entry is overwritten (FIFO eviction).
  *  2. [computeStepFrequency] scans the buffer, discards any timestamps older
- *     than `now − windowMs` (where *now* is the newest stored timestamp), and
- *     computes:
+ *     than `currentTimeMs − windowMs` (where *currentTimeMs* is the wall-clock
+ *     time supplied by the caller), and computes:
  *
  *     ```
  *     frequency = (validCount − 1) / windowDurationSeconds
@@ -85,35 +85,41 @@ class StepFrequencyTracker(
     /**
      * Computes the step frequency (steps per second) over the sliding window.
      *
-     * Only timestamps within [windowMs] of the most recently recorded step are
-     * considered.  Returns `0.0` when fewer than two qualifying timestamps
-     * exist (i.e., there are not enough events to measure a rate).
+     * The window cutoff is `currentTimeMs - windowMs`.  Only timestamps at or
+     * after the cutoff are considered.  This uses the caller-supplied wall-clock
+     * time rather than the buffer's newest timestamp, so that after a walking
+     * pause (no new steps recorded) the frequency correctly drops to `0.0` once
+     * all buffered steps are older than [windowMs].
      *
-     * Time complexity: O([capacity]) — iterates over all stored timestamps.
+     * Returns `0.0` when fewer than two qualifying timestamps exist (i.e., there
+     * are not enough events to measure a rate).
      *
+     * Time complexity: O([capacity]) — iterates over all stored timestamps in a
+     * single pass.
+     *
+     * @param currentTimeMs Wall-clock time in milliseconds representing "now".
+     *   Use `System.currentTimeMillis()` in production.  All buffered timestamps
+     *   older than `currentTimeMs - windowMs` are excluded from the calculation.
      * @return Steps per second, or `0.0` if the frequency cannot be determined.
      */
     @Synchronized
-    fun computeStepFrequency(): Double {
+    fun computeStepFrequency(currentTimeMs: Long): Double {
         if (count < 2) return 0.0
 
         val n = count
         val startIdx = (head - n + capacity) % capacity
 
-        // Find the newest timestamp to use as the "now" reference.
+        // Use wall-clock time for the window cutoff, not the buffer's newest.
+        val cutoff = currentTimeMs - windowMs
+
+        // Single pass: find newest timestamp (for duration denominator) and
+        // collect the count and oldest timestamp within the window.
         var newestTs = Long.MIN_VALUE
-        for (i in 0 until n) {
-            val ts = timestamps[(startIdx + i) % capacity]
-            if (ts > newestTs) newestTs = ts
-        }
-
-        val cutoff = newestTs - windowMs
-
-        // Collect timestamps within the window.
         var validCount = 0
         var oldestInWindow = Long.MAX_VALUE
         for (i in 0 until n) {
             val ts = timestamps[(startIdx + i) % capacity]
+            if (ts > newestTs) newestTs = ts
             if (ts >= cutoff) {
                 validCount++
                 if (ts < oldestInWindow) oldestInWindow = ts

@@ -279,8 +279,8 @@ class StepTrackingService : Service() {
             delay(CLASSIFIER_INTERVAL_MS)
             val features = accelerometerSampler.sampleBuffer.computeWindowFeatures()
                 ?: continue // not enough samples yet
-            val stepFreq = stepFrequencyTracker.computeStepFrequency()
             val now = System.currentTimeMillis()
+            val stepFreq = stepFrequencyTracker.computeStepFrequency(now)
             val transition = cyclingClassifier.evaluate(features, stepFreq, now) ?: continue
 
             Log.d(TAG, "Activity transition: ${transition.fromState} → ${transition.toState}")
