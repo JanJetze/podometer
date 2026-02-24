@@ -52,21 +52,30 @@ class AccelerometerSampler @Inject constructor(
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
+    /** True while the sensor listener is registered; guards against duplicate registrations. */
+    private var isSampling: Boolean = false
+
     /**
      * Registers the TYPE_ACCELEROMETER sensor listener at
      * [SensorManager.SENSOR_DELAY_NORMAL].
      *
      * If no accelerometer is available on the device this method logs a warning
      * and returns without registering. Calling [startSampling] while already
-     * registered is a no-op (Android deduplicates listeners for the same sensor).
+     * registered is a no-op, guarded by an internal flag, so the listener is
+     * never registered twice and the sample buffer never receives duplicate events.
      */
     fun startSampling() {
+        if (isSampling) {
+            Log.d(TAG, "Already sampling — ignoring duplicate startSampling() call")
+            return
+        }
         val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         if (sensor == null) {
             Log.w(TAG, "No TYPE_ACCELEROMETER available — AccelerometerSampler inactive")
             return
         }
         sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+        isSampling = true
         Log.d(TAG, "Registered TYPE_ACCELEROMETER at SENSOR_DELAY_NORMAL for activity classification")
     }
 
@@ -78,6 +87,7 @@ class AccelerometerSampler @Inject constructor(
     fun stopSampling() {
         sensorManager.unregisterListener(this)
         sampleBuffer.reset()
+        isSampling = false
         Log.d(TAG, "Unregistered accelerometer sampler, buffer reset")
     }
 
