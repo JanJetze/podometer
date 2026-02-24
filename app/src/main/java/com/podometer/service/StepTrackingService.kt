@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.ServiceCompat
 import com.podometer.data.db.ActivityTransition
 import com.podometer.data.repository.CyclingRepository
@@ -384,6 +385,9 @@ class StepTrackingService : Service() {
 
     // ─── Constants and helpers ────────────────────────────────────────────────
 
+    // Companion is `internal` rather than `private` to allow direct unit-test access from
+    // the same module. @VisibleForTesting marks the intent; production callers should not
+    // rely on this symbol.
     internal companion object {
         internal const val TAG = "StepTrackingService"
         private const val NOTIFICATION_CHANNEL_NAME = "Step Tracking"
@@ -411,6 +415,7 @@ class StepTrackingService : Service() {
          * @param block The suspend lambda to execute.
          * @return The result of [block], or [default] on failure.
          */
+        @VisibleForTesting
         internal fun <T> runBlockingWithDefault(default: T, tag: String, block: suspend () -> T): T {
             return try {
                 runBlocking { block() }
