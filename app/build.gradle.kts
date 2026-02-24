@@ -73,6 +73,15 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests {
+            // Make Android framework stubs (e.g. android.util.Log) return
+            // default values (null / 0 / false) instead of throwing
+            // RuntimeException in JVM unit tests.
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {

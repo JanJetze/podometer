@@ -33,8 +33,8 @@ class BootReceiver : BroadcastReceiver() {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
         if (context == null) return
 
-        val autoStartEnabled = runBlocking {
-            preferencesManager.isAutoStartEnabled().first()
+        val autoStartEnabled = resolveAutoStartEnabled {
+            runBlocking { preferencesManager.isAutoStartEnabled().first() }
         }
 
         if (!autoStartEnabled) {
@@ -47,7 +47,27 @@ class BootReceiver : BroadcastReceiver() {
         context.startForegroundService(serviceIntent)
     }
 
-    private companion object {
+    internal companion object {
         const val TAG = "BootReceiver"
+
+        /**
+         * Reads the auto-start preference via [readPreference] and returns its value.
+         *
+         * If [readPreference] throws any [Exception] (e.g. DataStore I/O failure,
+         * coroutine cancellation), the exception is caught, an error is logged,
+         * and `true` is returned so that step tracking is not silently lost on
+         * boot (fail-open policy).
+         *
+         * @param readPreference A lambda that returns the stored auto-start preference value.
+         * @return The preference value, or `true` when [readPreference] throws.
+         */
+        fun resolveAutoStartEnabled(readPreference: () -> Boolean): Boolean {
+            return try {
+                readPreference()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read auto-start preference, defaulting to enabled", e)
+                true
+            }
+        }
     }
 }
