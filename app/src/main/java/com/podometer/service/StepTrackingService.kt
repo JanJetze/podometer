@@ -118,7 +118,9 @@ class StepTrackingService : Service() {
         }
         // Orphan cleanup must be launched before the classifier so the classifier
         // can join() it before its first evaluation (see launchClassifier).
-        closeOrphanedSession()
+        if (orphanCleanupJob == null || orphanCleanupJob?.isActive != true) {
+            closeOrphanedSession()
+        }
         if (classifierJob == null || classifierJob?.isActive != true) {
             classifierJob = launchClassifier()
         }
@@ -324,13 +326,17 @@ class StepTrackingService : Service() {
      */
     private fun closeOrphanedSession() {
         orphanCleanupJob = serviceScope.launch {
-            val ongoing = cyclingRepository.getOngoingSession() ?: return@launch
-            val nowMs = System.currentTimeMillis()
-            val durationMs = nowMs - ongoing.startTime
-            val durationMinutes = ((durationMs + 30_000L) / 60_000L).toInt()
-            val closed = ongoing.copy(endTime = nowMs, durationMinutes = durationMinutes)
-            cyclingRepository.updateSession(closed)
-            Log.d(TAG, "Closed orphaned cycling session id=${ongoing.id}, duration=${durationMinutes} min")
+            try {
+                val ongoing = cyclingRepository.getOngoingSession() ?: return@launch
+                val nowMs = System.currentTimeMillis()
+                val durationMs = nowMs - ongoing.startTime
+                val durationMinutes = ((durationMs + 30_000L) / 60_000L).toInt()
+                val closed = ongoing.copy(endTime = nowMs, durationMinutes = durationMinutes)
+                cyclingRepository.updateSession(closed)
+                Log.d(TAG, "Closed orphaned cycling session id=${ongoing.id}, duration=${durationMinutes} min")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to close orphaned cycling session", e)
+            }
         }
     }
 
