@@ -1,18 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.data.sensor
 
+import android.hardware.FakeSensorManager
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Unit tests for [StepSensorManager] computation logic.
  *
  * The SensorEventListener callbacks cannot be unit-tested without the Android
- * framework, so these tests focus on the pure delta-computation function and
- * the sensor-type selection logic — both of which are extracted into testable
- * standalone functions.
+ * framework, so these tests focus on:
+ *  - The pure delta-computation function ([computeStepDelta]).
+ *  - The sensor-type selection logic ([selectSensorType]).
+ *  - The idempotency guard in [StepSensorManager.startListening], verified via
+ *    [StepSensorManager.isListening] (internal visibility) using a lightweight
+ *    [FakeSensorManager] that returns null for all sensors.
  */
 class StepSensorManagerTest {
+
+    private fun createManager(fake: FakeSensorManager = FakeSensorManager()): StepSensorManager =
+        StepSensorManager(fake)
 
     // ─── computeStepDelta ────────────────────────────────────────────────────
 
@@ -115,5 +124,55 @@ class StepSensorManagerTest {
     @Test
     fun `SensorType is in com_podometer_data_sensor package`() {
         assertEquals("com.podometer.data.sensor", SensorType::class.java.packageName)
+    }
+
+    // ─── startListening idempotency guard ────────────────────────────────────
+
+    @Test
+    fun `isListening is false before startListening is called`() {
+        val manager = createManager()
+        assertFalse("Expected isListening to be false initially", manager.isListening)
+    }
+
+    @Test
+    fun `isListening remains false when sensor type is NONE`() {
+        // FakeSensorManager returns null for all sensors, so getAvailableSensorType()
+        // returns NONE and startListening() must NOT set isListening to true.
+        val manager = createManager()
+        manager.startListening()
+        assertFalse("Expected isListening to stay false for NONE sensor type", manager.isListening)
+    }
+
+    @Test
+    fun `startListening is a no-op when already listening`() {
+        // Simulate a prior successful registration by forcing isListening = true.
+        // Then call startListening() a second time and verify the guard fires —
+        // registerListener must not be called a second time.
+        val fake = FakeSensorManager()
+        val manager = StepSensorManager(fake)
+        manager.isListening = true
+        manager.startListening()
+        assertEquals(
+            "Expected registerListener not to be called on duplicate startListening()",
+            0,
+            fake.registerListenerCallCount,
+        )
+        assertTrue("Expected isListening to remain true", manager.isListening)
+    }
+
+    @Test
+    fun `stopListening resets isListening to false`() {
+        val manager = createManager()
+        manager.isListening = true
+        manager.stopListening()
+        assertFalse("Expected isListening to be false after stopListening()", manager.isListening)
+    }
+
+    @Test
+    fun `stopListening is safe to call when not yet started`() {
+        val manager = createManager()
+        // Should not throw when called before startListening has ever succeeded.
+        manager.stopListening()
+        assertFalse("Expected isListening to remain false", manager.isListening)
     }
 }

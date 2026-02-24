@@ -80,6 +80,9 @@ class StepSensorManager @Inject constructor(
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────
 
+    /** True while the sensor listener is registered; guards against duplicate registrations. */
+    internal var isListening: Boolean = false
+
     /**
      * Registers the best available sensor listener.
      *
@@ -90,11 +93,20 @@ class StepSensorManager @Inject constructor(
      *   (~50 Hz) — above the Nyquist frequency for walking cadence (~2 Hz) so
      *   the EMA filter in [AccelerometerStepDetector] has enough resolution.
      *
-     * Calling this when already listening is a no-op (Android deduplicates
-     * listeners for the same sensor).
+     * Calling this when already listening is a no-op, guarded by an internal
+     * flag, so the listener is never registered twice even if [startListening]
+     * is called multiple times (e.g. on repeated [android.app.Service.onStartCommand]
+     * invocations with START_STICKY). The flag is reset by [stopListening].
+     * When no step-counting sensor is available ([SensorType.NONE]) the flag
+     * is left as `false` because no registration took place.
      */
     fun startListening() {
-        when (getAvailableSensorType()) {
+        if (isListening) {
+            Log.d(TAG, "Already listening — ignoring duplicate startListening() call")
+            return
+        }
+        val sensorType = getAvailableSensorType()
+        when (sensorType) {
             SensorType.STEP_COUNTER -> {
                 val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)!!
                 sensorManager.registerListener(
@@ -128,6 +140,9 @@ class StepSensorManager @Inject constructor(
                 Log.w(TAG, "No step-counting sensor available on this device")
             }
         }
+        if (sensorType != SensorType.NONE) {
+            isListening = true
+        }
     }
 
     /**
@@ -139,6 +154,7 @@ class StepSensorManager @Inject constructor(
         sensorManager.unregisterListener(this)
         stepCounterBaseline = null
         accelerometerDetector.reset()
+        isListening = false
         Log.d(TAG, "Unregistered step sensor listener")
     }
 
