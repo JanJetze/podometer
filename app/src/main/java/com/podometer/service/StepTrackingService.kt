@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Inject
 
 /**
@@ -101,11 +102,20 @@ class StepTrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        val strideKm = runBlocking { preferencesManager.strideLengthKm().first() }
+        val strideKm = runBlockingWithDefault(
+            default = StepAccumulator.DEFAULT_STRIDE_LENGTH_KM,
+            tag = "read stride length preference",
+        ) { preferencesManager.strideLengthKm().first() }
         val now = System.currentTimeMillis()
         val hourStart = StepAccumulator.truncateToHour(now)
-        val currentHourSteps = runBlocking { stepRepository.getStepsForHour(hourStart) }
-        val totalToday = runBlocking { stepRepository.getTodayTotalStepsSnapshot() }
+        val currentHourSteps = runBlockingWithDefault(
+            default = 0,
+            tag = "read current-hour steps from DB",
+        ) { stepRepository.getStepsForHour(hourStart) }
+        val totalToday = runBlockingWithDefault(
+            default = 0,
+            tag = "read today's total steps from DB",
+        ) { stepRepository.getTodayTotalStepsSnapshot() }
         accumulator = StepAccumulator(
             initialHourTimestamp = now,
             strideLengthKm = strideKm,
@@ -372,10 +382,10 @@ class StepTrackingService : Service() {
         }
     }
 
-    // ─── Constants ───────────────────────────────────────────────────────────
+    // ─── Constants and helpers ────────────────────────────────────────────────
 
-    private companion object {
-        private const val TAG = "StepTrackingService"
+    internal companion object {
+        internal const val TAG = "StepTrackingService"
         private const val NOTIFICATION_CHANNEL_NAME = "Step Tracking"
         private const val NOTIFICATION_UPDATE_INTERVAL_MS = 30_000L
 
@@ -386,5 +396,30 @@ class StepTrackingService : Service() {
          * samples per evaluation — sufficient for a stable variance estimate.
          */
         private const val CLASSIFIER_INTERVAL_MS = 5_000L
+
+        /**
+         * Runs [block] inside [runBlocking] and returns its result. If [block]
+         * throws any non-cancellation [Exception], the exception is caught, an
+         * error is logged, and [default] is returned so the service can continue
+         * starting with a safe fallback value.
+         *
+         * [CancellationException] is always rethrown so that coroutine
+         * cancellation signals are never swallowed.
+         *
+         * @param default The fallback value returned when [block] throws.
+         * @param tag A short human-readable label used in the error log message.
+         * @param block The suspend lambda to execute.
+         * @return The result of [block], or [default] on failure.
+         */
+        internal fun <T> runBlockingWithDefault(default: T, tag: String, block: suspend () -> T): T {
+            return try {
+                runBlocking { block() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to $tag, using default: $default", e)
+                default
+            }
+        }
     }
 }
