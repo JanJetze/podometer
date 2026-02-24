@@ -575,6 +575,83 @@ class StepAccumulatorTest {
         assertNull(result)
     }
 
+    // ─── Seeded initialisation (service-restart recovery) ────────────────────
+
+    @Test
+    fun `seeded accumulator initialCurrentHourSteps is reflected in currentHourSteps`() {
+        val accumulator = StepAccumulator(
+            initialHourTimestamp = startOfHour(8),
+            initialCurrentHourSteps = 150,
+        )
+        assertEquals(150, accumulator.currentHourSteps)
+    }
+
+    @Test
+    fun `seeded accumulator initialTotalStepsToday is reflected in totalStepsToday`() {
+        val accumulator = StepAccumulator(
+            initialHourTimestamp = startOfHour(8),
+            initialTotalStepsToday = 500,
+        )
+        assertEquals(500, accumulator.totalStepsToday)
+    }
+
+    @Test
+    fun `seeded accumulator defaults preserve zero-init when params are omitted`() {
+        val accumulator = StepAccumulator(startOfHour(8))
+        assertEquals(0, accumulator.currentHourSteps)
+        assertEquals(0, accumulator.totalStepsToday)
+    }
+
+    @Test
+    fun `addSteps after seeded init accumulates on top of seed values`() {
+        val accumulator = StepAccumulator(
+            initialHourTimestamp = startOfHour(8),
+            initialCurrentHourSteps = 100,
+            initialTotalStepsToday = 300,
+        )
+
+        accumulator.addSteps(delta = 50, now = timeInHour(8, 30))
+
+        assertEquals(150, accumulator.currentHourSteps)
+        assertEquals(350, accumulator.totalStepsToday)
+    }
+
+    @Test
+    fun `flush after seeded init returns aggregate with total seed plus new steps`() {
+        val accumulator = StepAccumulator(
+            initialHourTimestamp = startOfHour(10),
+            initialCurrentHourSteps = 200,
+            initialTotalStepsToday = 600,
+        )
+
+        accumulator.addSteps(delta = 50, now = timeInHour(10, 30))
+
+        val result = accumulator.flush(now = timeInHour(10, 55))!!
+
+        // currentHourSteps = 200 + 50 = 250; totalStepsToday = 600 + 50 = 650
+        assertEquals(250, result.aggregate.stepCountDelta)
+        assertEquals(650, result.dailySummary.totalSteps)
+    }
+
+    @Test
+    fun `hour boundary flush after seeded init uses seeded currentHourSteps as delta`() {
+        val accumulator = StepAccumulator(
+            initialHourTimestamp = startOfHour(8),
+            initialCurrentHourSteps = 120,
+            initialTotalStepsToday = 400,
+        )
+
+        // Add more steps within hour 8
+        accumulator.addSteps(delta = 30, now = timeInHour(8, 40))
+
+        // Cross into hour 9 → should flush with 120 + 30 = 150 delta
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+
+        assertEquals(150, result.aggregate.stepCountDelta)
+        // totalAfterFlush was 400 + 30 = 430 before the new 5 steps hit
+        assertEquals(430, result.dailySummary.totalSteps)
+    }
+
     // ─── Multi-hour scenario with activity and midnight ───────────────────────
 
     @Test

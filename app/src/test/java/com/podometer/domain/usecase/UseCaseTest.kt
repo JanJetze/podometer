@@ -64,7 +64,11 @@ class UseCaseTest {
         override fun getWeeklyDailySummaries(startDate: String, endDate: String): Flow<List<DailySummary>> =
             weeklyFlow
 
+        override suspend fun getStepsForHour(hourTimestamp: Long): Int? = null
+        override suspend fun getTodayTotalStepsSnapshot(todayStart: Long): Int? = null
+        override suspend fun deleteHourlyAggregateByTimestamp(hourTimestamp: Long) = Unit
         override suspend fun insertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
+        override suspend fun upsertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
         override suspend fun upsertDailySummary(summary: DailySummary) = Unit
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
         override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = emptyList()

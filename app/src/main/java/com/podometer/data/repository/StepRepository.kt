@@ -54,7 +54,35 @@ class StepRepository @Inject constructor(
     fun getTodayTransitions(): Flow<List<ActivityTransition>> =
         activityTransitionDao.getTodayTransitions(getTodayStartMillis())
 
+    // ─── One-shot reads for service-restart recovery ──────────────────────────
+
+    /**
+     * Returns the step count for the hourly aggregate whose timestamp equals
+     * [hourTimestamp], or 0 if no row exists yet for that hour.
+     * Used during service restart to seed [com.podometer.service.StepAccumulator].
+     */
+    suspend fun getStepsForHour(hourTimestamp: Long): Int =
+        stepDao.getStepsForHour(hourTimestamp) ?: 0
+
+    /**
+     * Returns the sum of all hourly aggregate step counts for today, or 0 if
+     * no rows exist yet.
+     * Used during service restart to seed [com.podometer.service.StepAccumulator].
+     */
+    suspend fun getTodayTotalStepsSnapshot(): Int =
+        stepDao.getTodayTotalStepsSnapshot(getTodayStartMillis()) ?: 0
+
     // ─── Write ───────────────────────────────────────────────────────────────
+
+    /**
+     * Upserts an hourly step aggregate: deletes any existing row for the same
+     * timestamp then inserts the new one, all within a single transaction.
+     * This avoids duplicate rows when the service restarts mid-hour and
+     * re-flushes an hour that was already partially persisted.
+     */
+    suspend fun upsertHourlyAggregate(aggregate: HourlyStepAggregate) {
+        stepDao.upsertHourlyAggregate(aggregate)
+    }
 
     /** Inserts a new hourly step aggregate row. */
     suspend fun insertHourlyAggregate(aggregate: HourlyStepAggregate) {

@@ -30,9 +30,12 @@ class StepRepositoryTest {
         private val hourlyAggregatesFlow: Flow<List<HourlyStepAggregate>> = flowOf(emptyList()),
         private val dailySummaryFlow: Flow<DailySummary?> = flowOf(null),
         private val weeklyFlow: Flow<List<DailySummary>> = flowOf(emptyList()),
+        private val stepsForHour: Int? = null,
+        private val totalStepsSnapshot: Int? = null,
     ) : StepDao {
         var insertedAggregate: HourlyStepAggregate? = null
         var upsertedSummary: DailySummary? = null
+        var upsertedAggregate: HourlyStepAggregate? = null
 
         override fun getTodayHourlyAggregates(todayStart: Long): Flow<List<HourlyStepAggregate>> =
             hourlyAggregatesFlow
@@ -44,8 +47,18 @@ class StepRepositoryTest {
         override fun getWeeklyDailySummaries(startDate: String, endDate: String): Flow<List<DailySummary>> =
             weeklyFlow
 
+        override suspend fun getStepsForHour(hourTimestamp: Long): Int? = stepsForHour
+
+        override suspend fun getTodayTotalStepsSnapshot(todayStart: Long): Int? = totalStepsSnapshot
+
+        override suspend fun deleteHourlyAggregateByTimestamp(hourTimestamp: Long) = Unit
+
         override suspend fun insertHourlyAggregate(aggregate: HourlyStepAggregate) {
             insertedAggregate = aggregate
+        }
+
+        override suspend fun upsertHourlyAggregate(aggregate: HourlyStepAggregate) {
+            upsertedAggregate = aggregate
         }
 
         override suspend fun upsertDailySummary(summary: DailySummary) {
@@ -198,7 +211,60 @@ class StepRepositoryTest {
         assertTrue(result.isEmpty())
     }
 
+    // ─── Recovery read methods ────────────────────────────────────────────────
+
+    @Test
+    fun `getStepsForHour maps null DAO result to 0`() = runTest {
+        val dao = FakeStepDao(stepsForHour = null)
+        val repo = StepRepository(dao, FakeActivityTransitionDao())
+
+        val result = repo.getStepsForHour(1000L)
+
+        assertEquals(0, result)
+    }
+
+    @Test
+    fun `getStepsForHour passes through non-null DAO result`() = runTest {
+        val dao = FakeStepDao(stepsForHour = 250)
+        val repo = StepRepository(dao, FakeActivityTransitionDao())
+
+        val result = repo.getStepsForHour(1000L)
+
+        assertEquals(250, result)
+    }
+
+    @Test
+    fun `getTodayTotalStepsSnapshot maps null DAO result to 0`() = runTest {
+        val dao = FakeStepDao(totalStepsSnapshot = null)
+        val repo = StepRepository(dao, FakeActivityTransitionDao())
+
+        val result = repo.getTodayTotalStepsSnapshot()
+
+        assertEquals(0, result)
+    }
+
+    @Test
+    fun `getTodayTotalStepsSnapshot passes through non-null DAO result`() = runTest {
+        val dao = FakeStepDao(totalStepsSnapshot = 1500)
+        val repo = StepRepository(dao, FakeActivityTransitionDao())
+
+        val result = repo.getTodayTotalStepsSnapshot()
+
+        assertEquals(1500, result)
+    }
+
     // ─── Write methods ───────────────────────────────────────────────────────
+
+    @Test
+    fun `upsertHourlyAggregate delegates to StepDao`() = runTest {
+        val dao = FakeStepDao()
+        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val aggregate = HourlyStepAggregate(timestamp = 2000L, stepCountDelta = 200, detectedActivity = "WALKING")
+
+        repo.upsertHourlyAggregate(aggregate)
+
+        assertEquals(aggregate, dao.upsertedAggregate)
+    }
 
     @Test
     fun `insertHourlyAggregate delegates to StepDao`() = runTest {

@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -41,9 +42,44 @@ interface StepDao {
     @Query("SELECT * FROM daily_summaries WHERE date BETWEEN :startDate AND :endDate ORDER BY date ASC")
     fun getWeeklyDailySummaries(startDate: String, endDate: String): Flow<List<DailySummary>>
 
+    /**
+     * Returns the step count delta for the hourly aggregate matching
+     * [hourTimestamp] exactly, or null if no row exists for that timestamp.
+     * One-shot suspend query used for service-restart recovery.
+     */
+    @Query("SELECT stepCountDelta FROM hourly_step_aggregates WHERE timestamp = :hourTimestamp LIMIT 1")
+    suspend fun getStepsForHour(hourTimestamp: Long): Int?
+
+    /**
+     * Returns the sum of [HourlyStepAggregate.stepCountDelta] for all rows
+     * on or after [todayStart] (i.e. today), or null if no rows exist yet.
+     * One-shot suspend query used for service-restart recovery.
+     */
+    @Query("SELECT SUM(stepCountDelta) FROM hourly_step_aggregates WHERE timestamp >= :todayStart")
+    suspend fun getTodayTotalStepsSnapshot(todayStart: Long): Int?
+
+    /**
+     * Deletes the [HourlyStepAggregate] row whose timestamp equals
+     * [hourTimestamp]. Used as the delete half of a delete-then-insert upsert
+     * when re-flushing a partially-persisted hour after a service restart.
+     */
+    @Query("DELETE FROM hourly_step_aggregates WHERE timestamp = :hourTimestamp")
+    suspend fun deleteHourlyAggregateByTimestamp(hourTimestamp: Long)
+
     /** Inserts a new [HourlyStepAggregate] row. */
     @Insert
     suspend fun insertHourlyAggregate(aggregate: HourlyStepAggregate)
+
+    /**
+     * Deletes any existing [HourlyStepAggregate] row for the same timestamp,
+     * then inserts [aggregate] — a safe upsert given the auto-generated PK.
+     * Wrapped in a [Transaction] so both operations are atomic.
+     */
+    @Transaction
+    suspend fun upsertHourlyAggregate(aggregate: HourlyStepAggregate) {
+        deleteHourlyAggregateByTimestamp(aggregate.timestamp)
+        insertHourlyAggregate(aggregate)
+    }
 
     /**
      * Inserts or replaces a [DailySummary] row. Because [DailySummary.date]

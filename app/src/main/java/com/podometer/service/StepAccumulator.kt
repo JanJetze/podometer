@@ -29,18 +29,26 @@ import java.time.ZoneId
  *   (75 cm = 0.75 m). This value is fixed at construction time and does not
  *   change for the lifetime of this accumulator instance — by design, the
  *   service reads the preference once at session start and passes it here.
+ * @param initialCurrentHourSteps Seed value for [currentHourSteps]. Used on
+ *   service restart to restore the current hour's previously-persisted step
+ *   count from the database. Defaults to 0.
+ * @param initialTotalStepsToday Seed value for [totalStepsToday]. Used on
+ *   service restart to restore today's previously-persisted total from the
+ *   database. Defaults to 0.
  */
 class StepAccumulator(
     initialHourTimestamp: Long,
     private val strideLengthKm: Float = DEFAULT_STRIDE_LENGTH_KM,
+    initialCurrentHourSteps: Int = 0,
+    initialTotalStepsToday: Int = 0,
 ) {
 
     /** Steps accumulated in the current (open) hour bucket. */
-    var currentHourSteps: Int = 0
+    var currentHourSteps: Int = initialCurrentHourSteps
         private set
 
     /** Running total of steps counted today (resets at midnight). */
-    var totalStepsToday: Int = 0
+    var totalStepsToday: Int = initialTotalStepsToday
         private set
 
     /** Epoch-millis timestamp for the start of the current open bucket. */

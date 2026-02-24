@@ -102,9 +102,18 @@ class StepTrackingService : Service() {
         super.onCreate()
         createNotificationChannel()
         val strideKm = runBlocking { preferencesManager.strideLengthKm().first() }
-        accumulator = StepAccumulator(System.currentTimeMillis(), strideLengthKm = strideKm)
+        val now = System.currentTimeMillis()
+        val hourStart = StepAccumulator.truncateToHour(now)
+        val currentHourSteps = runBlocking { stepRepository.getStepsForHour(hourStart) }
+        val totalToday = runBlocking { stepRepository.getTodayTotalStepsSnapshot() }
+        accumulator = StepAccumulator(
+            initialHourTimestamp = now,
+            strideLengthKm = strideKm,
+            initialCurrentHourSteps = currentHourSteps,
+            initialTotalStepsToday = totalToday,
+        )
         startForegroundWithNotification()
-        Log.d(TAG, "Service created")
+        Log.d(TAG, "Service created: restored $currentHourSteps current-hour steps, $totalToday today total")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -133,7 +142,7 @@ class StepTrackingService : Service() {
         val result = accumulator.flush()
         if (result != null) {
             runBlocking {
-                stepRepository.insertHourlyAggregate(result.aggregate)
+                stepRepository.upsertHourlyAggregate(result.aggregate)
                 stepRepository.upsertDailySummary(result.dailySummary)
                 Log.d(TAG, "Final flush on destroy: ${result.aggregate.stepCountDelta} steps")
             }
@@ -198,7 +207,7 @@ class StepTrackingService : Service() {
 
             val flushResult = accumulator.addSteps(delta)
             if (flushResult != null) {
-                stepRepository.insertHourlyAggregate(flushResult.aggregate)
+                stepRepository.upsertHourlyAggregate(flushResult.aggregate)
                 stepRepository.upsertDailySummary(flushResult.dailySummary)
                 Log.d(
                     TAG,
