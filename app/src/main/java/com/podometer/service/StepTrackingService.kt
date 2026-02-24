@@ -53,7 +53,10 @@ import javax.inject.Inject
  * classifier can detect when cycling ends).
  *
  * On service start, any orphaned ongoing cycling session (from a previous service
- * kill) is closed with the current time.
+ * kill) is closed with the current time. [closeOrphanedSession] is called before
+ * [launchClassifier] so the classifier always starts from a clean session state.
+ * The classifier awaits the cleanup job before its first evaluation, ensuring it
+ * never reads a stale open session. The main thread is not blocked.
  */
 @AndroidEntryPoint
 class StepTrackingService : Service() {
@@ -91,6 +94,7 @@ class StepTrackingService : Service() {
     private var collectorJob: Job? = null
     private var notificationTickerJob: Job? = null
     private var classifierJob: Job? = null
+    private var orphanCleanupJob: Job? = null
 
     // ─── Service lifecycle ────────────────────────────────────────────────────
 
@@ -112,10 +116,12 @@ class StepTrackingService : Service() {
         if (notificationTickerJob == null || notificationTickerJob?.isActive != true) {
             notificationTickerJob = launchNotificationTicker()
         }
+        // Orphan cleanup must be launched before the classifier so the classifier
+        // can join() it before its first evaluation (see launchClassifier).
+        closeOrphanedSession()
         if (classifierJob == null || classifierJob?.isActive != true) {
             classifierJob = launchClassifier()
         }
-        closeOrphanedSession()
         Log.d(TAG, "Service started, sensor listening")
         return START_STICKY
     }
@@ -208,6 +214,14 @@ class StepTrackingService : Service() {
      * features, detects activity transitions, persists them, updates the
      * accumulator's current activity, and manages the cycling session lifecycle.
      *
+     * Before entering the evaluation loop, the coroutine awaits
+     * [orphanCleanupJob] (launched by [closeOrphanedSession] in
+     * [onStartCommand]). This guarantees the classifier never reads a stale
+     * open session on its first evaluation. If there was no orphaned session,
+     * the job completes almost immediately and causes no meaningful delay.
+     * The main thread is not blocked because the join occurs inside this
+     * coroutine.
+     *
      * All in-memory state changes ([CyclingSessionManager.startSession],
      * [CyclingSessionManager.endSession], [StepAccumulator.setActivity]) happen
      * synchronously inside the loop so that step-count pausing activates
@@ -236,6 +250,9 @@ class StepTrackingService : Service() {
      * scope is cancelled.
      */
     private fun launchClassifier(): Job = serviceScope.launch {
+        // Wait for any orphaned session to be closed before the first evaluation
+        // so the classifier never reads a stale open session.
+        orphanCleanupJob?.join()
         while (isActive) {
             delay(CLASSIFIER_INTERVAL_MS)
             val features = accelerometerSampler.sampleBuffer.computeWindowFeatures()
@@ -298,10 +315,15 @@ class StepTrackingService : Service() {
      * kill (i.e. a [com.podometer.data.db.CyclingSession] row with a null
      * [com.podometer.data.db.CyclingSession.endTime]).
      *
-     * Run once in [onStartCommand] before the classifier loop begins.
+     * The launched [Job] is stored in [orphanCleanupJob] so that
+     * [launchClassifier] can `join()` it before the classifier's first
+     * evaluation, guaranteeing no stale open session is visible to the loop.
+     * If there is no orphaned session the job completes almost immediately.
+     *
+     * Must be called in [onStartCommand] before [launchClassifier].
      */
     private fun closeOrphanedSession() {
-        serviceScope.launch {
+        orphanCleanupJob = serviceScope.launch {
             val ongoing = cyclingRepository.getOngoingSession() ?: return@launch
             val nowMs = System.currentTimeMillis()
             val durationMs = nowMs - ongoing.startTime
