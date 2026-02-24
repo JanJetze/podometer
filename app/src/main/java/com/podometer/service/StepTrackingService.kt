@@ -208,16 +208,29 @@ class StepTrackingService : Service() {
      * features, detects activity transitions, persists them, updates the
      * accumulator's current activity, and manages the cycling session lifecycle.
      *
+     * All in-memory state changes ([CyclingSessionManager.startSession],
+     * [CyclingSessionManager.endSession], [StepAccumulator.setActivity]) happen
+     * synchronously inside the loop so that step-count pausing activates
+     * immediately on the same iteration that detected the transition.
+     *
+     * DB writes are launched as separate fire-and-forget coroutines on
+     * [serviceScope] so they cannot delay the next classifier evaluation. Each
+     * async DB block is wrapped in a try/catch and logs any failure — a DB
+     * error therefore does not crash the service or disrupt the loop.
+     *
      * When a transition **to** [ActivityState.CYCLING] is detected:
-     * 1. A new [com.podometer.data.db.CyclingSession] is created and inserted.
-     * 2. [CyclingSessionManager.setOngoingSessionId] is called with the
-     *    DB-generated id, which activates step-count pausing.
+     * 1. [CyclingSessionManager.startSession] is called synchronously, which
+     *    immediately sets `sessionActive = true` and pauses step accumulation.
+     * 2. The DB insert and subsequent [CyclingSessionManager.setOngoingSessionId]
+     *    run asynchronously in a child coroutine.
      *
      * When a transition **from** [ActivityState.CYCLING] is detected:
-     * 1. [CyclingSessionManager.endSession] computes the session duration and
-     *    returns the entity to update.
-     * 2. The session row is updated in the database.
-     * 3. Step-count pausing is lifted automatically.
+     * 1. [CyclingSessionManager.endSession] is called synchronously, which
+     *    immediately clears step-count pausing.
+     * 2. The DB update runs asynchronously in a child coroutine.
+     *
+     * The [ActivityTransition] DB insert runs asynchronously because it has no
+     * downstream effect on classifier state.
      *
      * Runs every [CLASSIFIER_INTERVAL_MS] (~5 seconds) until the service
      * scope is cancelled.
@@ -234,29 +247,47 @@ class StepTrackingService : Service() {
             Log.d(TAG, "Activity transition: ${transition.fromState} → ${transition.toState}")
             accumulator.setActivity(transition.toState.name)
 
-            // Cycling session lifecycle
+            // Cycling session lifecycle — in-memory ops are synchronous; DB I/O
+            // is offloaded to child coroutines so the loop is never blocked.
             if (transition.toState == ActivityState.CYCLING) {
-                val session = cyclingSessionManager.startSession(now)
-                val insertedId = cyclingRepository.insertSession(session)
-                cyclingSessionManager.setOngoingSessionId(insertedId.toInt())
-                Log.d(TAG, "Cycling session started, db id=$insertedId")
+                val session = cyclingSessionManager.startSession(now) // fast, sets sessionActive=true
+                serviceScope.launch {
+                    try {
+                        val insertedId = cyclingRepository.insertSession(session)
+                        cyclingSessionManager.setOngoingSessionId(insertedId.toInt())
+                        Log.d(TAG, "Cycling session started, db id=$insertedId")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to insert cycling session into DB", e)
+                    }
+                }
             }
             if (transition.fromState == ActivityState.CYCLING) {
-                val endedSession = cyclingSessionManager.endSession(now)
+                val endedSession = cyclingSessionManager.endSession(now) // fast, clears step pause
                 if (endedSession != null) {
-                    cyclingRepository.updateSession(endedSession)
-                    Log.d(TAG, "Cycling session ended, duration=${endedSession.durationMinutes} min")
+                    serviceScope.launch {
+                        try {
+                            cyclingRepository.updateSession(endedSession)
+                            Log.d(TAG, "Cycling session ended, duration=${endedSession.durationMinutes} min")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to update cycling session in DB", e)
+                        }
+                    }
                 }
             }
 
-            stepRepository.insertTransition(
-                ActivityTransition(
-                    timestamp = System.currentTimeMillis(),
-                    fromActivity = transition.fromState.name,
-                    toActivity = transition.toState.name,
-                    isManualOverride = false,
-                ),
+            val transitionEntity = ActivityTransition(
+                timestamp = System.currentTimeMillis(),
+                fromActivity = transition.fromState.name,
+                toActivity = transition.toState.name,
+                isManualOverride = false,
             )
+            serviceScope.launch {
+                try {
+                    stepRepository.insertTransition(transitionEntity)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to insert activity transition into DB", e)
+                }
+            }
         }
     }
 
