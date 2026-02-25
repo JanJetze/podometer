@@ -710,26 +710,26 @@ private fun StepGoalDialogValidPreview() {
     }
 }
 
-/** Preview: StepGoalDialog when the initial value is zero — error state shown. */
-@Preview(showBackground = true, name = "StepGoalDialog - Zero Value Error")
+/** Preview: StepGoalDialog with a moderate valid goal — shows the dialog works with various goals. */
+@Preview(showBackground = true, name = "StepGoalDialog - Moderate Goal")
 @Composable
-private fun StepGoalDialogZeroPreview() {
+private fun StepGoalDialogModeratePreview() {
     PodometerTheme {
         StepGoalDialog(
-            currentGoal = 0,
+            currentGoal = 5_000,
             onConfirm = {},
             onDismiss = {},
         )
     }
 }
 
-/** Preview: StepGoalDialog when the initial value exceeds the maximum — error state shown. */
-@Preview(showBackground = true, name = "StepGoalDialog - Out of Range Error")
+/** Preview: StepGoalDialog with a low valid goal — shows the dialog works with small targets. */
+@Preview(showBackground = true, name = "StepGoalDialog - Low Goal")
 @Composable
-private fun StepGoalDialogOutOfRangePreview() {
+private fun StepGoalDialogLowPreview() {
     PodometerTheme {
         StepGoalDialog(
-            currentGoal = 200_000,
+            currentGoal = 1_000,
             onConfirm = {},
             onDismiss = {},
         )
