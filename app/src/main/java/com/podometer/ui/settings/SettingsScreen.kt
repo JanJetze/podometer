@@ -96,16 +96,28 @@ fun SettingsScreen(
     val exportSuccessMessage = stringResource(R.string.settings_export_success)
     val exportErrorPrefix = stringResource(R.string.settings_export_error)
 
-    // Show snackbar on success or error, then reset state
+    // Show snackbar on success or error, then reset state.
+    // try/finally guarantees onResetExportState() runs even if the coroutine is
+    // cancelled mid-way through showSnackbar() (e.g. because the user triggers
+    // another export and the LaunchedEffect key changes before the snackbar dismisses).
     LaunchedEffect(uiState.exportState) {
         when (uiState.exportState) {
             is ExportState.Success -> {
-                snackbarHostState.showSnackbar(exportSuccessMessage)
-                onResetExportState()
+                try {
+                    snackbarHostState.showSnackbar(exportSuccessMessage)
+                } finally {
+                    onResetExportState()
+                }
             }
             is ExportState.Error -> {
-                snackbarHostState.showSnackbar("$exportErrorPrefix: ${uiState.exportState.message}")
-                onResetExportState()
+                // Capture the message before the finally block resets state to Idle,
+                // otherwise uiState.exportState.message would no longer be accessible.
+                val message = "$exportErrorPrefix: ${uiState.exportState.message}"
+                try {
+                    snackbarHostState.showSnackbar(message)
+                } finally {
+                    onResetExportState()
+                }
             }
             else -> Unit
         }

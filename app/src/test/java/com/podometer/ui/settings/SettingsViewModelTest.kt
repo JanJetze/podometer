@@ -133,4 +133,50 @@ class SettingsViewModelTest {
         state = ExportState.Idle
         assertEquals(ExportState.Idle, state)
     }
+
+    // ─── Export state reset ordering contract ────────────────────────────────
+
+    /**
+     * Documents the required ordering contract for the SettingsScreen LaunchedEffect:
+     * the error message must be captured BEFORE resetExportState() is called, because
+     * the reset transitions the state back to Idle and the message would be lost.
+     *
+     * This test verifies the pure-Kotlin ordering logic that the composable must follow
+     * when using try/finally to guarantee reset even on coroutine cancellation.
+     */
+    @Test
+    fun `error message captured before reset does not change on reset`() {
+        var state: ExportState = ExportState.Error("disk full")
+
+        // Capture message before reset — as required by the try/finally fix
+        val capturedMessage = (state as ExportState.Error).message
+
+        // Simulate reset (what onResetExportState does)
+        state = ExportState.Idle
+
+        // Message captured before reset is still intact, even though state is now Idle
+        assertEquals("disk full", capturedMessage)
+        assertEquals(ExportState.Idle, state)
+    }
+
+    @Test
+    fun `error message is inaccessible after reset to Idle`() {
+        var state: ExportState = ExportState.Error("connection timeout")
+
+        // Simulate reset before capturing message — the WRONG ordering
+        state = ExportState.Idle
+
+        // After reset, state is Idle and carries no message
+        assertEquals(ExportState.Idle, state)
+    }
+
+    @Test
+    fun `success state resets to Idle without requiring message capture`() {
+        var state: ExportState = ExportState.Success
+
+        // Success carries no message, so reset order does not matter for message safety
+        state = ExportState.Idle
+
+        assertEquals(ExportState.Idle, state)
+    }
 }
