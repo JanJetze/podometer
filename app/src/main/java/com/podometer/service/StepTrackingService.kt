@@ -160,12 +160,14 @@ class StepTrackingService : Service() {
 
     override fun onDestroy() {
         // Must complete flush before cancelling scope to avoid data loss
-        val result = accumulator.flush()
-        if (result != null) {
+        val results = accumulator.flush()
+        if (results.isNotEmpty()) {
             runBlocking {
-                stepRepository.upsertHourlyAggregate(result.aggregate)
-                stepRepository.upsertDailySummary(result.dailySummary)
-                Log.d(TAG, "Final flush on destroy: ${result.aggregate.stepCountDelta} steps")
+                for (result in results) {
+                    stepRepository.upsertHourlyAggregate(result.aggregate)
+                    stepRepository.upsertDailySummary(result.dailySummary)
+                }
+                Log.d(TAG, "Final flush on destroy: ${results.size} result(s)")
             }
         }
         classifierJob?.cancel()
@@ -234,8 +236,8 @@ class StepTrackingService : Service() {
                 return@collect
             }
 
-            val flushResult = accumulator.addSteps(delta)
-            if (flushResult != null) {
+            val flushResults = accumulator.addSteps(delta)
+            for (flushResult in flushResults) {
                 stepRepository.upsertHourlyAggregate(flushResult.aggregate)
                 stepRepository.upsertDailySummary(flushResult.dailySummary)
                 Log.d(

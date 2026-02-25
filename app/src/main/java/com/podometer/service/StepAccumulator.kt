@@ -15,6 +15,8 @@ import java.time.LocalDate
  * - Track total steps today ([totalStepsToday]).
  * - Detect hour-boundary crossings on each [addSteps] call.
  * - Detect midnight crossings and reset the daily total for the new day.
+ * - Handle multi-hour clock jumps (DST, timezone changes) by emitting a
+ *   [FlushResult] for each skipped intermediate hour with zero steps.
  * - Track the detected activity state per bucket via [setActivity].
  * - Produce [FlushResult] (hourly aggregate + daily summary) whenever the bucket
  *   is flushed — either automatically at an hour boundary or explicitly via
@@ -79,62 +81,95 @@ class StepAccumulator(
     }
 
     /**
-     * Adds [delta] steps, checks for an hour-boundary crossing (including a
-     * midnight date rollover), and returns a [FlushResult] if the previous hour
-     * bucket was completed, or `null` if no flush occurred.
+     * Adds [delta] steps, checks for an hour-boundary crossing (including
+     * midnight date rollovers and multi-hour clock jumps), and returns a
+     * [List] of [FlushResult] for each hour bucket that was completed.
+     *
+     * An empty list means no flush occurred (same hour as the current bucket).
+     * A single-element list is the common case of one hour boundary crossed.
+     * Multiple elements are produced when the clock jumps forward by more than
+     * one hour (DST, timezone change, etc.). Each skipped intermediate hour
+     * yields a [FlushResult] with zero [FlushResult.aggregate] step count.
      *
      * When the event time crosses midnight the daily step total is reset so
      * [totalStepsToday] only counts steps for the current calendar day.
      *
      * @param delta Number of new steps (may be 0, never negative).
      * @param now   Current epoch-millis (defaults to [System.currentTimeMillis]).
+     * @return A list of [FlushResult] for all completed hour buckets, or an
+     *   empty list if no hour boundary was crossed.
      */
-    fun addSteps(delta: Int, now: Long = System.currentTimeMillis()): FlushResult? {
+    fun addSteps(delta: Int, now: Long = System.currentTimeMillis()): List<FlushResult> {
         val nowHour = truncateToHour(now)
 
-        return if (nowHour > currentHourTimestamp) {
-            // Hour boundary crossed: flush previous bucket, start new one.
-            // The flush total captures all steps accumulated so far today (including
-            // the steps in the bucket being flushed, which are already in totalStepsToday).
-            val flushResult = buildFlushResult(
+        if (nowHour <= currentHourTimestamp) {
+            // Same hour — just accumulate
+            currentHourSteps += delta
+            totalStepsToday += delta
+            return emptyList()
+        }
+
+        // Hour boundary crossed: flush current bucket + any intermediate empty hours.
+        val results = mutableListOf<FlushResult>()
+
+        // 1. Flush the current (potentially non-empty) bucket.
+        results.add(
+            buildFlushResult(
                 bucketTimestamp = currentHourTimestamp,
                 bucketSteps = currentHourSteps,
                 totalAfterFlush = totalStepsToday,
                 summaryDate = currentDate,
             )
+        )
 
-            // Detect midnight: if the new timestamp is on a different day, reset the
-            // daily total before accumulating the new delta.
-            val nowDate = toLocalDate(nowHour)
-            if (nowDate != currentDate) {
-                totalStepsToday = delta
-                currentDate = nowDate
-            } else {
-                totalStepsToday += delta
+        // 2. Create 0-step aggregates for each intermediate skipped hour.
+        var intermediateHour = currentHourTimestamp + ONE_HOUR_MS
+        while (intermediateHour < nowHour) {
+            val intermediateDate = toLocalDate(intermediateHour)
+            if (intermediateDate != currentDate) {
+                // Midnight was crossed in the gap — reset the daily running total.
+                totalStepsToday = 0
+                currentDate = intermediateDate
             }
-
-            // Reset activity to default for the new bucket.
-            currentActivity = DEFAULT_ACTIVITY
-            currentHourTimestamp = nowHour
-            currentHourSteps = delta
-            flushResult
-        } else {
-            currentHourSteps += delta
-            totalStepsToday += delta
-            null
+            results.add(
+                buildFlushResult(
+                    bucketTimestamp = intermediateHour,
+                    bucketSteps = 0,
+                    totalAfterFlush = totalStepsToday,
+                    summaryDate = currentDate,
+                )
+            )
+            intermediateHour += ONE_HOUR_MS
         }
+
+        // 3. Start the new current bucket for nowHour.
+        val nowDate = toLocalDate(nowHour)
+        if (nowDate != currentDate) {
+            // Midnight crossed right at the boundary between last intermediate and nowHour.
+            totalStepsToday = delta
+            currentDate = nowDate
+        } else {
+            totalStepsToday += delta
+        }
+        currentActivity = DEFAULT_ACTIVITY
+        currentHourTimestamp = nowHour
+        currentHourSteps = delta
+
+        return results
     }
 
     /**
      * Explicitly flushes the current open hour bucket (e.g., when the service
      * is stopping mid-hour).
      *
-     * Returns `null` when [currentHourSteps] is zero (nothing to persist).
+     * Returns an empty list when [currentHourSteps] is zero (nothing to persist).
+     * Returns a single-element list otherwise.
      *
      * @param now Current epoch-millis (defaults to [System.currentTimeMillis]).
+     * @return A list with one [FlushResult], or an empty list if nothing to flush.
      */
-    fun flush(now: Long = System.currentTimeMillis()): FlushResult? {
-        if (currentHourSteps == 0) return null
+    fun flush(now: Long = System.currentTimeMillis()): List<FlushResult> {
+        if (currentHourSteps == 0) return emptyList()
 
         val result = buildFlushResult(
             bucketTimestamp = currentHourTimestamp,
@@ -143,7 +178,7 @@ class StepAccumulator(
             summaryDate = currentDate,
         )
         currentHourSteps = 0
-        return result
+        return listOf(result)
     }
 
     // ─── Private helpers ─────────────────────────────────────────────────────
@@ -190,6 +225,9 @@ class StepAccumulator(
 
         /** Default stride length: 75 cm = 0.00075 km. */
         const val DEFAULT_STRIDE_LENGTH_KM = 0.00075f
+
+        /** Milliseconds in one hour. */
+        private const val ONE_HOUR_MS = 3_600_000L
 
         /**
          * Truncates [epochMillis] to the start of its local hour.

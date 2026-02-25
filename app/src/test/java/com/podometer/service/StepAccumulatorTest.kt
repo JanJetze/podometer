@@ -4,8 +4,6 @@ package com.podometer.service
 import com.podometer.data.db.DailySummary
 import com.podometer.data.db.HourlyStepAggregate
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Calendar
@@ -14,7 +12,8 @@ import java.util.Calendar
  * Unit tests for [StepAccumulator].
  *
  * Covers step accumulation, hour-boundary detection, flush-to-aggregate
- * production, daily-summary production, and edge cases.
+ * production, daily-summary production, and edge cases including multi-hour
+ * clock jumps.
  */
 class StepAccumulatorTest {
 
@@ -73,7 +72,7 @@ class StepAccumulatorTest {
         val result = accumulator.addSteps(delta = 5, now = timeInHour(8, 30))
 
         assertEquals(5, accumulator.currentHourSteps)
-        assertNull("No flush expected within same hour", result)
+        assertTrue("No flush expected within same hour", result.isEmpty())
     }
 
     @Test
@@ -112,7 +111,7 @@ class StepAccumulatorTest {
         // Cross into hour 9 → should flush
         val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
-        assertNotNull("Expected FlushResult when crossing hour boundary", result)
+        assertTrue("Expected FlushResult when crossing hour boundary", result.isNotEmpty())
     }
 
     @Test
@@ -123,9 +122,9 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 100, now = timeInHour(8, 30))
         accumulator.addSteps(delta = 50, now = timeInHour(8, 45))
 
-        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
-        assertEquals(150, result.aggregate.stepCountDelta)
+        assertEquals(150, result.first().aggregate.stepCountDelta)
     }
 
     @Test
@@ -135,9 +134,9 @@ class StepAccumulatorTest {
 
         accumulator.addSteps(delta = 100, now = timeInHour(8, 30))
 
-        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
-        assertEquals(hourStart, result.aggregate.timestamp)
+        assertEquals(hourStart, result.first().aggregate.timestamp)
     }
 
     @Test
@@ -147,9 +146,9 @@ class StepAccumulatorTest {
 
         accumulator.addSteps(delta = 100, now = timeInHour(8, 30))
 
-        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
-        assertEquals("WALKING", result.aggregate.detectedActivity)
+        assertEquals("WALKING", result.first().aggregate.detectedActivity)
     }
 
     @Test
@@ -188,9 +187,9 @@ class StepAccumulatorTest {
         // When the hour boundary is crossed, the flush snapshot captures totalStepsToday
         // before the new delta (10 steps at 9:05 belong to hour 9, not the flushed hour 8).
         // The daily summary will be upserted again when hour 9 is eventually flushed.
-        val result = accumulator.addSteps(delta = 10, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 10, now = timeInHour(9, 5))
 
-        assertEquals(200, result.dailySummary.totalSteps)
+        assertEquals(200, result.first().dailySummary.totalSteps)
     }
 
     @Test
@@ -200,22 +199,22 @@ class StepAccumulatorTest {
 
         accumulator.addSteps(delta = 100, now = timeInHour(8, 30))
 
-        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
         // date must match pattern yyyy-MM-dd
         assertTrue(
-            "Date '${result.dailySummary.date}' does not match yyyy-MM-dd",
-            result.dailySummary.date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")),
+            "Date '${result.first().dailySummary.date}' does not match yyyy-MM-dd",
+            result.first().dailySummary.date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")),
         )
     }
 
     // ─── flush() explicit flush ───────────────────────────────────────────────
 
     @Test
-    fun `flush returns null when no steps accumulated`() {
+    fun `flush returns empty list when no steps accumulated`() {
         val accumulator = StepAccumulator(startOfHour(8))
         val result = accumulator.flush(now = timeInHour(8, 30))
-        assertNull(result)
+        assertTrue(result.isEmpty())
     }
 
     @Test
@@ -227,8 +226,8 @@ class StepAccumulatorTest {
 
         val result = accumulator.flush(now = timeInHour(8, 59))
 
-        assertNotNull(result)
-        assertEquals(75, result!!.aggregate.stepCountDelta)
+        assertTrue(result.isNotEmpty())
+        assertEquals(75, result.first().aggregate.stepCountDelta)
     }
 
     @Test
@@ -249,9 +248,9 @@ class StepAccumulatorTest {
 
         accumulator.addSteps(delta = 50, now = timeInHour(10, 30))
 
-        val result = accumulator.flush(now = timeInHour(10, 50))!!
+        val result = accumulator.flush(now = timeInHour(10, 50))
 
-        assertEquals(hourStart, result.aggregate.timestamp)
+        assertEquals(hourStart, result.first().aggregate.timestamp)
     }
 
     @Test
@@ -267,9 +266,9 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 30, now = timeInHour(9, 40))
 
         // Explicit flush mid-hour 9
-        val result = accumulator.flush(now = timeInHour(9, 55))!!
+        val result = accumulator.flush(now = timeInHour(9, 55))
 
-        assertEquals(180, result.dailySummary.totalSteps)
+        assertEquals(180, result.first().dailySummary.totalSteps)
     }
 
     // ─── Multiple hour boundaries ────────────────────────────────────────────
@@ -283,10 +282,10 @@ class StepAccumulatorTest {
         val flush1 = accumulator.addSteps(delta = 5, now = timeInHour(8, 5))
         val flush2 = accumulator.addSteps(delta = 10, now = timeInHour(9, 5))
 
-        assertNotNull(flush1)
-        assertNotNull(flush2)
-        assertEquals(100, flush1!!.aggregate.stepCountDelta)
-        assertEquals(5, flush2!!.aggregate.stepCountDelta)
+        assertTrue(flush1.isNotEmpty())
+        assertTrue(flush2.isNotEmpty())
+        assertEquals(100, flush1.first().aggregate.stepCountDelta)
+        assertEquals(5, flush2.first().aggregate.stepCountDelta)
     }
 
     // ─── Zero-delta edge case ────────────────────────────────────────────────
@@ -320,8 +319,8 @@ class StepAccumulatorTest {
         val hourStart = startOfHour(8)
         val accumulator = StepAccumulator(hourStart)
         accumulator.addSteps(delta = 50, now = timeInHour(8, 20))
-        val result = accumulator.flush(now = timeInHour(8, 50))!!
-        assertTrue(result.aggregate is HourlyStepAggregate)
+        val result = accumulator.flush(now = timeInHour(8, 50))
+        assertTrue(result.first().aggregate is HourlyStepAggregate)
     }
 
     @Test
@@ -329,8 +328,8 @@ class StepAccumulatorTest {
         val hourStart = startOfHour(8)
         val accumulator = StepAccumulator(hourStart)
         accumulator.addSteps(delta = 50, now = timeInHour(8, 20))
-        val result = accumulator.flush(now = timeInHour(8, 50))!!
-        assertTrue(result.dailySummary is DailySummary)
+        val result = accumulator.flush(now = timeInHour(8, 50))
+        assertTrue(result.first().dailySummary is DailySummary)
     }
 
     // ─── Midnight rollover ───────────────────────────────────────────────────
@@ -346,7 +345,7 @@ class StepAccumulatorTest {
 
         // Cross midnight into day 1 at 00:05
         val day1Hour0 = epochForDayAndHour(dayOffset = 1, hour = 0, minuteOffset = 5)
-        val flushResult = accumulator.addSteps(delta = 10, now = day1Hour0)
+        accumulator.addSteps(delta = 10, now = day1Hour0)
 
         // totalStepsToday should be 10 (only the steps on the new day)
         assertEquals(10, accumulator.totalStepsToday)
@@ -361,12 +360,12 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 400, now = epochForDayAndHour(0, 23, 30))
 
         val day1Hour0 = epochForDayAndHour(dayOffset = 1, hour = 0, minuteOffset = 5)
-        val flushResult = accumulator.addSteps(delta = 20, now = day1Hour0)!!
+        val flushResults = accumulator.addSteps(delta = 20, now = day1Hour0)
 
         // The flushed aggregate's daily summary should contain only old-day steps
-        assertEquals(400, flushResult.dailySummary.totalSteps)
+        assertEquals(400, flushResults.first().dailySummary.totalSteps)
         // The date in the daily summary should be day 0 (2026-01-01)
-        assertEquals("2026-01-01", flushResult.dailySummary.date)
+        assertEquals("2026-01-01", flushResults.first().dailySummary.date)
     }
 
     @Test
@@ -395,13 +394,13 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 200, now = epochForDayAndHour(0, 23, 45))
 
         // Cross into new day
-        val flushResult = accumulator.addSteps(
+        val flushResults = accumulator.addSteps(
             delta = 5,
             now = epochForDayAndHour(1, 0, 5),
         )
 
-        assertNotNull("Should flush the 23:00 bucket at midnight crossing", flushResult)
-        assertEquals(200, flushResult!!.aggregate.stepCountDelta)
+        assertTrue("Should flush the 23:00 bucket at midnight crossing", flushResults.isNotEmpty())
+        assertEquals(200, flushResults.first().aggregate.stepCountDelta)
     }
 
     @Test
@@ -416,12 +415,12 @@ class StepAccumulatorTest {
 
         // Accumulate more steps then flush mid-hour
         accumulator.addSteps(delta = 30, now = epochForDayAndHour(1, 0, 30))
-        val flushResult = accumulator.flush(now = epochForDayAndHour(1, 0, 50))!!
+        val flushResult = accumulator.flush(now = epochForDayAndHour(1, 0, 50))
 
         // The explicit flush should have the new day's date
-        assertEquals("2026-01-02", flushResult.dailySummary.date)
+        assertEquals("2026-01-02", flushResult.first().dailySummary.date)
         // And only day-1 steps: 5 + 30 = 35
-        assertEquals(35, flushResult.dailySummary.totalSteps)
+        assertEquals(35, flushResult.first().dailySummary.totalSteps)
     }
 
     // ─── DailySummary date comes from tracked currentDate, not bucket timestamp ──
@@ -443,20 +442,20 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 300, now = epochForDayAndHour(0, 23, 30))
 
         // Crossing midnight flushes the 23:00 bucket — summary date must be old day.
-        val oldDayFlush = accumulator.addSteps(delta = 15, now = epochForDayAndHour(1, 0, 5))!!
+        val oldDayFlushResults = accumulator.addSteps(delta = 15, now = epochForDayAndHour(1, 0, 5))
         assertEquals(
             "DailySummary date should be the old day (from tracked currentDate)",
             "2026-01-01",
-            oldDayFlush.dailySummary.date,
+            oldDayFlushResults.first().dailySummary.date,
         )
 
         // Add more steps on day 1, then flush explicitly.
         accumulator.addSteps(delta = 20, now = epochForDayAndHour(1, 0, 30))
-        val newDayFlush = accumulator.flush(now = epochForDayAndHour(1, 0, 50))!!
+        val newDayFlushResults = accumulator.flush(now = epochForDayAndHour(1, 0, 50))
         assertEquals(
             "DailySummary date should be the new day (from tracked currentDate)",
             "2026-01-02",
-            newDayFlush.dailySummary.date,
+            newDayFlushResults.first().dailySummary.date,
         )
     }
 
@@ -470,9 +469,9 @@ class StepAccumulatorTest {
         accumulator.setActivity("CYCLING")
         accumulator.addSteps(delta = 100, now = timeInHour(8, 30))
 
-        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
-        assertEquals("CYCLING", result.aggregate.detectedActivity)
+        assertEquals("CYCLING", result.first().aggregate.detectedActivity)
     }
 
     @Test
@@ -481,9 +480,9 @@ class StepAccumulatorTest {
         val accumulator = StepAccumulator(hourStart)
 
         accumulator.addSteps(delta = 100, now = timeInHour(8, 30))
-        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
-        assertEquals("WALKING", result.aggregate.detectedActivity)
+        assertEquals("WALKING", result.first().aggregate.detectedActivity)
     }
 
     @Test
@@ -497,9 +496,9 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 5, now = timeInHour(10, 55))
 
         // Cross into hour 11 to flush the hour 10 bucket
-        val result = accumulator.addSteps(delta = 3, now = timeInHour(11, 5))!!
+        val result = accumulator.addSteps(delta = 3, now = timeInHour(11, 5))
 
-        assertEquals("STILL", result.aggregate.detectedActivity)
+        assertEquals("STILL", result.first().aggregate.detectedActivity)
     }
 
     @Test
@@ -511,12 +510,12 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 100, now = timeInHour(8, 30))
 
         // Cross hour boundary — should flush with CYCLING
-        val flush1 = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
-        assertEquals("CYCLING", flush1.aggregate.detectedActivity)
+        val flush1 = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
+        assertEquals("CYCLING", flush1.first().aggregate.detectedActivity)
 
         // Now in hour 9 — activity should reset to WALKING
-        val flush2 = accumulator.addSteps(delta = 10, now = timeInHour(10, 5))!!
-        assertEquals("WALKING", flush2.aggregate.detectedActivity)
+        val flush2 = accumulator.addSteps(delta = 10, now = timeInHour(10, 5))
+        assertEquals("WALKING", flush2.first().aggregate.detectedActivity)
     }
 
     @Test
@@ -529,9 +528,9 @@ class StepAccumulatorTest {
         accumulator.setActivity("WALKING")
         accumulator.addSteps(delta = 50, now = timeInHour(14, 45))
 
-        val result = accumulator.addSteps(delta = 2, now = timeInHour(15, 5))!!
+        val result = accumulator.addSteps(delta = 2, now = timeInHour(15, 5))
 
-        assertEquals("WALKING", result.aggregate.detectedActivity)
+        assertEquals("WALKING", result.first().aggregate.detectedActivity)
     }
 
     @Test
@@ -542,9 +541,9 @@ class StepAccumulatorTest {
         accumulator.setActivity("CYCLING")
         accumulator.addSteps(delta = 80, now = timeInHour(9, 20))
 
-        val result = accumulator.flush(now = timeInHour(9, 55))!!
+        val result = accumulator.flush(now = timeInHour(9, 55))
 
-        assertEquals("CYCLING", result.aggregate.detectedActivity)
+        assertEquals("CYCLING", result.first().aggregate.detectedActivity)
     }
 
     // ─── Distance computation ─────────────────────────────────────────────────
@@ -555,10 +554,10 @@ class StepAccumulatorTest {
         val accumulator = StepAccumulator(hourStart)
 
         accumulator.addSteps(delta = 1000, now = timeInHour(8, 30))
-        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
         // 1000 steps * 0.00075 km/step = 0.75 km
-        assertEquals(0.75f, result.dailySummary.totalDistance, 0.0001f)
+        assertEquals(0.75f, result.first().dailySummary.totalDistance, 0.0001f)
     }
 
     @Test
@@ -567,10 +566,10 @@ class StepAccumulatorTest {
         val accumulator = StepAccumulator(hourStart, strideLengthKm = 0.001f)
 
         accumulator.addSteps(delta = 1000, now = timeInHour(8, 30))
-        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
         // 1000 steps * 0.001 km/step = 1.0 km
-        assertEquals(1.0f, result.dailySummary.totalDistance, 0.0001f)
+        assertEquals(1.0f, result.first().dailySummary.totalDistance, 0.0001f)
     }
 
     @Test
@@ -580,10 +579,10 @@ class StepAccumulatorTest {
 
         accumulator.addSteps(delta = 500, now = timeInHour(8, 20))
 
-        val result = accumulator.flush(now = timeInHour(8, 50))!!
+        val result = accumulator.flush(now = timeInHour(8, 50))
 
         // 500 steps * 0.00075 km/step = 0.375 km
-        assertEquals(0.375f, result.dailySummary.totalDistance, 0.0001f)
+        assertEquals(0.375f, result.first().dailySummary.totalDistance, 0.0001f)
     }
 
     @Test
@@ -593,10 +592,10 @@ class StepAccumulatorTest {
 
         accumulator.addSteps(delta = 500, now = timeInHour(8, 20))
 
-        val result = accumulator.flush(now = timeInHour(8, 50))!!
+        val result = accumulator.flush(now = timeInHour(8, 50))
 
         // 500 steps * 0.0009 km/step = 0.45 km
-        assertEquals(0.45f, result.dailySummary.totalDistance, 0.0001f)
+        assertEquals(0.45f, result.first().dailySummary.totalDistance, 0.0001f)
     }
 
     @Test
@@ -608,7 +607,7 @@ class StepAccumulatorTest {
         val result = accumulator.flush(now = timeInHour(8, 50))
 
         // No steps means no flush
-        assertNull(result)
+        assertTrue(result.isEmpty())
     }
 
     // ─── Seeded initialisation (service-restart recovery) ────────────────────
@@ -662,11 +661,11 @@ class StepAccumulatorTest {
 
         accumulator.addSteps(delta = 50, now = timeInHour(10, 30))
 
-        val result = accumulator.flush(now = timeInHour(10, 55))!!
+        val result = accumulator.flush(now = timeInHour(10, 55))
 
         // currentHourSteps = 200 + 50 = 250; totalStepsToday = 600 + 50 = 650
-        assertEquals(250, result.aggregate.stepCountDelta)
-        assertEquals(650, result.dailySummary.totalSteps)
+        assertEquals(250, result.first().aggregate.stepCountDelta)
+        assertEquals(650, result.first().dailySummary.totalSteps)
     }
 
     @Test
@@ -681,11 +680,11 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 30, now = timeInHour(8, 40))
 
         // Cross into hour 9 → should flush with 120 + 30 = 150 delta
-        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))!!
+        val result = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
 
-        assertEquals(150, result.aggregate.stepCountDelta)
+        assertEquals(150, result.first().aggregate.stepCountDelta)
         // totalAfterFlush was 400 + 30 = 430 before the new 5 steps hit
-        assertEquals(430, result.dailySummary.totalSteps)
+        assertEquals(430, result.first().dailySummary.totalSteps)
     }
 
     // ─── Multi-hour scenario with activity and midnight ───────────────────────
@@ -701,9 +700,10 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 400, now = epochForDayAndHour(0, 23, 30))
 
         // Cross midnight: should flush hour 23 bucket
-        val midnightFlush = accumulator.addSteps(delta = 5, now = epochForDayAndHour(1, 0, 5))
-        assertNotNull(midnightFlush)
-        assertEquals(400, midnightFlush!!.aggregate.stepCountDelta)
+        val midnightFlushResults = accumulator.addSteps(delta = 5, now = epochForDayAndHour(1, 0, 5))
+        assertTrue(midnightFlushResults.isNotEmpty())
+        val midnightFlush = midnightFlushResults.first()
+        assertEquals(400, midnightFlush.aggregate.stepCountDelta)
         assertEquals("WALKING", midnightFlush.aggregate.detectedActivity)
         // Daily summary for old day
         assertEquals(400, midnightFlush.dailySummary.totalSteps)
@@ -717,12 +717,129 @@ class StepAccumulatorTest {
         accumulator.addSteps(delta = 50, now = epochForDayAndHour(1, 0, 30))
 
         // Cross hour 0 → 1
-        val hourFlush = accumulator.addSteps(delta = 10, now = epochForDayAndHour(1, 1, 5))
-        assertNotNull(hourFlush)
-        assertEquals(55, hourFlush!!.aggregate.stepCountDelta) // 5 + 50
+        val hourFlushResults = accumulator.addSteps(delta = 10, now = epochForDayAndHour(1, 1, 5))
+        assertTrue(hourFlushResults.isNotEmpty())
+        val hourFlush = hourFlushResults.first()
+        assertEquals(55, hourFlush.aggregate.stepCountDelta) // 5 + 50
         assertEquals("CYCLING", hourFlush.aggregate.detectedActivity)
         assertEquals("2026-01-02", hourFlush.dailySummary.date)
         // totalSteps = 55 (steps in bucket); the 10 arriving in the new hour are not yet flushed
         assertEquals(55, hourFlush.dailySummary.totalSteps)
+    }
+
+    // ─── Multi-hour clock jump (bug fix: task-1311ada1) ──────────────────────
+
+    @Test
+    fun `two-hour skip produces flush for current and one intermediate empty hour`() {
+        // Start at 08:00, accumulate steps, then jump to 10:05 (skipping 09:00)
+        val accumulator = StepAccumulator(epochForDayAndHour(0, 8))
+        accumulator.addSteps(delta = 300, now = epochForDayAndHour(0, 8, 30))
+
+        // Jump directly from 08:xx to 10:05 — skips the 09:00 bucket entirely
+        val results = accumulator.addSteps(delta = 5, now = epochForDayAndHour(0, 10, 5))
+
+        // Should produce 2 results: 08:00 (300 steps) and 09:00 (0 steps)
+        assertEquals("Expected 2 flush results for 2-hour skip", 2, results.size)
+
+        val flush08 = results[0]
+        assertEquals(epochForDayAndHour(0, 8), flush08.aggregate.timestamp)
+        assertEquals(300, flush08.aggregate.stepCountDelta)
+
+        val flush09 = results[1]
+        assertEquals(epochForDayAndHour(0, 9), flush09.aggregate.timestamp)
+        assertEquals(0, flush09.aggregate.stepCountDelta)
+    }
+
+    @Test
+    fun `intermediate empty hours have zero stepCountDelta`() {
+        val accumulator = StepAccumulator(epochForDayAndHour(0, 8))
+        accumulator.addSteps(delta = 100, now = epochForDayAndHour(0, 8, 30))
+
+        // Jump 3 hours ahead: skips 09:00 and 10:00
+        val results = accumulator.addSteps(delta = 10, now = epochForDayAndHour(0, 11, 5))
+
+        // Intermediate results (09:00 and 10:00) must have zero steps
+        assertTrue("Expected at least 3 results", results.size >= 3)
+        for (i in 1 until results.size) {
+            assertEquals(
+                "Intermediate hour result[${i}] should have 0 steps",
+                0,
+                results[i].aggregate.stepCountDelta,
+            )
+        }
+    }
+
+    @Test
+    fun `large clock jump produces correct number of intermediate flushes`() {
+        // Jump from 08:00 to 11:00 — skips 09:00 and 10:00
+        val accumulator = StepAccumulator(epochForDayAndHour(0, 8))
+        accumulator.addSteps(delta = 50, now = epochForDayAndHour(0, 8, 45))
+
+        val results = accumulator.addSteps(delta = 5, now = epochForDayAndHour(0, 11, 5))
+
+        // Expect: 08:00 (50 steps), 09:00 (0), 10:00 (0) = 3 total
+        assertEquals(3, results.size)
+        assertEquals(epochForDayAndHour(0, 8), results[0].aggregate.timestamp)
+        assertEquals(epochForDayAndHour(0, 9), results[1].aggregate.timestamp)
+        assertEquals(epochForDayAndHour(0, 10), results[2].aggregate.timestamp)
+        assertEquals(50, results[0].aggregate.stepCountDelta)
+        assertEquals(0, results[1].aggregate.stepCountDelta)
+        assertEquals(0, results[2].aggregate.stepCountDelta)
+
+        // New bucket should hold only the arriving steps
+        assertEquals(5, accumulator.currentHourSteps)
+        // totalStepsToday: 50 (hour 8) + 5 (new) = 55
+        assertEquals(55, accumulator.totalStepsToday)
+    }
+
+    @Test
+    fun `multi-hour skip crossing midnight resets daily total`() {
+        // Start at 23:00 on day 0, accumulate steps, then jump to 02:05 on day 1
+        // Skipped hours: 00:00 and 01:00 on day 1
+        val accumulator = StepAccumulator(epochForDayAndHour(0, 23))
+        accumulator.addSteps(delta = 500, now = epochForDayAndHour(0, 23, 30))
+
+        val results = accumulator.addSteps(delta = 10, now = epochForDayAndHour(1, 2, 5))
+
+        // Should produce 3 results: 23:00 (500), 00:00 (0), 01:00 (0)
+        assertEquals(3, results.size)
+
+        // First result: hour 23:00 on day 0, 500 steps, old-day summary
+        assertEquals(epochForDayAndHour(0, 23), results[0].aggregate.timestamp)
+        assertEquals(500, results[0].aggregate.stepCountDelta)
+        assertEquals("2026-01-01", results[0].dailySummary.date)
+        assertEquals(500, results[0].dailySummary.totalSteps)
+
+        // Second result: hour 00:00 on day 1, 0 steps, new-day summary (daily total resets)
+        assertEquals(epochForDayAndHour(1, 0), results[1].aggregate.timestamp)
+        assertEquals(0, results[1].aggregate.stepCountDelta)
+        assertEquals("2026-01-02", results[1].dailySummary.date)
+        assertEquals(0, results[1].dailySummary.totalSteps)
+
+        // Third result: hour 01:00 on day 1, 0 steps
+        assertEquals(epochForDayAndHour(1, 1), results[2].aggregate.timestamp)
+        assertEquals(0, results[2].aggregate.stepCountDelta)
+        assertEquals("2026-01-02", results[2].dailySummary.date)
+        assertEquals(0, results[2].dailySummary.totalSteps)
+
+        // After the jump, totalStepsToday is only the new delta (day 1 steps)
+        assertEquals(10, accumulator.totalStepsToday)
+    }
+
+    @Test
+    fun `DST-like one-hour forward jump produces single flush result`() {
+        // Simulates a DST spring-forward: clock jumps 1 hour forward.
+        // From perspective of addSteps, this looks like a normal 2-hour boundary crossing
+        // (current hour + exactly 2 epoch-hour slots).
+        val accumulator = StepAccumulator(epochForDayAndHour(0, 1))
+        accumulator.addSteps(delta = 100, now = epochForDayAndHour(0, 1, 30))
+
+        // Spring-forward: clock jumps from ~01:59 to 03:00 — skips 02:00 entirely
+        val results = accumulator.addSteps(delta = 5, now = epochForDayAndHour(0, 3, 5))
+
+        // Should produce 2 results: 01:00 (100 steps) and 02:00 (0 steps)
+        assertEquals(2, results.size)
+        assertEquals(100, results[0].aggregate.stepCountDelta)
+        assertEquals(0, results[1].aggregate.stepCountDelta)
     }
 }
