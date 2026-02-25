@@ -113,6 +113,7 @@
     <string name="settings_step_goal_dialog_label">Steps (1–100,000)</string>
     <string name="settings_step_goal_dialog_confirm">Set</string>
     <string name="settings_step_goal_dialog_cancel">Cancel</string>
+    <string name="settings_step_goal_dialog_error">Enter a number between 1 and 100,000</string>
 
     <!-- Settings: Calibration section -->
     <string name="settings_section_calibration">Calibration</string>

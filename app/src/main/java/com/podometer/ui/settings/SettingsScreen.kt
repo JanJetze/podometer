@@ -571,7 +571,10 @@ private fun StepGoalDialog(
                 label = { Text(text = stringResource(R.string.settings_step_goal_dialog_label)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                isError = parsed == null && input.isNotBlank(),
+                isError = parsed == null,
+                supportingText = if (parsed == null) {
+                    { Text(text = stringResource(R.string.settings_step_goal_dialog_error)) }
+                } else null,
             )
         },
         confirmButton = {
@@ -690,6 +693,45 @@ private fun SettingsScreenErrorPreview() {
             onSetNotificationStyle = {},
             onExportData = {},
             onResetExportState = {},
+        )
+    }
+}
+
+/** Preview: StepGoalDialog with a valid pre-populated value — no error shown. */
+@Preview(showBackground = true, name = "StepGoalDialog - Valid Input")
+@Composable
+private fun StepGoalDialogValidPreview() {
+    PodometerTheme {
+        StepGoalDialog(
+            currentGoal = 10_000,
+            onConfirm = {},
+            onDismiss = {},
+        )
+    }
+}
+
+/** Preview: StepGoalDialog when the initial value is zero — error state shown. */
+@Preview(showBackground = true, name = "StepGoalDialog - Zero Value Error")
+@Composable
+private fun StepGoalDialogZeroPreview() {
+    PodometerTheme {
+        StepGoalDialog(
+            currentGoal = 0,
+            onConfirm = {},
+            onDismiss = {},
+        )
+    }
+}
+
+/** Preview: StepGoalDialog when the initial value exceeds the maximum — error state shown. */
+@Preview(showBackground = true, name = "StepGoalDialog - Out of Range Error")
+@Composable
+private fun StepGoalDialogOutOfRangePreview() {
+    PodometerTheme {
+        StepGoalDialog(
+            currentGoal = 200_000,
+            onConfirm = {},
+            onDismiss = {},
         )
     }
 }
