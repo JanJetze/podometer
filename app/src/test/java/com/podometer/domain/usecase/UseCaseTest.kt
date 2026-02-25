@@ -194,12 +194,13 @@ class UseCaseTest {
     }
 
     @Test
-    fun `GetTodayStepsUseCase caps progressPercent at 100`() = runTest {
+    fun `GetTodayStepsUseCase allows progressPercent to exceed 100 when goal surpassed`() = runTest {
         val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 15_000), preferencesManager())
 
         val result = useCase().first()
 
-        assertEquals(100.0f, result.progressPercent, 0.001f)
+        // 15000 / 10000 * 100 = 150.0%
+        assertEquals(150.0f, result.progressPercent, 0.001f)
     }
 
     @Test

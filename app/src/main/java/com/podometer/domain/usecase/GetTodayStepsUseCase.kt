@@ -34,7 +34,7 @@ class GetTodayStepsUseCaseImpl @Inject constructor(
 
     override operator fun invoke(): Flow<StepData> =
         stepRepository.getTodaySteps().combine(preferencesManager.strideLengthKm()) { steps, strideKm ->
-            val progressPercent = (steps.toFloat() / DEFAULT_GOAL * 100f).coerceAtMost(100f)
+            val progressPercent = steps.toFloat() / DEFAULT_GOAL * 100f
             val distanceKm = steps * strideKm
             StepData(
                 steps = steps,
