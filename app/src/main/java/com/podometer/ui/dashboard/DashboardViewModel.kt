@@ -32,7 +32,7 @@ import javax.inject.Inject
  *
  * @property todaySteps       Total steps taken today.
  * @property dailyGoal        User's configured daily step goal.
- * @property progressPercent  Steps as a percentage of [dailyGoal], capped at 100.
+ * @property progressPercent  Steps as a percentage of [dailyGoal] (may exceed 100 when the goal is surpassed).
  * @property distanceKm       Approximate distance walked today in kilometres.
  * @property currentActivity  Current inferred activity, derived from the most recent
  *                            transition or [ActivityState.STILL] if none.
