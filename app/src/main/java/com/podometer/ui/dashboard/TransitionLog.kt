@@ -39,8 +39,9 @@ import com.podometer.R
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.TransitionEvent
 import com.podometer.ui.theme.PodometerTheme
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -128,6 +129,7 @@ fun TransitionLog(
     val scope = rememberCoroutineScope()
 
     var selectedTransition by remember { mutableStateOf<TransitionEvent?>(null) }
+    var snackbarJob by remember { mutableStateOf<Job?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(modifier = modifier) {
@@ -159,21 +161,26 @@ fun TransitionLog(
                 onOptionSelected = { newActivity ->
                     selectedTransition = null
                     onOverride(event.id, newActivity)
-                    scope.launch {
-                        // Use Indefinite + manual dismiss to get exactly 5 seconds
+                    snackbarJob?.cancel()
+                    snackbarJob = scope.launch {
+                        // Use Indefinite + withTimeoutOrNull to get exactly 5 seconds
                         // (SnackbarDuration.Short is 4s, Long is 10s).
-                        val snackbarJob = launch {
-                            val result = snackbarHostState.showSnackbar(
-                                message = overriddenLabel,
-                                actionLabel = undoLabel,
-                                duration = SnackbarDuration.Indefinite,
-                            )
+                        // withTimeoutOrNull returns null on timeout, or the actual result
+                        // if the user interacts before the timeout.
+                        try {
+                            val result = withTimeoutOrNull(SNACKBAR_TIMEOUT_MS) {
+                                snackbarHostState.showSnackbar(
+                                    message = overriddenLabel,
+                                    actionLabel = undoLabel,
+                                    duration = SnackbarDuration.Indefinite,
+                                )
+                            }
                             if (result == SnackbarResult.ActionPerformed) {
                                 onUndo()
                             }
+                        } finally {
+                            snackbarHostState.currentSnackbarData?.dismiss()
                         }
-                        delay(SNACKBAR_TIMEOUT_MS)
-                        snackbarHostState.currentSnackbarData?.dismiss()
                     }
                 },
             )
