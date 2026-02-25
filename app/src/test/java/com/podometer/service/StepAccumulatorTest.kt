@@ -826,6 +826,43 @@ class StepAccumulatorTest {
         assertEquals(10, accumulator.totalStepsToday)
     }
 
+    // ─── currentActivity public getter ───────────────────────────────────────
+
+    @Test
+    fun `currentActivity defaults to WALKING`() {
+        val accumulator = StepAccumulator(startOfHour(8))
+        assertEquals("WALKING", accumulator.currentActivity)
+    }
+
+    @Test
+    fun `currentActivity reflects most-recently set activity`() {
+        val accumulator = StepAccumulator(startOfHour(8))
+        accumulator.setActivity("CYCLING")
+        assertEquals("CYCLING", accumulator.currentActivity)
+    }
+
+    @Test
+    fun `currentActivity resets to WALKING after hour rollover`() {
+        val accumulator = StepAccumulator(startOfHour(8))
+        accumulator.setActivity("CYCLING")
+        // Cross hour boundary to trigger reset
+        accumulator.addSteps(delta = 10, now = timeInHour(8, 30))
+        accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
+        assertEquals("WALKING", accumulator.currentActivity)
+    }
+
+    @Test
+    fun `currentActivity can be updated after rollover`() {
+        val accumulator = StepAccumulator(startOfHour(8))
+        accumulator.setActivity("CYCLING")
+        accumulator.addSteps(delta = 10, now = timeInHour(8, 30))
+        // Cross to hour 9 — activity resets to WALKING
+        accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
+        // Update again in new bucket
+        accumulator.setActivity("STILL")
+        assertEquals("STILL", accumulator.currentActivity)
+    }
+
     @Test
     fun `DST-like one-hour forward jump produces single flush result`() {
         // Simulates a DST spring-forward: clock jumps 1 hour forward.

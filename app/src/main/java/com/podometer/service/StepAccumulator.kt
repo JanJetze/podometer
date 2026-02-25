@@ -62,8 +62,13 @@ class StepAccumulator(
      * The detected activity for the current open bucket.
      * Defaults to [DEFAULT_ACTIVITY] and resets after each hour rollover.
      * Update via [setActivity].
+     *
+     * Exposed as a public getter so that [com.podometer.service.StepTrackingService]
+     * can read the current activity when writing partial-hour aggregates to the
+     * database on each step event (for live dashboard updates).
      */
-    private var currentActivity: String = DEFAULT_ACTIVITY
+    var currentActivity: String = DEFAULT_ACTIVITY
+        private set
 
     // ─── Public API ──────────────────────────────────────────────────────────
 

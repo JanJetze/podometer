@@ -11,6 +11,8 @@ import android.util.Log
 import androidx.annotation.VisibleForTesting
 import androidx.core.app.ServiceCompat
 import com.podometer.data.db.ActivityTransition
+import com.podometer.data.db.HourlyStepAggregate
+import com.podometer.data.db.DailySummary
 import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
@@ -19,6 +21,7 @@ import com.podometer.data.sensor.CyclingClassifier
 import com.podometer.data.sensor.StepFrequencyTracker
 import com.podometer.data.sensor.StepSensorManager
 import com.podometer.domain.model.ActivityState
+import com.podometer.util.DateTimeUtils
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -108,6 +111,17 @@ class StepTrackingService : Service() {
      */
     private var lastStepEventMs: Long = 0L
 
+    /**
+     * Stride length in kilometres, read once from [PreferencesManager] during
+     * [onCreate] and cached here so that [collectStepEvents] can construct
+     * partial-hour [DailySummary] records for live dashboard updates without
+     * re-reading the preference on every step event.
+     *
+     * Defaults to [StepAccumulator.DEFAULT_STRIDE_LENGTH_KM] if the preference
+     * read fails.
+     */
+    private var strideLengthKm: Float = StepAccumulator.DEFAULT_STRIDE_LENGTH_KM
+
     // ─── Service lifecycle ────────────────────────────────────────────────────
 
     override fun onCreate() {
@@ -117,6 +131,7 @@ class StepTrackingService : Service() {
             default = StepAccumulator.DEFAULT_STRIDE_LENGTH_KM,
             tag = "read stride length preference",
         ) { preferencesManager.strideLengthKm().first() }
+        strideLengthKm = strideKm
         val now = System.currentTimeMillis()
         val hourStart = StepAccumulator.truncateToHour(now)
         val currentHourSteps = runBlockingWithDefault(
@@ -246,6 +261,26 @@ class StepTrackingService : Service() {
                         "${flushResult.aggregate.timestamp}",
                 )
             }
+
+            // Always write the current partial-hour state so the dashboard (which reads
+            // from Room Flows) sees live step-count updates without waiting up to 59
+            // minutes for the first hour-boundary flush.
+            // The upsert (delete-by-timestamp + insert) ensures no duplicate rows.
+            val partialAggregate = HourlyStepAggregate(
+                timestamp = StepAccumulator.truncateToHour(nowMs),
+                stepCountDelta = accumulator.currentHourSteps,
+                detectedActivity = accumulator.currentActivity,
+            )
+            stepRepository.upsertHourlyAggregate(partialAggregate)
+            val partialSummary = DailySummary(
+                date = DateTimeUtils.toLocalDate(nowMs).toString(),
+                totalSteps = accumulator.totalStepsToday,
+                totalDistance = accumulator.totalStepsToday * strideLengthKm,
+                walkingMinutes = 0,
+                cyclingMinutes = 0,
+            )
+            stepRepository.upsertDailySummary(partialSummary)
+            Log.d(TAG, "Partial-hour write: ${accumulator.currentHourSteps} steps in current hour, ${accumulator.totalStepsToday} today")
         }
     }
 
