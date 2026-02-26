@@ -255,6 +255,32 @@ class UseCaseTest {
         assertEquals(0, result.steps)
     }
 
+    @Test
+    fun `GetTodayStepsUseCase reflects custom daily step goal from preferences`() = runTest {
+        val pm = preferencesManager()
+        pm.setDailyStepGoal(5_000)
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 2_500), pm)
+
+        val result = useCase().first()
+
+        assertEquals(5_000, result.goal)
+        // 2500 / 5000 * 100 = 50.0
+        assertEquals(50.0f, result.progressPercent, 0.001f)
+    }
+
+    @Test
+    fun `GetTodayStepsUseCase progressPercent uses custom goal not hardcoded 10000`() = runTest {
+        val pm = preferencesManager()
+        pm.setDailyStepGoal(20_000)
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 5_000), pm)
+
+        val result = useCase().first()
+
+        assertEquals(20_000, result.goal)
+        // 5000 / 20000 * 100 = 25.0
+        assertEquals(25.0f, result.progressPercent, 0.001f)
+    }
+
     // ─── GetWeeklyStepsUseCase ───────────────────────────────────────────────
 
     @Test

@@ -17,28 +17,27 @@ fun interface GetTodayStepsUseCase {
  * Returns a [Flow] of [StepData] representing today's step-count progress.
  *
  * Combines the live step count from [StepRepository] with the user-configured
- * stride length from [PreferencesManager] to compute [StepData.progressPercent]
- * and [StepData.distanceKm]. The daily goal is hardcoded at 10,000 steps.
+ * stride length and daily step goal from [PreferencesManager] to compute
+ * [StepData.progressPercent] and [StepData.distanceKm]. When the user changes
+ * their step goal or stride length in Settings, the emitted [StepData] updates
+ * immediately without waiting for new steps to arrive.
  */
 class GetTodayStepsUseCaseImpl @Inject constructor(
     private val stepRepository: StepRepository,
     private val preferencesManager: PreferencesManager,
 ) : GetTodayStepsUseCase {
 
-    // ─── Constants ───────────────────────────────────────────────────────────
-
-    private companion object {
-        /** Default daily step goal. */
-        const val DEFAULT_GOAL = 10_000
-    }
-
     override operator fun invoke(): Flow<StepData> =
-        stepRepository.getTodaySteps().combine(preferencesManager.strideLengthKm()) { steps, strideKm ->
-            val progressPercent = steps.toFloat() / DEFAULT_GOAL * 100f
+        combine(
+            stepRepository.getTodaySteps(),
+            preferencesManager.strideLengthKm(),
+            preferencesManager.dailyStepGoal(),
+        ) { steps, strideKm, goal ->
+            val progressPercent = steps.toFloat() / goal * 100f
             val distanceKm = steps * strideKm
             StepData(
                 steps = steps,
-                goal = DEFAULT_GOAL,
+                goal = goal,
                 progressPercent = progressPercent,
                 distanceKm = distanceKm,
             )
