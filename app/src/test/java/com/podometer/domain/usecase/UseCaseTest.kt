@@ -3,6 +3,7 @@ package com.podometer.domain.usecase
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.ActivityTransitionDao
@@ -279,6 +280,25 @@ class UseCaseTest {
         assertEquals(20_000, result.goal)
         // 5000 / 20000 * 100 = 25.0
         assertEquals(25.0f, result.progressPercent, 0.001f)
+    }
+
+    @Test
+    fun `GetTodayStepsUseCase falls back to DEFAULT_DAILY_STEP_GOAL when goal is zero`() = runTest {
+        // Simulate a corrupt/zero goal stored in DataStore (cannot happen via the normal
+        // setDailyStepGoal path which validates goal > 0, but the use case must be
+        // arithmetically safe on its own).
+        //
+        // We bypass setDailyStepGoal's validation by seeding the DataStore directly with 0.
+        val goalKey = intPreferencesKey("daily_step_goal")
+        val pm = PreferencesManager(FakeDataStore(preferencesOf(goalKey to 0)))
+        val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 5_000), pm)
+
+        val result = useCase().first()
+
+        // goal stored in StepData should be the safe fallback (10_000)
+        assertEquals(10_000, result.goal)
+        // progressPercent must be computed with the safe goal, not trigger divide-by-zero
+        assertEquals(50.0f, result.progressPercent, 0.001f)
     }
 
     // ─── GetWeeklyStepsUseCase ───────────────────────────────────────────────

@@ -27,17 +27,29 @@ class GetTodayStepsUseCaseImpl @Inject constructor(
     private val preferencesManager: PreferencesManager,
 ) : GetTodayStepsUseCase {
 
+    private companion object {
+        /**
+         * Fallback goal used when the value from [PreferencesManager] is zero or negative.
+         *
+         * [PreferencesManager.setDailyStepGoal] already validates that goal > 0, but a
+         * defensive guard here ensures [StepData.progressPercent] is never computed via
+         * division-by-zero regardless of how this use case is wired up in the future.
+         */
+        const val DEFAULT_DAILY_STEP_GOAL = 10_000
+    }
+
     override operator fun invoke(): Flow<StepData> =
         combine(
             stepRepository.getTodaySteps(),
             preferencesManager.strideLengthKm(),
             preferencesManager.dailyStepGoal(),
         ) { steps, strideKm, goal ->
-            val progressPercent = steps.toFloat() / goal * 100f
+            val safeGoal = if (goal > 0) goal else DEFAULT_DAILY_STEP_GOAL
+            val progressPercent = steps.toFloat() / safeGoal * 100f
             val distanceKm = steps * strideKm
             StepData(
                 steps = steps,
-                goal = goal,
+                goal = safeGoal,
                 progressPercent = progressPercent,
                 distanceKm = distanceKm,
             )
