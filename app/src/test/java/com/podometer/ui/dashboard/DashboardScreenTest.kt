@@ -11,8 +11,8 @@ import org.junit.Test
  * Compose composables cannot be rendered in JVM unit tests without a device/emulator,
  * so these tests verify:
  *  - The [DashboardScreen] composable class exists in the expected package.
- *  - The private helper composables [SectionHeader] and [PlaceholderSection] are compiled
- *    into the [DashboardScreenKt] class (verifiable via reflection on their enclosing class).
+ *  - The private helper composable [SectionHeader] is compiled into the [DashboardScreenKt]
+ *    class (verifiable via reflection on its enclosing class).
  *  - The [DashboardScreenKt] class is in the [com.podometer.ui.dashboard] package.
  */
 class DashboardScreenTest {
@@ -50,13 +50,4 @@ class DashboardScreenTest {
         )
     }
 
-    @Test
-    fun `PlaceholderSection private composable is compiled into DashboardScreenKt`() {
-        val clazz = Class.forName("com.podometer.ui.dashboard.DashboardScreenKt")
-        val methods = clazz.declaredMethods.map { it.name }
-        assertTrue(
-            "PlaceholderSection method should be declared in DashboardScreenKt, found: $methods",
-            methods.any { it == "PlaceholderSection" },
-        )
-    }
 }

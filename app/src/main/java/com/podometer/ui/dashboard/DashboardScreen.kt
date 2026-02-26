@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
 import com.podometer.data.sensor.SensorType
+import com.podometer.util.DateTimeUtils
 import com.podometer.util.checkEssentialPermissions
 
 /**
@@ -168,9 +169,18 @@ fun DashboardScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Section: Activity Timeline (placeholder — full implementation is a separate task)
+                // Section: Activity Timeline — wired up to real transition data
                 SectionHeader(title = stringResource(R.string.section_activity_timeline))
-                PlaceholderSection(text = stringResource(R.string.placeholder_timeline))
+                val dayStartMillis = DateTimeUtils.todayStartMillis()
+                ActivityTimeline(
+                    segments = buildTimelineSegments(
+                        transitions = uiState.transitions,
+                        dayStartMillis = dayStartMillis,
+                        dayEndMillis = dayStartMillis + 86_400_000L,
+                        nowMillis = System.currentTimeMillis(),
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -219,22 +229,5 @@ private fun SectionHeader(title: String) {
         text = title,
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.padding(vertical = 8.dp),
-    )
-}
-
-/**
- * Placeholder body text shown in sections that are not yet implemented.
- *
- * Uses [MaterialTheme.typography.bodyMedium] with [MaterialTheme.colorScheme.onSurfaceVariant]
- * to visually de-emphasise the placeholder relative to real content.
- *
- * @param text The localised placeholder message to display.
- */
-@Composable
-private fun PlaceholderSection(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
