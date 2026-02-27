@@ -31,6 +31,18 @@ import com.podometer.data.db.CyclingSession
  */
 class CyclingSessionManager {
 
+    companion object {
+        /**
+         * Minimum session duration in milliseconds (60 seconds) below which a
+         * cycling session is considered accidental and should be discarded.
+         *
+         * [StepTrackingService] checks the ended session's duration against this
+         * threshold and deletes the DB row instead of updating it when the duration
+         * is below the threshold.
+         */
+        const val MIN_SESSION_DURATION_MS = 60_000L
+    }
+
     /** Epoch-millisecond timestamp when the current session started. */
     private var sessionStartTimeMs: Long = 0L
 

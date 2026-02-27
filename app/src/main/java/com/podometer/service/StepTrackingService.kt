@@ -377,12 +377,24 @@ class StepTrackingService : Service() {
             if (transition.fromState == ActivityState.CYCLING) {
                 val endedSession = cyclingSessionManager.endSession(now) // fast, clears step pause
                 if (endedSession != null) {
-                    serviceScope.launch {
-                        try {
-                            cyclingRepository.updateSession(endedSession)
-                            Log.d(TAG, "Cycling session ended, duration=${endedSession.durationMinutes} min")
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to update cycling session in DB", e)
+                    val durationMs = endedSession.endTime!! - endedSession.startTime
+                    if (durationMs < CyclingSessionManager.MIN_SESSION_DURATION_MS) {
+                        serviceScope.launch {
+                            try {
+                                cyclingRepository.deleteSession(endedSession)
+                                Log.d(TAG, "Cycling session discarded (too short, ${durationMs}ms < ${CyclingSessionManager.MIN_SESSION_DURATION_MS}ms)")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to delete short cycling session from DB", e)
+                            }
+                        }
+                    } else {
+                        serviceScope.launch {
+                            try {
+                                cyclingRepository.updateSession(endedSession)
+                                Log.d(TAG, "Cycling session ended, duration=${endedSession.durationMinutes} min")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to update cycling session in DB", e)
+                            }
                         }
                     }
                 }
@@ -424,10 +436,15 @@ class StepTrackingService : Service() {
                 val ongoing = cyclingRepository.getOngoingSession() ?: return@launch
                 val nowMs = System.currentTimeMillis()
                 val durationMs = nowMs - ongoing.startTime
-                val durationMinutes = ((durationMs + 30_000L) / 60_000L).toInt()
-                val closed = ongoing.copy(endTime = nowMs, durationMinutes = durationMinutes)
-                cyclingRepository.updateSession(closed)
-                Log.d(TAG, "Closed orphaned cycling session id=${ongoing.id}, duration=${durationMinutes} min")
+                if (durationMs < CyclingSessionManager.MIN_SESSION_DURATION_MS) {
+                    cyclingRepository.deleteSession(ongoing)
+                    Log.d(TAG, "Deleted orphaned cycling session id=${ongoing.id} (too short, ${durationMs}ms < ${CyclingSessionManager.MIN_SESSION_DURATION_MS}ms)")
+                } else {
+                    val durationMinutes = ((durationMs + 30_000L) / 60_000L).toInt()
+                    val closed = ongoing.copy(endTime = nowMs, durationMinutes = durationMinutes)
+                    cyclingRepository.updateSession(closed)
+                    Log.d(TAG, "Closed orphaned cycling session id=${ongoing.id}, duration=${durationMinutes} min")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to close orphaned cycling session", e)
             }

@@ -305,6 +305,65 @@ class CyclingSessionManagerTest {
         assertEquals(5_000_000L, newSession.startTime)
     }
 
+    // ─── MIN_SESSION_DURATION_MS threshold ────────────────────────────────────
+
+    @Test
+    fun `MIN_SESSION_DURATION_MS constant is 60 seconds`() {
+        assertEquals(60_000L, CyclingSessionManager.MIN_SESSION_DURATION_MS)
+    }
+
+    @Test
+    fun `endSession returns session for duration exactly at threshold (60 s)`() {
+        // A session of exactly MIN_SESSION_DURATION_MS should NOT be considered short.
+        manager.startSession(0L)
+        manager.setOngoingSessionId(1)
+        val result = manager.endSession(60_000L)
+        assertNotNull(result)
+    }
+
+    @Test
+    fun `endSession returns session for duration one ms below threshold (59999 ms)`() {
+        // Duration is below MIN_SESSION_DURATION_MS — session is still returned so
+        // the caller can identify and delete it from the DB.
+        manager.startSession(0L)
+        manager.setOngoingSessionId(1)
+        val result = manager.endSession(59_999L)
+        assertNotNull(result)
+    }
+
+    @Test
+    fun `endSession returned session durationMs is below threshold for 30 second session`() {
+        // Caller must check endTime - startTime against MIN_SESSION_DURATION_MS.
+        val startTime = 0L
+        val endTime = 30_000L
+        manager.startSession(startTime)
+        manager.setOngoingSessionId(1)
+        val result = manager.endSession(endTime)!!
+        val durationMs = result.endTime!! - result.startTime
+        assertTrue(durationMs < CyclingSessionManager.MIN_SESSION_DURATION_MS)
+    }
+
+    @Test
+    fun `endSession returned session durationMs is at or above threshold for 60 second session`() {
+        val startTime = 0L
+        val endTime = 60_000L
+        manager.startSession(startTime)
+        manager.setOngoingSessionId(1)
+        val result = manager.endSession(endTime)!!
+        val durationMs = result.endTime!! - result.startTime
+        assertTrue(durationMs >= CyclingSessionManager.MIN_SESSION_DURATION_MS)
+    }
+
+    @Test
+    fun `endSession clears state even for short session below threshold`() {
+        manager.startSession(0L)
+        manager.setOngoingSessionId(1)
+        manager.endSession(10_000L) // 10 seconds, well below threshold
+        assertFalse(manager.hasOngoingSession())
+        assertFalse(manager.isStepCountingPaused)
+        assertNull(manager.getOngoingSessionId())
+    }
+
     // ─── Thread safety ────────────────────────────────────────────────────────
 
     @Test
