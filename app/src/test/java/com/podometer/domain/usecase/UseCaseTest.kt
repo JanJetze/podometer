@@ -909,4 +909,26 @@ class UseCaseTest {
         assertNotNull("Expected session to be updated (closed) at exact 60s", capturedDao?.updatedSession)
         assertEquals(1, capturedDao?.updatedSession?.durationMinutes)
     }
+
+    @Test
+    fun `OverrideActivityUseCase overriding away from CYCLING when no session covers the timestamp sets neither updatedSession nor deletedSession`() = runTest {
+        val transition = ActivityTransition(
+            id = 80,
+            timestamp = 4_000_000L,
+            fromActivity = "WALKING",
+            toActivity = "CYCLING",
+            isManualOverride = false,
+        )
+        val transitionDao = FakeActivityTransitionDao(flowOf(listOf(transition)))
+        val repo = StepRepository(FakeStepDao(), transitionDao)
+        var capturedDao: FakeCyclingSessionDao? = null
+        // No session covers this timestamp
+        val cycling = cyclingRepo(sessionCoveringTimestamp = null, daoOut = { capturedDao = it })
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+
+        useCase(transition, ActivityState.WALKING)
+
+        assertNull("Expected updatedSession to be null when no session covers the timestamp", capturedDao?.updatedSession)
+        assertNull("Expected deletedSession to be null when no session covers the timestamp", capturedDao?.deletedSession)
+    }
 }

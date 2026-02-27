@@ -99,7 +99,7 @@ class OverrideActivityUseCaseImpl @Inject constructor(
                 // Too short — do not create a session.
                 return
             }
-            val durationMinutes = ((durationMs + 30_000L) / 60_000L).toInt()
+            val durationMinutes = CyclingSessionManager.msToNearestMinute(durationMs)
             val session = CyclingSession(
                 startTime = transition.timestamp,
                 endTime = nextTransition.timestamp,
@@ -131,12 +131,15 @@ class OverrideActivityUseCaseImpl @Inject constructor(
      */
     private suspend fun closeCyclingSession(timestamp: Long) {
         val session = cyclingRepository.getSessionCoveringTimestamp(timestamp) ?: return
+        // durationMs >= 0 is guaranteed: getSessionCoveringTimestamp only returns sessions
+        // where startTime <= timestamp (SQL query constraint), so the subtraction cannot
+        // produce a negative value.
         val durationMs = timestamp - session.startTime
         if (durationMs < CyclingSessionManager.MIN_SESSION_DURATION_MS) {
             cyclingRepository.deleteSession(session)
             return
         }
-        val durationMinutes = ((durationMs + 30_000L) / 60_000L).toInt()
+        val durationMinutes = CyclingSessionManager.msToNearestMinute(durationMs)
         cyclingRepository.updateSession(
             session.copy(
                 endTime = timestamp,

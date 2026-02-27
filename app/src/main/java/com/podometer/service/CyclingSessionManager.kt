@@ -41,6 +41,19 @@ class CyclingSessionManager {
          * is below the threshold.
          */
         const val MIN_SESSION_DURATION_MS = 60_000L
+
+        /**
+         * Converts a duration in milliseconds to the nearest whole minute.
+         *
+         * Rounding is done by adding half a minute (30 000 ms) before integer
+         * division, so durations in [0, 30 000) → 0 min, [30 000, 90 000) → 1 min,
+         * etc.
+         *
+         * @param durationMs Duration in milliseconds. Must be non-negative.
+         * @return The duration rounded to the nearest whole minute.
+         */
+        fun msToNearestMinute(durationMs: Long): Int =
+            ((durationMs + 30_000L) / 60_000L).toInt()
     }
 
     /** Epoch-millisecond timestamp when the current session started. */
@@ -119,7 +132,7 @@ class CyclingSessionManager {
         val id = ongoingSessionId ?: return null
 
         val durationMs = endTimeMs - sessionStartTimeMs
-        val durationMinutes = ((durationMs + 30_000L) / 60_000L).toInt()
+        val durationMinutes = msToNearestMinute(durationMs)
 
         val session = CyclingSession(
             id = id,

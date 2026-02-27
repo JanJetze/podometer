@@ -440,7 +440,7 @@ class StepTrackingService : Service() {
                     cyclingRepository.deleteSession(ongoing)
                     Log.d(TAG, "Deleted orphaned cycling session id=${ongoing.id} (too short, ${durationMs}ms < ${CyclingSessionManager.MIN_SESSION_DURATION_MS}ms)")
                 } else {
-                    val durationMinutes = ((durationMs + 30_000L) / 60_000L).toInt()
+                    val durationMinutes = CyclingSessionManager.msToNearestMinute(durationMs)
                     val closed = ongoing.copy(endTime = nowMs, durationMinutes = durationMinutes)
                     cyclingRepository.updateSession(closed)
                     Log.d(TAG, "Closed orphaned cycling session id=${ongoing.id}, duration=${durationMinutes} min")
