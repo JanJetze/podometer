@@ -152,6 +152,17 @@ class StepRepository @Inject constructor(
     suspend fun getAllTransitions(): List<ActivityTransition> =
         activityTransitionDao.getAllTransitions()
 
+    /**
+     * Returns the first [ActivityTransition] whose timestamp is strictly greater than
+     * [afterTimestamp], or `null` if none exists.
+     *
+     * Used by [com.podometer.domain.usecase.OverrideActivityUseCaseImpl] to locate the
+     * transition immediately following a manual cycling override so that the session's
+     * end time and duration can be set at creation time.
+     */
+    suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? =
+        activityTransitionDao.getNextTransitionAfter(afterTimestamp)
+
     // ─── Helper ──────────────────────────────────────────────────────────────
 
     /**

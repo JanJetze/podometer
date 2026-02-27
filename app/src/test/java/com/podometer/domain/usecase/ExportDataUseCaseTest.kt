@@ -81,6 +81,8 @@ class ExportDataUseCaseTest {
         override suspend fun updateTransition(transition: ActivityTransition) = Unit
 
         override suspend fun getAllTransitions(): List<ActivityTransition> = transitions
+
+        override suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? = null
     }
 
     private class FakeCyclingSessionDao(

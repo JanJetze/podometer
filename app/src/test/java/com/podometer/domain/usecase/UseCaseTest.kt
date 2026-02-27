@@ -80,6 +80,7 @@ class UseCaseTest {
 
     private class FakeActivityTransitionDao(
         private val transitionsFlow: Flow<List<ActivityTransition>> = flowOf(emptyList()),
+        private val nextTransitionAfter: ActivityTransition? = null,
     ) : ActivityTransitionDao {
         var updatedTransition: ActivityTransition? = null
 
@@ -93,6 +94,9 @@ class UseCaseTest {
         }
 
         override suspend fun getAllTransitions(): List<ActivityTransition> = emptyList()
+
+        override suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? =
+            nextTransitionAfter
     }
 
     private class FakeCyclingSessionDao(
@@ -100,6 +104,7 @@ class UseCaseTest {
         private val sessionCoveringTimestamp: CyclingSession? = null,
     ) : CyclingSessionDao {
         var insertedSession: CyclingSession? = null
+        var updatedSession: CyclingSession? = null
         var deletedSession: CyclingSession? = null
 
         override fun getTodaySessions(todayStart: Long): Flow<List<CyclingSession>> = sessionsFlow
@@ -107,7 +112,9 @@ class UseCaseTest {
             insertedSession = session
             return 0L
         }
-        override suspend fun updateSession(session: CyclingSession) = Unit
+        override suspend fun updateSession(session: CyclingSession) {
+            updatedSession = session
+        }
         override suspend fun deleteSession(session: CyclingSession) {
             deletedSession = session
         }
@@ -131,6 +138,15 @@ class UseCaseTest {
         ),
         transitionDao,
     )
+
+    private fun stepRepoWithNextTransition(
+        transitions: List<ActivityTransition> = emptyList(),
+        nextTransitionAfter: ActivityTransition? = null,
+    ): Pair<StepRepository, FakeActivityTransitionDao> {
+        val dao = FakeActivityTransitionDao(flowOf(transitions), nextTransitionAfter)
+        val repo = StepRepository(FakeStepDao(), dao)
+        return repo to dao
+    }
 
     private fun cyclingRepo(
         sessions: List<CyclingSession> = emptyList(),
@@ -672,8 +688,8 @@ class UseCaseTest {
         )
         assertNotNull("Expected a session to have been inserted on override to CYCLING", insertedCyclingSessionDao?.insertedSession)
 
-        // Step 2: undo → override back to WALKING — the use case should delete the session
-        // covering timestamp 60_000L.
+        // Step 2: undo → override back to WALKING — the session (0ms duration) is under the
+        // 60s threshold, so it should be deleted rather than updated.
         var deletingCyclingSessionDao: FakeCyclingSessionDao? = null
         val cycling2 = cyclingRepo(
             sessionCoveringTimestamp = createdSession,
@@ -684,5 +700,213 @@ class UseCaseTest {
         useCase2(afterOverride, ActivityState.WALKING)
 
         assertEquals(createdSession, deletingCyclingSessionDao?.deletedSession)
+    }
+
+    // ─── OverrideActivityUseCase — createCyclingSession with next transition ──
+
+    @Test
+    fun `OverrideActivityUseCase overriding to CYCLING sets endTime and duration when next transition exists`() = runTest {
+        val transition = ActivityTransition(
+            id = 10,
+            timestamp = 100_000L,
+            fromActivity = "WALKING",
+            toActivity = "WALKING",
+            isManualOverride = false,
+        )
+        // next transition is 5 minutes later
+        val nextTransition = ActivityTransition(
+            id = 11,
+            timestamp = 400_000L, // 300_000 ms = 5 min later
+            fromActivity = "CYCLING",
+            toActivity = "STILL",
+            isManualOverride = false,
+        )
+        val (repo, _) = stepRepoWithNextTransition(
+            transitions = listOf(transition),
+            nextTransitionAfter = nextTransition,
+        )
+        var capturedDao: FakeCyclingSessionDao? = null
+        val cycling = cyclingRepo(daoOut = { capturedDao = it })
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+
+        useCase(transition, ActivityState.CYCLING)
+
+        val inserted = capturedDao?.insertedSession
+        assertNotNull("Expected a CyclingSession to be inserted", inserted)
+        assertEquals(100_000L, inserted?.startTime)
+        assertEquals(400_000L, inserted?.endTime)
+        // durationMs = 300_000 ms, rounded: (300_000 + 30_000) / 60_000 = 5 min
+        assertEquals(5, inserted?.durationMinutes)
+        assertEquals(true, inserted?.isManualOverride)
+    }
+
+    @Test
+    fun `OverrideActivityUseCase overriding to CYCLING leaves endTime null when no next transition exists`() = runTest {
+        val transition = ActivityTransition(
+            id = 20,
+            timestamp = 200_000L,
+            fromActivity = "STILL",
+            toActivity = "WALKING",
+            isManualOverride = false,
+        )
+        // no next transition
+        val (repo, _) = stepRepoWithNextTransition(
+            transitions = listOf(transition),
+            nextTransitionAfter = null,
+        )
+        var capturedDao: FakeCyclingSessionDao? = null
+        val cycling = cyclingRepo(daoOut = { capturedDao = it })
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+
+        useCase(transition, ActivityState.CYCLING)
+
+        val inserted = capturedDao?.insertedSession
+        assertNotNull("Expected a CyclingSession to be inserted", inserted)
+        assertEquals(200_000L, inserted?.startTime)
+        assertNull("endTime should be null for ongoing session", inserted?.endTime)
+        assertEquals(0, inserted?.durationMinutes)
+    }
+
+    @Test
+    fun `OverrideActivityUseCase overriding to CYCLING drops sub-60s session when next transition is too soon`() = runTest {
+        val transition = ActivityTransition(
+            id = 30,
+            timestamp = 300_000L,
+            fromActivity = "WALKING",
+            toActivity = "WALKING",
+            isManualOverride = false,
+        )
+        // next transition is only 30 seconds later — below the 60s threshold
+        val nextTransition = ActivityTransition(
+            id = 31,
+            timestamp = 330_000L, // 30_000 ms = 30 s
+            fromActivity = "CYCLING",
+            toActivity = "STILL",
+            isManualOverride = false,
+        )
+        val (repo, _) = stepRepoWithNextTransition(
+            transitions = listOf(transition),
+            nextTransitionAfter = nextTransition,
+        )
+        var capturedDao: FakeCyclingSessionDao? = null
+        val cycling = cyclingRepo(daoOut = { capturedDao = it })
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+
+        useCase(transition, ActivityState.CYCLING)
+
+        // Session under 60s should not be inserted at all
+        assertNull("Expected no CyclingSession to be inserted for sub-60s duration", capturedDao?.insertedSession)
+    }
+
+    // ─── OverrideActivityUseCase — closeCyclingSession (away from CYCLING) ────
+
+    @Test
+    fun `OverrideActivityUseCase overriding away from CYCLING closes session when duration is at least 60s`() = runTest {
+        val startTimeMs = 1_000_000L
+        val endTimeMs = 1_120_000L // 120_000 ms = 2 min
+        val existingSession = CyclingSession(
+            id = 42,
+            startTime = startTimeMs,
+            endTime = null,
+            durationMinutes = 0,
+            isManualOverride = true,
+        )
+        val transition = ActivityTransition(
+            id = 50,
+            timestamp = endTimeMs,
+            fromActivity = "WALKING",
+            toActivity = "CYCLING",
+            isManualOverride = false,
+        )
+        val transitionDao = FakeActivityTransitionDao(flowOf(listOf(transition)))
+        val repo = StepRepository(FakeStepDao(), transitionDao)
+        var capturedDao: FakeCyclingSessionDao? = null
+        val cycling = cyclingRepo(
+            sessionCoveringTimestamp = existingSession,
+            daoOut = { capturedDao = it },
+        )
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+
+        useCase(transition, ActivityState.WALKING)
+
+        // Should be updated (closed), not deleted
+        assertNull("Expected session NOT to be deleted for long-enough duration", capturedDao?.deletedSession)
+        val updated = capturedDao?.updatedSession
+        assertNotNull("Expected session to be updated (closed)", updated)
+        assertEquals(42, updated?.id)
+        assertEquals(startTimeMs, updated?.startTime)
+        assertEquals(endTimeMs, updated?.endTime)
+        // durationMs = 120_000, rounded: (120_000 + 30_000) / 60_000 = 2 min
+        assertEquals(2, updated?.durationMinutes)
+    }
+
+    @Test
+    fun `OverrideActivityUseCase overriding away from CYCLING deletes session when duration is under 60s`() = runTest {
+        val startTimeMs = 2_000_000L
+        val endTimeMs = 2_030_000L // 30_000 ms = 30 s — below threshold
+        val existingSession = CyclingSession(
+            id = 55,
+            startTime = startTimeMs,
+            endTime = null,
+            durationMinutes = 0,
+            isManualOverride = true,
+        )
+        val transition = ActivityTransition(
+            id = 60,
+            timestamp = endTimeMs,
+            fromActivity = "WALKING",
+            toActivity = "CYCLING",
+            isManualOverride = false,
+        )
+        val transitionDao = FakeActivityTransitionDao(flowOf(listOf(transition)))
+        val repo = StepRepository(FakeStepDao(), transitionDao)
+        var capturedDao: FakeCyclingSessionDao? = null
+        val cycling = cyclingRepo(
+            sessionCoveringTimestamp = existingSession,
+            daoOut = { capturedDao = it },
+        )
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+
+        useCase(transition, ActivityState.STILL)
+
+        // Should be deleted (too short)
+        assertNotNull("Expected session to be deleted for sub-60s duration", capturedDao?.deletedSession)
+        assertNull("Expected session NOT to be updated for sub-60s duration", capturedDao?.updatedSession)
+        assertEquals(existingSession, capturedDao?.deletedSession)
+    }
+
+    @Test
+    fun `OverrideActivityUseCase overriding away from CYCLING closes session with exact 60s duration`() = runTest {
+        val startTimeMs = 3_000_000L
+        val endTimeMs = 3_060_000L // exactly 60_000 ms = exactly 60 s
+        val existingSession = CyclingSession(
+            id = 70,
+            startTime = startTimeMs,
+            endTime = null,
+            durationMinutes = 0,
+            isManualOverride = true,
+        )
+        val transition = ActivityTransition(
+            id = 75,
+            timestamp = endTimeMs,
+            fromActivity = "WALKING",
+            toActivity = "CYCLING",
+            isManualOverride = false,
+        )
+        val transitionDao = FakeActivityTransitionDao(flowOf(listOf(transition)))
+        val repo = StepRepository(FakeStepDao(), transitionDao)
+        var capturedDao: FakeCyclingSessionDao? = null
+        val cycling = cyclingRepo(
+            sessionCoveringTimestamp = existingSession,
+            daoOut = { capturedDao = it },
+        )
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+
+        useCase(transition, ActivityState.WALKING)
+
+        // Exactly 60s meets the threshold → should be updated
+        assertNull("Expected session NOT to be deleted at exact 60s threshold", capturedDao?.deletedSession)
+        assertNotNull("Expected session to be updated (closed) at exact 60s", capturedDao?.updatedSession)
+        assertEquals(1, capturedDao?.updatedSession?.durationMinutes)
     }
 }

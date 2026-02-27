@@ -37,4 +37,15 @@ interface ActivityTransitionDao {
      */
     @Query("SELECT * FROM activity_transitions ORDER BY timestamp ASC")
     suspend fun getAllTransitions(): List<ActivityTransition>
+
+    /**
+     * Returns the first [ActivityTransition] whose timestamp is strictly greater than
+     * [afterTimestamp], ordered by timestamp ascending, or `null` if none exists.
+     *
+     * Used by [com.podometer.domain.usecase.OverrideActivityUseCaseImpl] to find the
+     * next transition after a manual cycling override so that the session's end time
+     * and duration can be computed immediately.
+     */
+    @Query("SELECT * FROM activity_transitions WHERE timestamp > :afterTimestamp ORDER BY timestamp ASC LIMIT 1")
+    suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition?
 }

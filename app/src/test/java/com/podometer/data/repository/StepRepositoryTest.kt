@@ -111,6 +111,8 @@ class StepRepositoryTest {
         }
 
         override suspend fun getAllTransitions(): List<ActivityTransition> = emptyList()
+
+        override suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? = null
     }
 
     // ─── getTodaySteps: null → 0 mapping ────────────────────────────────────
