@@ -59,6 +59,12 @@ class ExportDataUseCaseTest {
 
         override suspend fun upsertDailySummary(summary: DailySummary) = Unit
 
+        override suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) = Unit
+
+        override suspend fun addWalkingMinutes(date: String, minutes: Int) = Unit
+
+        override suspend fun addCyclingMinutes(date: String, minutes: Int) = Unit
+
         override suspend fun getAllDailySummaries(): List<DailySummary> = dailySummaries
 
         override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = hourlyAggregates

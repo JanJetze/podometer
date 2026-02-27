@@ -124,10 +124,13 @@ class StepAccumulator(
                 bucketSteps = currentHourSteps,
                 totalAfterFlush = totalStepsToday,
                 summaryDate = currentDate,
+                isFullHour = true,
             )
         )
 
         // 2. Create 0-step aggregates for each intermediate skipped hour.
+        // Intermediate hours are synthetic empty buckets with no tracked activity;
+        // they do not contribute any activity minutes.
         var intermediateHour = currentHourTimestamp + ONE_HOUR_MS
         while (intermediateHour < nowHour) {
             val intermediateDate = toLocalDate(intermediateHour)
@@ -142,6 +145,7 @@ class StepAccumulator(
                     bucketSteps = 0,
                     totalAfterFlush = totalStepsToday,
                     summaryDate = currentDate,
+                    isFullHour = false,
                 )
             )
             intermediateHour += ONE_HOUR_MS
@@ -181,6 +185,7 @@ class StepAccumulator(
             bucketSteps = currentHourSteps,
             totalAfterFlush = totalStepsToday,
             summaryDate = currentDate,
+            isFullHour = false,
         )
         currentHourSteps = 0
         return listOf(result)
@@ -191,6 +196,16 @@ class StepAccumulator(
     /**
      * Builds a [FlushResult] for the bucket identified by [bucketTimestamp].
      *
+     * Activity minutes ([FlushResult.walkingMinutes] / [FlushResult.cyclingMinutes])
+     * are only populated for completed full-hour buckets ([isFullHour] = `true`).
+     * Mid-hour explicit flushes ([StepAccumulator.flush]) pass [isFullHour] = `false`
+     * so that a partial hour does not incorrectly contribute 60 minutes to the day.
+     *
+     * For a full-hour bucket:
+     * - If [currentActivity] is "WALKING", [FlushResult.walkingMinutes] = 60.
+     * - If [currentActivity] is "CYCLING", [FlushResult.cyclingMinutes] = 60.
+     * - Any other activity (e.g. "STILL") contributes 0 minutes to either counter.
+     *
      * @param bucketTimestamp Epoch-millis for the start of the hour bucket being
      *   flushed. Used exclusively for the [HourlyStepAggregate] timestamp.
      * @param bucketSteps Total steps recorded during the bucket.
@@ -200,12 +215,15 @@ class StepAccumulator(
      *   derived from [bucketTimestamp] so that the daily summary's date remains
      *   independent of the hourly aggregate's timestamp. The two can theoretically
      *   diverge at hour boundaries that also cross midnight.
+     * @param isFullHour Whether this flush covers a complete hour bucket. Pass
+     *   `true` for hour-boundary rollovers; `false` for mid-hour explicit flushes.
      */
     private fun buildFlushResult(
         bucketTimestamp: Long,
         bucketSteps: Int,
         totalAfterFlush: Int,
         summaryDate: LocalDate,
+        isFullHour: Boolean,
     ): FlushResult {
         val aggregate = HourlyStepAggregate(
             timestamp = bucketTimestamp,
@@ -219,7 +237,21 @@ class StepAccumulator(
             walkingMinutes = 0,
             cyclingMinutes = 0,
         )
-        return FlushResult(aggregate = aggregate, dailySummary = dailySummary)
+        val walkingMinutes: Int
+        val cyclingMinutes: Int
+        if (isFullHour) {
+            walkingMinutes = if (currentActivity == "WALKING") MINUTES_PER_HOUR else 0
+            cyclingMinutes = if (currentActivity == "CYCLING") MINUTES_PER_HOUR else 0
+        } else {
+            walkingMinutes = 0
+            cyclingMinutes = 0
+        }
+        return FlushResult(
+            aggregate = aggregate,
+            dailySummary = dailySummary,
+            walkingMinutes = walkingMinutes,
+            cyclingMinutes = cyclingMinutes,
+        )
     }
 
     // ─── Companion ───────────────────────────────────────────────────────────
@@ -233,6 +265,9 @@ class StepAccumulator(
 
         /** Milliseconds in one hour. */
         private const val ONE_HOUR_MS = 3_600_000L
+
+        /** Minutes in one hour, used for activity-minute accumulation per bucket. */
+        private const val MINUTES_PER_HOUR = 60
 
         /**
          * Truncates [epochMillis] to the start of its local hour.

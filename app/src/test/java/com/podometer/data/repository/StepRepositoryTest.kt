@@ -36,6 +36,13 @@ class StepRepositoryTest {
         var insertedAggregate: HourlyStepAggregate? = null
         var upsertedSummary: DailySummary? = null
         var upsertedAggregate: HourlyStepAggregate? = null
+        var upsertedStepsAndDistanceDate: String? = null
+        var upsertedStepsAndDistanceTotalSteps: Int? = null
+        var upsertedStepsAndDistanceTotalDistance: Float? = null
+        var addedWalkingMinutesDate: String? = null
+        var addedWalkingMinutes: Int? = null
+        var addedCyclingMinutesDate: String? = null
+        var addedCyclingMinutes: Int? = null
 
         override fun getTodayHourlyAggregates(todayStart: Long): Flow<List<HourlyStepAggregate>> =
             hourlyAggregatesFlow
@@ -63,6 +70,22 @@ class StepRepositoryTest {
 
         override suspend fun upsertDailySummary(summary: DailySummary) {
             upsertedSummary = summary
+        }
+
+        override suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) {
+            upsertedStepsAndDistanceDate = date
+            upsertedStepsAndDistanceTotalSteps = totalSteps
+            upsertedStepsAndDistanceTotalDistance = totalDistance
+        }
+
+        override suspend fun addWalkingMinutes(date: String, minutes: Int) {
+            addedWalkingMinutesDate = date
+            addedWalkingMinutes = minutes
+        }
+
+        override suspend fun addCyclingMinutes(date: String, minutes: Int) {
+            addedCyclingMinutesDate = date
+            addedCyclingMinutes = minutes
         }
 
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
@@ -329,6 +352,46 @@ class StepRepositoryTest {
         val millis = repo.getTodayStartMillis()
 
         assertTrue("Midnight should be before or equal to now", millis <= before)
+    }
+
+    // ─── upsertStepsAndDistance ──────────────────────────────────────────────
+
+    @Test
+    fun `upsertStepsAndDistance delegates to StepDao`() = runTest {
+        val dao = FakeStepDao()
+        val repo = StepRepository(dao, FakeActivityTransitionDao())
+
+        repo.upsertStepsAndDistance(date = "2026-02-27", totalSteps = 3000, totalDistance = 2.25f)
+
+        assertEquals("2026-02-27", dao.upsertedStepsAndDistanceDate)
+        assertEquals(3000, dao.upsertedStepsAndDistanceTotalSteps)
+        assertEquals(2.25f, dao.upsertedStepsAndDistanceTotalDistance!!, 0.0001f)
+    }
+
+    // ─── addWalkingMinutes ───────────────────────────────────────────────────
+
+    @Test
+    fun `addWalkingMinutes delegates to StepDao`() = runTest {
+        val dao = FakeStepDao()
+        val repo = StepRepository(dao, FakeActivityTransitionDao())
+
+        repo.addWalkingMinutes(date = "2026-02-27", minutes = 60)
+
+        assertEquals("2026-02-27", dao.addedWalkingMinutesDate)
+        assertEquals(60, dao.addedWalkingMinutes)
+    }
+
+    // ─── addCyclingMinutes ───────────────────────────────────────────────────
+
+    @Test
+    fun `addCyclingMinutes delegates to StepDao`() = runTest {
+        val dao = FakeStepDao()
+        val repo = StepRepository(dao, FakeActivityTransitionDao())
+
+        repo.addCyclingMinutes(date = "2026-02-27", minutes = 60)
+
+        assertEquals("2026-02-27", dao.addedCyclingMinutesDate)
+        assertEquals(60, dao.addedCyclingMinutes)
     }
 
     // ─── Class existence ────────────────────────────────────────────────────

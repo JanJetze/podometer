@@ -12,7 +12,6 @@ import androidx.annotation.VisibleForTesting
 import androidx.core.app.ServiceCompat
 import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.HourlyStepAggregate
-import com.podometer.data.db.DailySummary
 import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
@@ -174,13 +173,21 @@ class StepTrackingService : Service() {
     }
 
     override fun onDestroy() {
-        // Must complete flush before cancelling scope to avoid data loss
+        // Must complete flush before cancelling scope to avoid data loss.
+        // accumulator.flush() is a mid-hour partial flush — it does not produce
+        // activity minutes (walkingMinutes/cyclingMinutes are always 0 here).
+        // Only steps and distance are updated to preserve previously accumulated
+        // activity minutes stored in the database.
         val results = accumulator.flush()
         if (results.isNotEmpty()) {
             runBlocking {
                 for (result in results) {
                     stepRepository.upsertHourlyAggregate(result.aggregate)
-                    stepRepository.upsertDailySummary(result.dailySummary)
+                    stepRepository.upsertStepsAndDistance(
+                        date = result.dailySummary.date,
+                        totalSteps = result.dailySummary.totalSteps,
+                        totalDistance = result.dailySummary.totalDistance,
+                    )
                 }
                 Log.d(TAG, "Final flush on destroy: ${results.size} result(s)")
             }
@@ -254,17 +261,32 @@ class StepTrackingService : Service() {
             val flushResults = accumulator.addSteps(delta)
             for (flushResult in flushResults) {
                 stepRepository.upsertHourlyAggregate(flushResult.aggregate)
-                stepRepository.upsertDailySummary(flushResult.dailySummary)
+                // Update steps/distance first so the row exists before incrementing minutes.
+                stepRepository.upsertStepsAndDistance(
+                    date = flushResult.dailySummary.date,
+                    totalSteps = flushResult.dailySummary.totalSteps,
+                    totalDistance = flushResult.dailySummary.totalDistance,
+                )
+                if (flushResult.walkingMinutes > 0) {
+                    stepRepository.addWalkingMinutes(flushResult.dailySummary.date, flushResult.walkingMinutes)
+                }
+                if (flushResult.cyclingMinutes > 0) {
+                    stepRepository.addCyclingMinutes(flushResult.dailySummary.date, flushResult.cyclingMinutes)
+                }
                 Log.d(
                     TAG,
                     "Flushed ${flushResult.aggregate.stepCountDelta} steps for hour " +
-                        "${flushResult.aggregate.timestamp}",
+                        "${flushResult.aggregate.timestamp}, " +
+                        "walkingMinutes=${flushResult.walkingMinutes}, " +
+                        "cyclingMinutes=${flushResult.cyclingMinutes}",
                 )
             }
 
             // Always write the current partial-hour state so the dashboard (which reads
             // from Room Flows) sees live step-count updates without waiting up to 59
             // minutes for the first hour-boundary flush.
+            // Only steps and distance are updated here; activity minutes are only
+            // finalized at hour boundaries and must not be reset mid-hour.
             // The upsert (delete-by-timestamp + insert) ensures no duplicate rows.
             val partialAggregate = HourlyStepAggregate(
                 timestamp = StepAccumulator.truncateToHour(nowMs),
@@ -272,14 +294,11 @@ class StepTrackingService : Service() {
                 detectedActivity = accumulator.currentActivity,
             )
             stepRepository.upsertHourlyAggregate(partialAggregate)
-            val partialSummary = DailySummary(
+            stepRepository.upsertStepsAndDistance(
                 date = DateTimeUtils.toLocalDate(nowMs).toString(),
                 totalSteps = accumulator.totalStepsToday,
                 totalDistance = accumulator.totalStepsToday * strideLengthKm,
-                walkingMinutes = 0,
-                cyclingMinutes = 0,
             )
-            stepRepository.upsertDailySummary(partialSummary)
             Log.d(TAG, "Partial-hour write: ${accumulator.currentHourSteps} steps in current hour, ${accumulator.totalStepsToday} today")
         }
     }

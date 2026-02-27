@@ -879,4 +879,102 @@ class StepAccumulatorTest {
         assertEquals(100, results[0].aggregate.stepCountDelta)
         assertEquals(0, results[1].aggregate.stepCountDelta)
     }
+
+    // ─── Activity minutes in FlushResult ────────────────────────────────────
+
+    @Test
+    fun `hour boundary flush with WALKING activity sets walkingMinutes to 60`() {
+        val accumulator = StepAccumulator(startOfHour(8))
+        accumulator.setActivity("WALKING")
+        accumulator.addSteps(delta = 100, now = timeInHour(8, 30))
+
+        val results = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
+
+        assertEquals(60, results.first().walkingMinutes)
+        assertEquals(0, results.first().cyclingMinutes)
+    }
+
+    @Test
+    fun `hour boundary flush with CYCLING activity sets cyclingMinutes to 60`() {
+        val accumulator = StepAccumulator(startOfHour(8))
+        accumulator.setActivity("CYCLING")
+        accumulator.addSteps(delta = 100, now = timeInHour(8, 30))
+
+        val results = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
+
+        assertEquals(0, results.first().walkingMinutes)
+        assertEquals(60, results.first().cyclingMinutes)
+    }
+
+    @Test
+    fun `hour boundary flush with STILL activity sets both minutes to 0`() {
+        val accumulator = StepAccumulator(startOfHour(8))
+        accumulator.setActivity("STILL")
+        accumulator.addSteps(delta = 0, now = timeInHour(8, 30))
+
+        val results = accumulator.addSteps(delta = 0, now = timeInHour(9, 5))
+
+        assertEquals(0, results.first().walkingMinutes)
+        assertEquals(0, results.first().cyclingMinutes)
+    }
+
+    @Test
+    fun `intermediate empty hours produced by multi-hour skip have 0 activity minutes`() {
+        val accumulator = StepAccumulator(epochForDayAndHour(0, 8))
+        accumulator.setActivity("WALKING")
+        accumulator.addSteps(delta = 100, now = epochForDayAndHour(0, 8, 30))
+
+        // Jump 3 hours: produces 08:00 (WALKING), 09:00 (0 steps), 10:00 (0 steps)
+        val results = accumulator.addSteps(delta = 5, now = epochForDayAndHour(0, 11, 5))
+
+        assertEquals(3, results.size)
+        // 08:00: WALKING bucket, 60 minutes
+        assertEquals(60, results[0].walkingMinutes)
+        assertEquals(0, results[0].cyclingMinutes)
+        // 09:00 and 10:00: intermediate empty hours, 0 minutes each
+        assertEquals(0, results[1].walkingMinutes)
+        assertEquals(0, results[1].cyclingMinutes)
+        assertEquals(0, results[2].walkingMinutes)
+        assertEquals(0, results[2].cyclingMinutes)
+    }
+
+    @Test
+    fun `explicit flush (mid-hour) produces 0 walkingMinutes and 0 cyclingMinutes`() {
+        // Mid-hour flush (service stopping) should NOT contribute activity minutes
+        // since it is a partial hour; steps/distance are the only concern.
+        val accumulator = StepAccumulator(startOfHour(9))
+        accumulator.setActivity("WALKING")
+        accumulator.addSteps(delta = 80, now = timeInHour(9, 20))
+
+        val results = accumulator.flush(now = timeInHour(9, 55))
+
+        assertEquals(0, results.first().walkingMinutes)
+        assertEquals(0, results.first().cyclingMinutes)
+    }
+
+    @Test
+    fun `walkingMinutes and cyclingMinutes are 0 for unknown activity`() {
+        val accumulator = StepAccumulator(startOfHour(8))
+        accumulator.setActivity("UNKNOWN_ACTIVITY")
+        accumulator.addSteps(delta = 50, now = timeInHour(8, 30))
+
+        val results = accumulator.addSteps(delta = 5, now = timeInHour(9, 5))
+
+        assertEquals(0, results.first().walkingMinutes)
+        assertEquals(0, results.first().cyclingMinutes)
+    }
+
+    @Test
+    fun `FlushResult walkingMinutes and cyclingMinutes fields exist`() {
+        val hourStart = startOfHour(8)
+        val accumulator = StepAccumulator(hourStart)
+        accumulator.addSteps(delta = 50, now = timeInHour(8, 20))
+
+        val result = accumulator.flush(now = timeInHour(8, 50))
+        val flushResult = result.first()
+
+        // Just verify the fields exist and are accessible
+        assertTrue(flushResult.walkingMinutes >= 0)
+        assertTrue(flushResult.cyclingMinutes >= 0)
+    }
 }

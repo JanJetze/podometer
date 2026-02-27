@@ -71,6 +71,9 @@ class UseCaseTest {
         override suspend fun insertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
         override suspend fun upsertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
         override suspend fun upsertDailySummary(summary: DailySummary) = Unit
+        override suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) = Unit
+        override suspend fun addWalkingMinutes(date: String, minutes: Int) = Unit
+        override suspend fun addCyclingMinutes(date: String, minutes: Int) = Unit
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
         override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = emptyList()
     }
