@@ -139,4 +139,15 @@
     <string name="settings_about_source_title">Source code</string>
     <string name="settings_about_source_url">https://github.com/podometer/podometer</string>
     <string name="cd_settings_about_source_link">Open source code repository</string>
+
+    <!-- Settings: About section – Donate row -->
+    <string name="settings_about_donate_title">Support development</string>
+    <string name="settings_about_donate_description">Help keep Podometer free</string>
+
+    <!-- Donate screen -->
+    <string name="screen_donate">Support Development</string>
+    <string name="donate_body">Podometer is free, open-source, and built without ads or tracking. If you find it useful, a small donation helps keep development going.</string>
+    <string name="donate_button">Donate via Liberapay</string>
+    <string name="donate_liberapay_note">Liberapay is a privacy-respecting, open-source donation platform with zero platform fees.</string>
+    <string name="cd_donate_button">Open Liberapay donation page in browser</string>
 </resources>

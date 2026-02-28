@@ -87,6 +87,7 @@ fun SettingsScreen(
     onSetNotificationStyle: (String) -> Unit,
     onExportData: (Uri) -> Unit,
     onResetExportState: () -> Unit,
+    onNavigateToDonate: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -270,6 +271,13 @@ fun SettingsScreen(
             SettingInfoRow(
                 title = stringResource(R.string.settings_about_source_title),
                 value = stringResource(R.string.settings_about_source_url),
+            )
+
+            SettingRowWithValue(
+                title = stringResource(R.string.settings_about_donate_title),
+                description = stringResource(R.string.settings_about_donate_description),
+                value = "",
+                onClick = onNavigateToDonate,
             )
 
             Spacer(modifier = Modifier.height(24.dp))

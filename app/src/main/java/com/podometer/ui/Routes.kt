@@ -15,4 +15,7 @@ sealed class Screen(val route: String) {
 
     /** First-run onboarding flow. */
     data object Onboarding : Screen("onboarding")
+
+    /** Donate / support development screen. */
+    data object Donate : Screen("donate")
 }

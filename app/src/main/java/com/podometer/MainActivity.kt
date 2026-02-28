@@ -22,6 +22,7 @@ import com.podometer.ui.Screen
 import com.podometer.ui.dashboard.DashboardScreen
 import com.podometer.ui.onboarding.OnboardingScreen
 import com.podometer.ui.onboarding.OnboardingViewModel
+import com.podometer.ui.donate.DonateScreen
 import com.podometer.ui.settings.SettingsScreen
 import com.podometer.ui.settings.SettingsViewModel
 import com.podometer.ui.theme.PodometerTheme
@@ -118,6 +119,24 @@ class MainActivity : ComponentActivity() {
                             onSetNotificationStyle = viewModel::setNotificationStyle,
                             onExportData = viewModel::exportData,
                             onResetExportState = viewModel::resetExportState,
+                            onNavigateToDonate = {
+                                navController.navigate(Screen.Donate.route)
+                            },
+                        )
+                    }
+
+                    composable(Screen.Donate.route) {
+                        DonateScreen(
+                            onNavigateBack = {
+                                navController.popBackStack()
+                            },
+                            onOpenDonateUrl = {
+                                val intent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://liberapay.com/JanJetze/"),
+                                )
+                                startActivity(intent)
+                            },
                         )
                     }
                 }
