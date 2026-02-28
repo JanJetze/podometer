@@ -29,6 +29,19 @@ fun interface OverrideActivityUseCase {
 }
 
 /**
+ * An interface that wraps a suspending block inside a database transaction.
+ *
+ * The production implementation delegates to [androidx.room.withTransaction], ensuring
+ * all DB operations in the block succeed or fail atomically. In unit tests a no-op
+ * implementation can be substituted so the logic is exercised on the JVM without a
+ * real Room database.
+ */
+interface TransactionRunner {
+    /** Executes [block] inside a single database transaction. */
+    suspend fun <R> run(block: suspend () -> R): R
+}
+
+/**
  * Default implementation of [OverrideActivityUseCase].
  *
  * Copies the original [ActivityTransition] record with [ActivityTransition.toActivity]
@@ -49,6 +62,10 @@ fun interface OverrideActivityUseCase {
  *   computing [CyclingSession.durationMinutes]. Sessions shorter than
  *   [CyclingSessionManager.MIN_SESSION_DURATION_MS] are deleted instead.
  *
+ * All DB operations are executed inside a single [TransactionRunner] block so the
+ * transition update and the cycling-session create/delete are atomic: if any operation
+ * fails, none of the changes are persisted.
+ *
  * Step count recalculation is intentionally deferred to a future task. Replaying the
  * raw step-event stream to recompute affected hourly aggregates is out of scope for v1;
  * the trade-off is that step counts remain as originally recorded even after a cycling
@@ -57,25 +74,29 @@ fun interface OverrideActivityUseCase {
  *
  * @param stepRepository     Repository used to persist the updated transition.
  * @param cyclingRepository  Repository used to create or close [CyclingSession] records.
+ * @param transactionRunner  Wraps all DB writes in a single atomic transaction.
  */
 class OverrideActivityUseCaseImpl @Inject constructor(
     private val stepRepository: StepRepository,
     private val cyclingRepository: CyclingRepository,
+    private val transactionRunner: TransactionRunner,
 ) : OverrideActivityUseCase {
 
     override suspend operator fun invoke(transition: ActivityTransition, newActivity: ActivityState) {
-        val updated = transition.copy(
-            toActivity = newActivity.name,
-            isManualOverride = true,
-        )
-        stepRepository.updateTransition(updated)
+        transactionRunner.run {
+            val updated = transition.copy(
+                toActivity = newActivity.name,
+                isManualOverride = true,
+            )
+            stepRepository.updateTransition(updated)
 
-        val wasAlreadyCycling = transition.toActivity == ActivityState.CYCLING.name
-        val isNowCycling = newActivity == ActivityState.CYCLING
+            val wasAlreadyCycling = transition.toActivity == ActivityState.CYCLING.name
+            val isNowCycling = newActivity == ActivityState.CYCLING
 
-        when {
-            isNowCycling && !wasAlreadyCycling -> createCyclingSession(transition)
-            !isNowCycling && wasAlreadyCycling -> closeCyclingSession(transition.timestamp)
+            when {
+                isNowCycling && !wasAlreadyCycling -> createCyclingSession(transition)
+                !isNowCycling && wasAlreadyCycling -> closeCyclingSession(transition.timestamp)
+            }
         }
     }
 

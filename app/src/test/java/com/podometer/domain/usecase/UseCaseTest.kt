@@ -161,6 +161,16 @@ class UseCaseTest {
     private fun preferencesManager(): PreferencesManager =
         PreferencesManager(FakeDataStore())
 
+    /**
+     * A [TransactionRunner] that executes the block directly without a real Room transaction.
+     *
+     * Used in JVM unit tests where no Room database is available. The logic under test is
+     * identical to the production path; only the transaction boundary is elided.
+     */
+    private val noOpTransactionRunner: TransactionRunner = object : TransactionRunner {
+        override suspend fun <R> run(block: suspend () -> R): R = block()
+    }
+
     // ─── ActivityState.fromString ────────────────────────────────────────────
 
     @Test
@@ -487,7 +497,7 @@ class UseCaseTest {
         )
         val transitionDao = FakeActivityTransitionDao(flowOf(listOf(originalTransition)))
         val repo = StepRepository(FakeStepDao(), transitionDao)
-        val useCase = OverrideActivityUseCaseImpl(repo, cyclingRepo())
+        val useCase = OverrideActivityUseCaseImpl(repo, cyclingRepo(), noOpTransactionRunner)
 
         useCase(originalTransition, ActivityState.CYCLING)
 
@@ -510,7 +520,7 @@ class UseCaseTest {
         )
         val transitionDao = FakeActivityTransitionDao(flowOf(listOf(originalTransition)))
         val repo = StepRepository(FakeStepDao(), transitionDao)
-        val useCase = OverrideActivityUseCaseImpl(repo, cyclingRepo())
+        val useCase = OverrideActivityUseCaseImpl(repo, cyclingRepo(), noOpTransactionRunner)
 
         useCase(originalTransition, ActivityState.WALKING)
 
@@ -528,7 +538,7 @@ class UseCaseTest {
         )
         val transitionDao = FakeActivityTransitionDao(flowOf(listOf(originalTransition)))
         val repo = StepRepository(FakeStepDao(), transitionDao)
-        val useCase = OverrideActivityUseCaseImpl(repo, cyclingRepo())
+        val useCase = OverrideActivityUseCaseImpl(repo, cyclingRepo(), noOpTransactionRunner)
 
         useCase(originalTransition, ActivityState.WALKING)
 
@@ -555,7 +565,7 @@ class UseCaseTest {
         val repo = StepRepository(FakeStepDao(), transitionDao)
         var capturedDao: FakeCyclingSessionDao? = null
         val cycling = cyclingRepo(daoOut = { capturedDao = it })
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.CYCLING)
 
@@ -578,7 +588,7 @@ class UseCaseTest {
         val repo = StepRepository(FakeStepDao(), transitionDao)
         var capturedDao: FakeCyclingSessionDao? = null
         val cycling = cyclingRepo(daoOut = { capturedDao = it })
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.CYCLING)
 
@@ -611,7 +621,7 @@ class UseCaseTest {
             sessionCoveringTimestamp = existingSession,
             daoOut = { capturedDao = it },
         )
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.WALKING)
 
@@ -631,7 +641,7 @@ class UseCaseTest {
         val repo = StepRepository(FakeStepDao(), transitionDao)
         var capturedDao: FakeCyclingSessionDao? = null
         val cycling = cyclingRepo(daoOut = { capturedDao = it })
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.STILL)
 
@@ -653,7 +663,7 @@ class UseCaseTest {
         var capturedDao: FakeCyclingSessionDao? = null
         // No session covering this timestamp
         val cycling = cyclingRepo(sessionCoveringTimestamp = null, daoOut = { capturedDao = it })
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         // Should not throw
         useCase(transition, ActivityState.WALKING)
@@ -676,7 +686,7 @@ class UseCaseTest {
         // Step 1: override to CYCLING → should create a session at timestamp 60_000L
         var insertedCyclingSessionDao: FakeCyclingSessionDao? = null
         val cycling1 = cyclingRepo(daoOut = { insertedCyclingSessionDao = it })
-        val useCase1 = OverrideActivityUseCaseImpl(repo, cycling1)
+        val useCase1 = OverrideActivityUseCaseImpl(repo, cycling1, noOpTransactionRunner)
         useCase1(transition, ActivityState.CYCLING)
 
         val createdSession = CyclingSession(
@@ -695,7 +705,7 @@ class UseCaseTest {
             sessionCoveringTimestamp = createdSession,
             daoOut = { deletingCyclingSessionDao = it },
         )
-        val useCase2 = OverrideActivityUseCaseImpl(repo, cycling2)
+        val useCase2 = OverrideActivityUseCaseImpl(repo, cycling2, noOpTransactionRunner)
         val afterOverride = transition.copy(toActivity = "CYCLING", isManualOverride = true)
         useCase2(afterOverride, ActivityState.WALKING)
 
@@ -727,7 +737,7 @@ class UseCaseTest {
         )
         var capturedDao: FakeCyclingSessionDao? = null
         val cycling = cyclingRepo(daoOut = { capturedDao = it })
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.CYCLING)
 
@@ -756,7 +766,7 @@ class UseCaseTest {
         )
         var capturedDao: FakeCyclingSessionDao? = null
         val cycling = cyclingRepo(daoOut = { capturedDao = it })
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.CYCLING)
 
@@ -790,7 +800,7 @@ class UseCaseTest {
         )
         var capturedDao: FakeCyclingSessionDao? = null
         val cycling = cyclingRepo(daoOut = { capturedDao = it })
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.CYCLING)
 
@@ -825,7 +835,7 @@ class UseCaseTest {
             sessionCoveringTimestamp = existingSession,
             daoOut = { capturedDao = it },
         )
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.WALKING)
 
@@ -865,7 +875,7 @@ class UseCaseTest {
             sessionCoveringTimestamp = existingSession,
             daoOut = { capturedDao = it },
         )
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.STILL)
 
@@ -900,7 +910,7 @@ class UseCaseTest {
             sessionCoveringTimestamp = existingSession,
             daoOut = { capturedDao = it },
         )
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.WALKING)
 
@@ -924,7 +934,7 @@ class UseCaseTest {
         var capturedDao: FakeCyclingSessionDao? = null
         // No session covers this timestamp
         val cycling = cyclingRepo(sessionCoveringTimestamp = null, daoOut = { capturedDao = it })
-        val useCase = OverrideActivityUseCaseImpl(repo, cycling)
+        val useCase = OverrideActivityUseCaseImpl(repo, cycling, noOpTransactionRunner)
 
         useCase(transition, ActivityState.WALKING)
 

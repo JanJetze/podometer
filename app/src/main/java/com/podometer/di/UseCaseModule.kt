@@ -2,6 +2,8 @@
 package com.podometer.di
 
 import android.os.Build
+import androidx.room.withTransaction
+import com.podometer.data.db.PodometerDatabase
 import com.podometer.domain.usecase.ExportDataUseCase
 import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCase
 import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCaseImpl
@@ -13,6 +15,7 @@ import com.podometer.domain.usecase.GetWeeklyStepsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCaseImpl
 import com.podometer.domain.usecase.OverrideActivityUseCase
 import com.podometer.domain.usecase.OverrideActivityUseCaseImpl
+import com.podometer.domain.usecase.TransactionRunner
 import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.StepRepository
 import dagger.Binds
@@ -57,6 +60,20 @@ abstract class UseCaseModule {
     abstract fun bindOverrideActivityUseCase(impl: OverrideActivityUseCaseImpl): OverrideActivityUseCase
 
     companion object {
+        /**
+         * Provides a [TransactionRunner] backed by [PodometerDatabase.withTransaction].
+         *
+         * All DB writes executed through this runner are wrapped in a single Room transaction,
+         * ensuring that cross-DAO operations are atomic.
+         */
+        @Provides
+        @Singleton
+        fun provideTransactionRunner(database: PodometerDatabase): TransactionRunner =
+            object : TransactionRunner {
+                override suspend fun <R> run(block: suspend () -> R): R =
+                    database.withTransaction(block)
+            }
+
         /**
          * Provides [ExportDataUseCase] with the device model string resolved at runtime.
          *
