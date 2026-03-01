@@ -74,6 +74,7 @@ private const val NOTIFICATION_STYLE_DETAILED = "detailed"
  * @param onSetNotificationStyle Called with the selected style string when the dropdown changes.
  * @param onExportData Called with the SAF URI when the user has selected a save location.
  * @param onResetExportState Called to reset the export state after showing a result.
+ * @param onOpenFeedbackUrl Called when the user taps the feedback row to open GitHub Issues.
  * @param modifier Optional [Modifier] for the root [Scaffold].
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,6 +89,7 @@ fun SettingsScreen(
     onExportData: (Uri) -> Unit,
     onResetExportState: () -> Unit,
     onNavigateToDonate: () -> Unit = {},
+    onOpenFeedbackUrl: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -271,6 +273,13 @@ fun SettingsScreen(
             SettingInfoRow(
                 title = stringResource(R.string.settings_about_source_title),
                 value = stringResource(R.string.settings_about_source_url),
+            )
+
+            SettingRowWithValue(
+                title = stringResource(R.string.settings_about_feedback_title),
+                description = stringResource(R.string.settings_about_feedback_description),
+                value = "",
+                onClick = onOpenFeedbackUrl,
             )
 
             SettingRowWithValue(

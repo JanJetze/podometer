@@ -122,6 +122,13 @@ class MainActivity : ComponentActivity() {
                             onNavigateToDonate = {
                                 navController.navigate(Screen.Donate.route)
                             },
+                            onOpenFeedbackUrl = {
+                                val intent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://github.com/JanJetze/podometer/issues"),
+                                )
+                                startActivity(intent)
+                            },
                         )
                     }
 
@@ -134,6 +141,13 @@ class MainActivity : ComponentActivity() {
                                 val intent = Intent(
                                     Intent.ACTION_VIEW,
                                     Uri.parse("https://liberapay.com/JanJetze/"),
+                                )
+                                startActivity(intent)
+                            },
+                            onOpenBuyMeACoffeeUrl = {
+                                val intent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://buymeacoffee.com/janjetze"),
                                 )
                                 startActivity(intent)
                             },

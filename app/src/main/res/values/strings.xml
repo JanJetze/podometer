@@ -144,10 +144,17 @@
     <string name="settings_about_donate_title">Support development</string>
     <string name="settings_about_donate_description">Help keep Podometer free</string>
 
+    <!-- Settings: About section – Feedback row -->
+    <string name="settings_about_feedback_title">Feedback &amp; bugs</string>
+    <string name="settings_about_feedback_description">Report issues on GitHub</string>
+
     <!-- Donate screen -->
     <string name="screen_donate">Support Development</string>
     <string name="donate_body">Podometer is free, open-source, and built without ads or tracking. If you find it useful, a small donation helps keep development going.</string>
     <string name="donate_button">Donate via Liberapay</string>
-    <string name="donate_liberapay_note">Liberapay is a privacy-respecting, open-source donation platform with zero platform fees.</string>
     <string name="cd_donate_button">Open Liberapay donation page in browser</string>
+    <string name="donate_buymeacoffee_button">Buy Me a Coffee</string>
+    <string name="cd_donate_buymeacoffee_button">Open Buy Me a Coffee page in browser</string>
+    <string name="donate_or">or</string>
+    <string name="donate_platforms_note">Both platforms are safe and your support goes directly to the developer.</string>
 </resources>

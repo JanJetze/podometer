@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -32,14 +33,17 @@ import com.podometer.R
 import com.podometer.ui.theme.PodometerTheme
 
 /**
- * Static donate screen encouraging users to support development via Liberapay.
+ * Static donate screen encouraging users to support development via Liberapay
+ * or Buy Me a Coffee.
  *
  * Displays a heart icon, a brief message explaining the app is free and donations
- * are welcome, a prominent donate button, and a short note about Liberapay.
- * No ViewModel is needed — the only action is opening an external URL.
+ * are welcome, two donate buttons (Liberapay primary, Buy Me a Coffee secondary),
+ * and a short note about both platforms.
+ * No ViewModel is needed — the only actions are opening external URLs.
  *
  * @param onNavigateBack Called when the user presses the back button.
- * @param onOpenDonateUrl Called when the user taps the donate button.
+ * @param onOpenDonateUrl Called when the user taps the Liberapay button.
+ * @param onOpenBuyMeACoffeeUrl Called when the user taps the Buy Me a Coffee button.
  * @param modifier Optional [Modifier] for the root [Scaffold].
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +51,7 @@ import com.podometer.ui.theme.PodometerTheme
 fun DonateScreen(
     onNavigateBack: () -> Unit,
     onOpenDonateUrl: () -> Unit,
+    onOpenBuyMeACoffeeUrl: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -107,10 +112,27 @@ fun DonateScreen(
                 Text(text = stringResource(R.string.donate_button))
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(R.string.donate_or),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = onOpenBuyMeACoffeeUrl,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = stringResource(R.string.donate_buymeacoffee_button))
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = stringResource(R.string.donate_liberapay_note),
+                text = stringResource(R.string.donate_platforms_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -130,6 +152,7 @@ private fun DonateScreenLightPreview() {
         DonateScreen(
             onNavigateBack = {},
             onOpenDonateUrl = {},
+            onOpenBuyMeACoffeeUrl = {},
         )
     }
 }
@@ -142,6 +165,7 @@ private fun DonateScreenDarkPreview() {
         DonateScreen(
             onNavigateBack = {},
             onOpenDonateUrl = {},
+            onOpenBuyMeACoffeeUrl = {},
         )
     }
 }
