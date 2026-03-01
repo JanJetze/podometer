@@ -78,7 +78,7 @@ internal fun timestampToFraction(
  * Builds a list of [TimelineSegment]s from a list of [TransitionEvent]s.
  *
  * ### Segment building rules
- * - **No transitions**: returns a single [ActivityState.STILL] segment spanning the entire bar.
+ * - **No transitions**: returns an empty list (no activity to show).
  * - **First segment**: starts at [dayStartMillis], ends at the first transition timestamp;
  *   activity is the first transition's [TransitionEvent.fromActivity].
  * - **Middle segments**: span from one transition to the next; activity is each transition's
@@ -87,6 +87,9 @@ internal fun timestampToFraction(
  *   activity is the last transition's [TransitionEvent.toActivity].
  *
  * Segments with zero duration (startFraction == endFraction) are omitted.
+ * [ActivityState.STILL] segments are filtered from the output — STILL is
+ * represented as the neutral background in the timeline bar, not as an
+ * explicit segment.
  *
  * @param transitions    Ordered list of activity transitions for the day.
  * @param dayStartMillis Start of the day in epoch millis.
@@ -104,13 +107,7 @@ fun buildTimelineSegments(
     val endFraction = timestampToFraction(effectiveEnd, dayStartMillis, dayEndMillis)
 
     if (transitions.isEmpty()) {
-        return listOf(
-            TimelineSegment(
-                startFraction = 0f,
-                endFraction = 1f,
-                activity = ActivityState.STILL,
-            ),
-        )
+        return emptyList()
     }
 
     val segments = mutableListOf<TimelineSegment>()
@@ -160,7 +157,7 @@ fun buildTimelineSegments(
         )
     }
 
-    return segments
+    return segments.filter { it.activity != ActivityState.STILL }
 }
 
 /**
@@ -179,15 +176,16 @@ fun buildTimelineSegments(
  * @return A human-readable English string suitable for use as a `contentDescription` in tests.
  */
 fun timelineContentDescription(segments: List<TimelineSegment>): String {
-    if (segments.isEmpty()) {
+    val activeSegments = segments.filter { it.activity != ActivityState.STILL }
+    if (activeSegments.isEmpty()) {
         return "Activity timeline: no activity data available."
     }
 
-    val parts = segments.map { seg ->
+    val parts = activeSegments.map { seg ->
         val activityLabel = when (seg.activity) {
             ActivityState.WALKING -> "walking"
             ActivityState.CYCLING -> "cycling"
-            ActivityState.STILL -> "still"
+            ActivityState.STILL -> "still" // unreachable after filter, kept for exhaustiveness
         }
         val percentStart = (seg.startFraction * 100).toInt()
         val percentEnd = (seg.endFraction * 100).toInt()
@@ -244,10 +242,11 @@ fun ActivityTimeline(
     // Build a localised content description using string resources so TalkBack announces
     // the correct text in the user's language. The pure-Kotlin timelineContentDescription()
     // function is kept separately for JVM unit tests.
-    val accessibilityText = if (segments.isEmpty()) {
+    val activeSegments = segments.filter { it.activity != ActivityState.STILL }
+    val accessibilityText = if (activeSegments.isEmpty()) {
         stringResource(R.string.cd_timeline_no_data)
     } else {
-        val parts = segments.map { seg ->
+        val parts = activeSegments.map { seg ->
             val label = when (seg.activity) {
                 ActivityState.WALKING -> stringResource(R.string.activity_walking)
                 ActivityState.CYCLING -> stringResource(R.string.activity_cycling)
@@ -316,13 +315,10 @@ private fun ActivityTimelineBar(segments: List<TimelineSegment>, activityColors:
         }
         clipPath(roundedPath, clipOp = ClipOp.Intersect) {
 
-            if (segments.isEmpty()) {
-                // Draw a single gray bar if no segments
-                drawRect(color = activityColors.still, size = barSize)
-                return@clipPath
-            }
+            // Neutral background — gaps between activity segments show as still/gray
+            drawRect(color = activityColors.still, size = barSize)
 
-            // Draw all segments
+            // Overlay activity segments (STILL segments are already filtered out)
             segments.forEach { seg ->
                 val segLeft = seg.startFraction * barWidth
                 val segRight = seg.endFraction * barWidth

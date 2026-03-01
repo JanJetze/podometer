@@ -29,7 +29,7 @@ class ActivityTimelineTest {
     // ─── buildTimelineSegments — empty transitions ────────────────────────────
 
     @Test
-    fun `buildTimelineSegments with empty transitions returns single gray segment`() {
+    fun `buildTimelineSegments with empty transitions returns empty list`() {
         val segments = buildTimelineSegments(
             transitions = emptyList(),
             dayStartMillis = dayStart,
@@ -37,16 +37,13 @@ class ActivityTimelineTest {
             nowMillis = now,
         )
 
-        assertEquals(1, segments.size)
-        assertEquals(ActivityState.STILL, segments[0].activity)
-        assertEquals(0f, segments[0].startFraction, 0.001f)
-        assertEquals(1f, segments[0].endFraction, 0.001f)
+        assertTrue("Empty transitions should return empty segments", segments.isEmpty())
     }
 
     // ─── buildTimelineSegments — single transition ────────────────────────────
 
     @Test
-    fun `buildTimelineSegments with single transition at noon returns two segments`() {
+    fun `buildTimelineSegments with single transition returns only non-STILL segments`() {
         val transitionAt6h = TransitionEvent(
             id = 1,
             timestamp = hoursToMillis(dayStart, 6f),
@@ -62,23 +59,17 @@ class ActivityTimelineTest {
             nowMillis = now,
         )
 
-        assertEquals(2, segments.size)
-
-        // First segment: midnight to 6am, activity is fromActivity (STILL)
-        assertEquals(ActivityState.STILL, segments[0].activity)
-        assertEquals(0f, segments[0].startFraction, 0.001f)
-        assertEquals(0.25f, segments[0].endFraction, 0.001f)  // 6h / 24h = 0.25
-
-        // Second segment: 6am to noon (now), activity is toActivity (WALKING)
-        assertEquals(ActivityState.WALKING, segments[1].activity)
-        assertEquals(0.25f, segments[1].startFraction, 0.001f)
-        assertEquals(0.5f, segments[1].endFraction, 0.001f)   // 12h / 24h = 0.5
+        // STILL segment (midnight to 6am) is filtered out; only WALKING remains
+        assertEquals(1, segments.size)
+        assertEquals(ActivityState.WALKING, segments[0].activity)
+        assertEquals(0.25f, segments[0].startFraction, 0.001f)  // 6h / 24h = 0.25
+        assertEquals(0.5f, segments[0].endFraction, 0.001f)     // 12h / 24h = 0.5
     }
 
     // ─── buildTimelineSegments — multiple transitions ─────────────────────────
 
     @Test
-    fun `buildTimelineSegments with multiple transitions returns correct segment count`() {
+    fun `buildTimelineSegments with multiple transitions filters STILL segments`() {
         val transitions = listOf(
             TransitionEvent(
                 id = 1,
@@ -103,15 +94,14 @@ class ActivityTimelineTest {
             nowMillis = now,
         )
 
-        // Expect 3 segments: STILL(0–6h), WALKING(6–9h), CYCLING(9–12h/now)
-        assertEquals(3, segments.size)
-        assertEquals(ActivityState.STILL, segments[0].activity)
-        assertEquals(ActivityState.WALKING, segments[1].activity)
-        assertEquals(ActivityState.CYCLING, segments[2].activity)
+        // STILL(0–6h) is filtered out; WALKING(6–9h) and CYCLING(9–12h) remain
+        assertEquals(2, segments.size)
+        assertEquals(ActivityState.WALKING, segments[0].activity)
+        assertEquals(ActivityState.CYCLING, segments[1].activity)
     }
 
     @Test
-    fun `buildTimelineSegments middle segment spans between two transitions`() {
+    fun `buildTimelineSegments WALKING segment spans between two transitions`() {
         val transitions = listOf(
             TransitionEvent(
                 id = 1,
@@ -136,9 +126,53 @@ class ActivityTimelineTest {
             nowMillis = now,
         )
 
-        // Middle segment: WALKING from 6h to 9h → fractions 0.25 to 0.375
-        assertEquals(0.25f, segments[1].startFraction, 0.001f)
-        assertEquals(0.375f, segments[1].endFraction, 0.001f)  // 9h / 24h = 0.375
+        // WALKING segment: 6h to 9h → fractions 0.25 to 0.375
+        val walkingSegment = segments.first { it.activity == ActivityState.WALKING }
+        assertEquals(0.25f, walkingSegment.startFraction, 0.001f)
+        assertEquals(0.375f, walkingSegment.endFraction, 0.001f)  // 9h / 24h = 0.375
+    }
+
+    // ─── buildTimelineSegments — STILL segments in middle are filtered ────────
+
+    @Test
+    fun `buildTimelineSegments filters STILL segments from mixed activity output`() {
+        val transitions = listOf(
+            TransitionEvent(
+                id = 1,
+                timestamp = hoursToMillis(dayStart, 6f),
+                fromActivity = ActivityState.STILL,
+                toActivity = ActivityState.WALKING,
+                isManualOverride = false,
+            ),
+            TransitionEvent(
+                id = 2,
+                timestamp = hoursToMillis(dayStart, 8f),
+                fromActivity = ActivityState.WALKING,
+                toActivity = ActivityState.STILL,
+                isManualOverride = false,
+            ),
+            TransitionEvent(
+                id = 3,
+                timestamp = hoursToMillis(dayStart, 10f),
+                fromActivity = ActivityState.STILL,
+                toActivity = ActivityState.CYCLING,
+                isManualOverride = false,
+            ),
+        )
+
+        val segments = buildTimelineSegments(
+            transitions = transitions,
+            dayStartMillis = dayStart,
+            dayEndMillis = dayEnd,
+            nowMillis = now,
+        )
+
+        // STILL segments (0-6h, 8-10h) filtered; WALKING(6-8h) and CYCLING(10-12h) remain
+        assertEquals(2, segments.size)
+        assertTrue("All segments should be non-STILL",
+            segments.all { it.activity != ActivityState.STILL })
+        assertEquals(ActivityState.WALKING, segments[0].activity)
+        assertEquals(ActivityState.CYCLING, segments[1].activity)
     }
 
     // ─── buildTimelineSegments — last segment ends at nowMillis or dayEnd ─────
@@ -225,10 +259,10 @@ class ActivityTimelineTest {
         }
     }
 
-    // ─── buildTimelineSegments — consecutive segments are contiguous ──────────
+    // ─── buildTimelineSegments — consecutive non-STILL segments are contiguous
 
     @Test
-    fun `buildTimelineSegments segments are contiguous with no gaps`() {
+    fun `buildTimelineSegments adjacent non-STILL segments are contiguous`() {
         val transitions = listOf(
             TransitionEvent(
                 id = 1,
@@ -253,15 +287,14 @@ class ActivityTimelineTest {
             nowMillis = now,
         )
 
-        // Each segment's endFraction should equal the next segment's startFraction
-        for (i in 0 until segments.size - 1) {
-            assertEquals(
-                "Segment $i endFraction should equal segment ${i + 1} startFraction",
-                segments[i].endFraction,
-                segments[i + 1].startFraction,
-                0.001f,
-            )
-        }
+        // WALKING(8-11h) and CYCLING(11-12h) — adjacent and contiguous
+        assertEquals(2, segments.size)
+        assertEquals(
+            "WALKING endFraction should equal CYCLING startFraction",
+            segments[0].endFraction,
+            segments[1].startFraction,
+            0.001f,
+        )
     }
 
     // ─── buildTimelineSegments — all-walking scenario ─────────────────────────
@@ -303,7 +336,7 @@ class ActivityTimelineTest {
     }
 
     @Test
-    fun `timelineContentDescription with single still segment returns still description`() {
+    fun `timelineContentDescription with single still segment returns no data message`() {
         val segments = listOf(
             TimelineSegment(
                 startFraction = 0f,
@@ -313,8 +346,8 @@ class ActivityTimelineTest {
         )
         val description = timelineContentDescription(segments)
         assertTrue(
-            "Description should mention 'still': $description",
-            description.contains("still", ignoreCase = true),
+            "STILL-only segments should produce no-data description: $description",
+            description.contains("no activity", ignoreCase = true),
         )
     }
 
@@ -337,19 +370,26 @@ class ActivityTimelineTest {
             "Description should mention 'walking': $description",
             description.contains("walking", ignoreCase = true),
         )
+        assertTrue(
+            "Description should NOT mention 'still': $description",
+            !description.contains("still", ignoreCase = true),
+        )
     }
 
     @Test
-    fun `timelineContentDescription with all three activities mentions all three`() {
+    fun `timelineContentDescription with all three activities skips STILL`() {
         val segments = listOf(
             TimelineSegment(startFraction = 0f, endFraction = 0.33f, activity = ActivityState.STILL),
             TimelineSegment(startFraction = 0.33f, endFraction = 0.66f, activity = ActivityState.WALKING),
             TimelineSegment(startFraction = 0.66f, endFraction = 1f, activity = ActivityState.CYCLING),
         )
         val description = timelineContentDescription(segments)
-        assertTrue("Description should mention 'still': $description", description.contains("still", ignoreCase = true))
-        assertTrue("Description should mention 'walking': $description", description.contains("walking", ignoreCase = true))
-        assertTrue("Description should mention 'cycling': $description", description.contains("cycling", ignoreCase = true))
+        assertTrue("Description should NOT mention 'still': $description",
+            !description.contains("still", ignoreCase = true))
+        assertTrue("Description should mention 'walking': $description",
+            description.contains("walking", ignoreCase = true))
+        assertTrue("Description should mention 'cycling': $description",
+            description.contains("cycling", ignoreCase = true))
     }
 
     // ─── ActivityTimelineKt class existence ───────────────────────────────────
@@ -375,6 +415,6 @@ class ActivityTimelineTest {
         )
         @Suppress("UNCHECKED_CAST")
         val result = method.invoke(null, emptyList<TransitionEvent>(), dayStart, dayEnd, now) as List<*>
-        assertEquals(1, result.size)
+        assertTrue("Empty transitions should return empty list", result.isEmpty())
     }
 }

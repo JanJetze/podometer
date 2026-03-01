@@ -31,11 +31,16 @@ import javax.inject.Singleton
  * ## State machine
  *
  * ```
- * STILL / WALKING  ──2+ cycling windows & >=60 s──────────────────►  CYCLING
- * STILL            ──non-still, non-cycling window────────────────►  WALKING
- * CYCLING          ──non-still, non-cycling window────────────────►  WALKING
- * WALKING / CYCLING ──still window──────────────────────────────►  STILL
+ * STILL            ──4+ walking windows (~20s)─────────────►  WALKING
+ * STILL / WALKING  ──2+ cycling windows & >=60 s───────────►  CYCLING
+ * CYCLING          ──non-still, non-cycling window─────────►  WALKING
+ * WALKING          ──still for >= 2 min────────────────────►  STILL
+ * CYCLING          ──still for >= 3 min────────────────────►  STILL
  * ```
+ *
+ * Grace periods prevent noisy fragmentation: a crosswalk pause no longer splits
+ * a walk into two segments, and kitchen steps require sustained walking (~20 s)
+ * before entering WALKING.
  *
  * ## Thread safety
  *
@@ -66,6 +71,16 @@ import javax.inject.Singleton
  *   emitted.  Satisfies the spec requirement: zero/very few steps for at least
  *   60 seconds before classifying as cycling. Default:
  *   [DEFAULT_MIN_CYCLING_DURATION_MS].
+ * @param walkingGracePeriodMs       Duration of sustained stillness (ms) required
+ *   before WALKING transitions to STILL. Brief pauses (crosswalk, traffic light)
+ *   are absorbed. Default: [DEFAULT_WALKING_GRACE_PERIOD_MS] (2 minutes).
+ * @param cyclingGracePeriodMs       Duration of sustained stillness (ms) required
+ *   before CYCLING transitions to STILL. Brief stops (red light, intersection)
+ *   are absorbed. Default: [DEFAULT_CYCLING_GRACE_PERIOD_MS] (3 minutes).
+ * @param consecutiveWalkingWindowsRequired Number of consecutive walking windows
+ *   required before STILL transitions to WALKING. Filters spurious walking from
+ *   kitchen steps or brief hand movements. Default:
+ *   [DEFAULT_CONSECUTIVE_WALKING_WINDOWS] (~20 seconds at 5-second evaluation).
  */
 @Singleton
 class CyclingClassifier(
@@ -74,6 +89,9 @@ class CyclingClassifier(
     private val consecutiveWindowsRequired: Int = DEFAULT_CONSECUTIVE_WINDOWS,
     private val stillVarianceThreshold: Double = DEFAULT_STILL_VARIANCE_THRESHOLD,
     private val minCyclingDurationMs: Long = DEFAULT_MIN_CYCLING_DURATION_MS,
+    private val walkingGracePeriodMs: Long = DEFAULT_WALKING_GRACE_PERIOD_MS,
+    private val cyclingGracePeriodMs: Long = DEFAULT_CYCLING_GRACE_PERIOD_MS,
+    private val consecutiveWalkingWindowsRequired: Int = DEFAULT_CONSECUTIVE_WALKING_WINDOWS,
 ) {
 
     /**
@@ -90,6 +108,9 @@ class CyclingClassifier(
         consecutiveWindowsRequired = DEFAULT_CONSECUTIVE_WINDOWS,
         stillVarianceThreshold = DEFAULT_STILL_VARIANCE_THRESHOLD,
         minCyclingDurationMs = DEFAULT_MIN_CYCLING_DURATION_MS,
+        walkingGracePeriodMs = DEFAULT_WALKING_GRACE_PERIOD_MS,
+        cyclingGracePeriodMs = DEFAULT_CYCLING_GRACE_PERIOD_MS,
+        consecutiveWalkingWindowsRequired = DEFAULT_CONSECUTIVE_WALKING_WINDOWS,
     )
 
     // Internal state — protected by @Synchronized on each public method.
@@ -102,6 +123,15 @@ class CyclingClassifier(
      * the streak is broken or [reset] is called.
      */
     private var cyclingWindowStartTimeMs: Long = 0L
+
+    /** Number of consecutive still windows observed. Used for grace-period tracking. */
+    private var consecutiveStillWindows: Int = 0
+
+    /** Timestamp of the first still window in the current consecutive still streak. */
+    private var stillWindowStartTimeMs: Long = 0L
+
+    /** Number of consecutive walking windows observed from STILL (for entry threshold). */
+    private var consecutiveWalkingWindows: Int = 0
 
     // ─── Public API ───────────────────────────────────────────────────────────
 
@@ -129,11 +159,11 @@ class CyclingClassifier(
         // Determine what this window looks like
         val isStillWindow = variance <= stillVarianceThreshold && stepFrequency < stepFrequencyThreshold
         val isCyclingWindow = variance > varianceThreshold && stepFrequency < stepFrequencyThreshold
+        val isWalkingWindow = !isCyclingWindow && !isStillWindow && stepFrequency >= stepFrequencyThreshold
 
         // Update consecutive cycling window count and track when the streak started
         if (isCyclingWindow) {
             if (consecutiveCyclingWindows == 0) {
-                // First window of a new streak — record when it started
                 cyclingWindowStartTimeMs = currentTimeMs
             }
             consecutiveCyclingWindows++
@@ -142,45 +172,100 @@ class CyclingClassifier(
             cyclingWindowStartTimeMs = 0L
         }
 
-        val previousState = currentState
-
-        // Still detection takes priority: stationary regardless of current state
+        // Update consecutive still window count
         if (isStillWindow) {
-            currentState = ActivityState.STILL
-            return if (previousState != ActivityState.STILL) {
-                TransitionResult(fromState = previousState, toState = ActivityState.STILL)
-            } else {
-                null
+            if (consecutiveStillWindows == 0) {
+                stillWindowStartTimeMs = currentTimeMs
             }
+            consecutiveStillWindows++
+        } else {
+            consecutiveStillWindows = 0
+            stillWindowStartTimeMs = 0L
         }
 
+        // Update consecutive walking windows (for STILL → WALKING threshold)
+        if (isWalkingWindow) {
+            consecutiveWalkingWindows++
+        } else {
+            consecutiveWalkingWindows = 0
+        }
+
+        val previousState = currentState
+
         // Cycling transition: enough consecutive cycling windows, duration gate
-        // satisfied, and not already cycling
+        // satisfied, and not already cycling — checked first in all states
         val durationSatisfied = (currentTimeMs - cyclingWindowStartTimeMs) >= minCyclingDurationMs
         if (consecutiveCyclingWindows >= consecutiveWindowsRequired
             && durationSatisfied
             && currentState != ActivityState.CYCLING
         ) {
             currentState = ActivityState.CYCLING
-            return TransitionResult(fromState = previousState, toState = ActivityState.CYCLING)
+            return TransitionResult(
+                fromState = previousState,
+                toState = ActivityState.CYCLING,
+                effectiveTimestamp = currentTimeMs,
+            )
         }
 
-        // Walking transition:
-        //   - From CYCLING: any non-cycling, non-still window (variance drop or steps resuming)
-        //   - From STILL: requires step activity (stepFrequency >= stepFrequencyThreshold) to
-        //     distinguish purposeful walking from ambiguous low-motion gap-zone windows
-        val isWalkingTransition = !isCyclingWindow && !isStillWindow && when (currentState) {
-            ActivityState.CYCLING -> true
-            ActivityState.STILL -> stepFrequency >= stepFrequencyThreshold
-            ActivityState.WALKING -> false
-        }
-        if (isWalkingTransition) {
-            currentState = ActivityState.WALKING
-            return TransitionResult(fromState = previousState, toState = ActivityState.WALKING)
-        }
+        return when (currentState) {
+            ActivityState.STILL -> {
+                // Walking entry requires sustained walking to filter kitchen steps
+                if (isWalkingWindow && consecutiveWalkingWindows >= consecutiveWalkingWindowsRequired) {
+                    currentState = ActivityState.WALKING
+                    TransitionResult(
+                        fromState = previousState,
+                        toState = ActivityState.WALKING,
+                        effectiveTimestamp = currentTimeMs,
+                    )
+                } else {
+                    null
+                }
+            }
 
-        // No state change
-        return null
+            ActivityState.WALKING -> {
+                if (isStillWindow) {
+                    val stillDuration = currentTimeMs - stillWindowStartTimeMs
+                    if (stillDuration >= walkingGracePeriodMs) {
+                        currentState = ActivityState.STILL
+                        TransitionResult(
+                            fromState = previousState,
+                            toState = ActivityState.STILL,
+                            effectiveTimestamp = stillWindowStartTimeMs,
+                        )
+                    } else {
+                        null // within grace period — stay WALKING
+                    }
+                } else {
+                    null // non-still window — stay WALKING
+                }
+            }
+
+            ActivityState.CYCLING -> {
+                // Non-still, non-cycling window → WALKING (immediate, no grace period)
+                if (!isCyclingWindow && !isStillWindow) {
+                    currentState = ActivityState.WALKING
+                    TransitionResult(
+                        fromState = previousState,
+                        toState = ActivityState.WALKING,
+                        effectiveTimestamp = currentTimeMs,
+                    )
+                } else if (isStillWindow) {
+                    val stillDuration = currentTimeMs - stillWindowStartTimeMs
+                    if (stillDuration >= cyclingGracePeriodMs) {
+                        currentState = ActivityState.STILL
+                        TransitionResult(
+                            fromState = previousState,
+                            toState = ActivityState.STILL,
+                            effectiveTimestamp = stillWindowStartTimeMs,
+                        )
+                    } else {
+                        null // within grace period — stay CYCLING
+                    }
+                } else {
+                    null // cycling window — stay CYCLING
+                }
+            }
+        }
     }
 
     /**
@@ -205,6 +290,9 @@ class CyclingClassifier(
         currentState = ActivityState.STILL
         consecutiveCyclingWindows = 0
         cyclingWindowStartTimeMs = 0L
+        consecutiveStillWindows = 0
+        stillWindowStartTimeMs = 0L
+        consecutiveWalkingWindows = 0
     }
 
     // ─── Constants ────────────────────────────────────────────────────────────
@@ -255,5 +343,30 @@ class CyclingClassifier(
          * classify as cycling".
          */
         const val DEFAULT_MIN_CYCLING_DURATION_MS = 60_000L
+
+        /**
+         * Default grace period before WALKING transitions to STILL, in ms.
+         *
+         * 120 000 ms = 2 minutes. Brief pauses (crosswalks, traffic lights)
+         * do not fragment a walking session.
+         */
+        const val DEFAULT_WALKING_GRACE_PERIOD_MS = 120_000L
+
+        /**
+         * Default grace period before CYCLING transitions to STILL, in ms.
+         *
+         * 180 000 ms = 3 minutes. Brief stops (red lights, intersections)
+         * do not fragment a cycling session.
+         */
+        const val DEFAULT_CYCLING_GRACE_PERIOD_MS = 180_000L
+
+        /**
+         * Default number of consecutive walking windows required before
+         * STILL transitions to WALKING.
+         *
+         * Four windows (~20 seconds at a 5-second evaluation period) filters
+         * out spurious walking from kitchen steps or brief hand movements.
+         */
+        const val DEFAULT_CONSECUTIVE_WALKING_WINDOWS = 4
     }
 }

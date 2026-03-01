@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +43,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
 import com.podometer.data.sensor.SensorType
+import com.podometer.domain.model.ActivityState
 import com.podometer.service.startTrackingServiceIfPermitted
 import com.podometer.util.DateTimeUtils
 import com.podometer.util.checkEssentialPermissions
@@ -151,13 +155,18 @@ fun DashboardScreen(
                     )
                 }
 
-                // Activity badge — centred below the app bar
-                ActivityBadge(
-                    activity = uiState.currentActivity,
-                    modifier = Modifier
-                        .align(CenterHorizontally)
-                        .padding(vertical = 8.dp),
-                )
+                // Activity badge — centred below the app bar, hidden when STILL
+                AnimatedVisibility(
+                    visible = uiState.currentActivity != ActivityState.STILL,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(CenterHorizontally),
+                ) {
+                    ActivityBadge(
+                        activity = uiState.currentActivity,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                }
 
                 // Today card or first-launch empty state
                 val isFirstLaunch = uiState.todaySteps == 0 && uiState.transitions.isEmpty()

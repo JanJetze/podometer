@@ -61,9 +61,14 @@ class CyclingClassifierTest {
     @Before
     fun setUp() {
         // Use minCyclingDurationMs = 0 so that existing consecutive-window tests
-        // are not broken by the duration gate.  Duration-specific behaviour is
-        // verified by the dedicated duration tests further below.
-        classifier = CyclingClassifier(minCyclingDurationMs = 0L)
+        // are not broken by the duration gate.  Grace periods and walking entry
+        // threshold are also disabled so existing tests behave as before.
+        classifier = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+        )
     }
 
     // ─── Helper to build a WindowFeatures with given variance ─────────────────
@@ -333,7 +338,12 @@ class CyclingClassifierTest {
     @Test
     fun `reset clears cycling window start timestamp`() {
         // Use a classifier with the real 60 s duration gate
-        val durationClassifier = CyclingClassifier(minCyclingDurationMs = 60_000L)
+        val durationClassifier = CyclingClassifier(
+            minCyclingDurationMs = 60_000L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+        )
 
         // Accumulate one cycling window at T0
         durationClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T0)
@@ -361,6 +371,9 @@ class CyclingClassifierTest {
         val durationClassifier = CyclingClassifier(
             consecutiveWindowsRequired = 2,
             minCyclingDurationMs = 60_000L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
         )
         // Window 1 at T=0
         val r1 = durationClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T0)
@@ -376,6 +389,9 @@ class CyclingClassifierTest {
         val durationClassifier = CyclingClassifier(
             consecutiveWindowsRequired = 2,
             minCyclingDurationMs = 60_000L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
         )
         // Window 1 at T=0
         durationClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T0)
@@ -390,6 +406,9 @@ class CyclingClassifierTest {
         val durationClassifier = CyclingClassifier(
             consecutiveWindowsRequired = 2,
             minCyclingDurationMs = 60_000L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
         )
         durationClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T0)
         val result = durationClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T_61S)
@@ -403,6 +422,9 @@ class CyclingClassifierTest {
         val durationClassifier = CyclingClassifier(
             consecutiveWindowsRequired = 2,
             minCyclingDurationMs = 60_000L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
         )
         var lastResult: TransitionResult? = null
         // Windows at 0, 5, 10, …, 55 s: only 11 windows, spanning 55 s — not enough
@@ -424,6 +446,9 @@ class CyclingClassifierTest {
         val durationClassifier = CyclingClassifier(
             consecutiveWindowsRequired = 2,
             minCyclingDurationMs = 60_000L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
         )
         // Build up 55 s of cycling windows (12 windows at t=0,5,...,55 s)
         // Duration gate not yet satisfied (55 s < 60 s required), so state stays STILL
@@ -458,6 +483,9 @@ class CyclingClassifierTest {
             stepFrequencyThreshold = 0.3,
             consecutiveWindowsRequired = 2,
             minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
         )
         // Use variance of 1.0 which is above the 0.5 threshold but below default 2.0
         val customVariance = 1.0
@@ -475,6 +503,9 @@ class CyclingClassifierTest {
             stepFrequencyThreshold = 3.0,    // higher threshold: 3.0 Hz
             consecutiveWindowsRequired = 2,
             minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
         )
         // At 2.0 Hz steps (WALKING_STEP_FREQ) — above default 0.3 but below custom 3.0 threshold
         // So with custom classifier, 2.0 Hz steps still count as "cycling-like"
@@ -491,6 +522,9 @@ class CyclingClassifierTest {
             stepFrequencyThreshold = 0.3,
             consecutiveWindowsRequired = 1,
             minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
         )
         val result = singleWindowClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T0)
         assertNotNull("Single window required: should detect on first window", result)
@@ -504,6 +538,9 @@ class CyclingClassifierTest {
             stepFrequencyThreshold = 0.3,
             consecutiveWindowsRequired = 3,
             minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
         )
         threeWindowClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T0)
         val r2 = threeWindowClassifier.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T_30S)
@@ -525,8 +562,8 @@ class CyclingClassifierTest {
 
     @Test
     fun `TransitionResult is data class with equality semantics`() {
-        val r1 = TransitionResult(ActivityState.STILL, ActivityState.CYCLING)
-        val r2 = TransitionResult(ActivityState.STILL, ActivityState.CYCLING)
+        val r1 = TransitionResult(ActivityState.STILL, ActivityState.CYCLING, 0L)
+        val r2 = TransitionResult(ActivityState.STILL, ActivityState.CYCLING, 0L)
         assertEquals(r1, r2)
     }
 
@@ -550,6 +587,254 @@ class CyclingClassifierTest {
     @Test
     fun `DEFAULT_STILL_VARIANCE_THRESHOLD is 0_5`() {
         assertEquals(0.5, CyclingClassifier.DEFAULT_STILL_VARIANCE_THRESHOLD, DELTA)
+    }
+
+    @Test
+    fun `DEFAULT_WALKING_GRACE_PERIOD_MS is 120_000`() {
+        assertEquals(120_000L, CyclingClassifier.DEFAULT_WALKING_GRACE_PERIOD_MS)
+    }
+
+    @Test
+    fun `DEFAULT_CYCLING_GRACE_PERIOD_MS is 180_000`() {
+        assertEquals(180_000L, CyclingClassifier.DEFAULT_CYCLING_GRACE_PERIOD_MS)
+    }
+
+    @Test
+    fun `DEFAULT_CONSECUTIVE_WALKING_WINDOWS is 4`() {
+        assertEquals(4, CyclingClassifier.DEFAULT_CONSECUTIVE_WALKING_WINDOWS)
+    }
+
+    // ─── Walking grace period ─────────────────────────────────────────────────
+
+    @Test
+    fun `grace period - walking plus still window stays WALKING within 2 min`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 120_000L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+        )
+        // Enter WALKING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+
+        // Still window at T=5 s — within 2 min grace period
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 5_000L)
+        assertNull("Should stay WALKING within grace period", result)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+    }
+
+    @Test
+    fun `grace period - walking plus still for 2 min transitions to STILL`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 120_000L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+        )
+        // Enter WALKING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+
+        // Still windows spanning 2 minutes
+        val stillStart = 10_000L
+        var t = stillStart
+        while (t < stillStart + 120_000L) {
+            val r = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, t)
+            assertNull("Should stay WALKING during grace period at t=$t", r)
+            t += WINDOW_INTERVAL_MS
+        }
+
+        // Window at stillStart + 120_000 should trigger transition
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, stillStart + 120_000L)
+        assertNotNull("Should transition to STILL after 2 min grace period", result)
+        assertEquals(ActivityState.WALKING, result!!.fromState)
+        assertEquals(ActivityState.STILL, result.toState)
+        assertEquals(stillStart, result.effectiveTimestamp)
+    }
+
+    // ─── Cycling grace period ─────────────────────────────────────────────────
+
+    @Test
+    fun `grace period - cycling plus still window stays CYCLING within 3 min`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 180_000L,
+            consecutiveWalkingWindowsRequired = 1,
+        )
+        // Enter CYCLING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T0)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, 5_000L)
+        assertEquals(ActivityState.CYCLING, gc.getCurrentState())
+
+        // Still window at T=10 s — within 3 min grace period
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 10_000L)
+        assertNull("Should stay CYCLING within grace period", result)
+        assertEquals(ActivityState.CYCLING, gc.getCurrentState())
+    }
+
+    @Test
+    fun `grace period - cycling plus still for 3 min transitions to STILL`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 180_000L,
+            consecutiveWalkingWindowsRequired = 1,
+        )
+        // Enter CYCLING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, T0)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, 5_000L)
+        assertEquals(ActivityState.CYCLING, gc.getCurrentState())
+
+        // Still windows spanning 3 minutes
+        val stillStart = 10_000L
+        var t = stillStart
+        while (t < stillStart + 180_000L) {
+            val r = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, t)
+            assertNull("Should stay CYCLING during grace period at t=$t", r)
+            t += WINDOW_INTERVAL_MS
+        }
+
+        // Window at stillStart + 180_000 should trigger transition
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, stillStart + 180_000L)
+        assertNotNull("Should transition to STILL after 3 min grace period", result)
+        assertEquals(ActivityState.CYCLING, result!!.fromState)
+        assertEquals(ActivityState.STILL, result.toState)
+        assertEquals(stillStart, result.effectiveTimestamp)
+    }
+
+    // ─── Grace period reset ───────────────────────────────────────────────────
+
+    @Test
+    fun `grace period reset - walking plus still plus walking resets counter`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 120_000L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+        )
+        // Enter WALKING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+
+        // Several still windows (within grace period)
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 10_000L)
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 15_000L)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+
+        // Walking window breaks the still streak, resets grace period
+        val result = gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 20_000L)
+        assertNull("No transition — still in WALKING", result)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+
+        // New still windows — grace period starts fresh from 25 s
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 25_000L)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+
+        // Even after original stillStart + 120 s (10_000 + 120_000 = 130_000), no transition
+        // because the still counter was reset at 20_000. New grace started at 25_000.
+        val shouldStayWalking = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 130_000L)
+        assertNull("Grace period was reset; 130s from new start (25s) is only 105s", shouldStayWalking)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+    }
+
+    // ─── Walking entry threshold ──────────────────────────────────────────────
+
+    @Test
+    fun `walking entry - 1 to 3 walking windows stays STILL`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 4,
+        )
+        for (i in 0 until 3) {
+            val result = gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, i * WINDOW_INTERVAL_MS)
+            assertNull("Walking window $i of 3 should not trigger transition (need 4)", result)
+            assertEquals(ActivityState.STILL, gc.getCurrentState())
+        }
+    }
+
+    @Test
+    fun `walking entry - 4 walking windows transitions to WALKING`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 4,
+        )
+        for (i in 0 until 3) {
+            gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, i * WINDOW_INTERVAL_MS)
+        }
+        val result = gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 3 * WINDOW_INTERVAL_MS)
+        assertNotNull("4th walking window should trigger STILL → WALKING", result)
+        assertEquals(ActivityState.STILL, result!!.fromState)
+        assertEquals(ActivityState.WALKING, result.toState)
+    }
+
+    @Test
+    fun `walking entry - interrupted by still window resets counter`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 4,
+        )
+        // 3 walking windows
+        for (i in 0 until 3) {
+            gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, i * WINDOW_INTERVAL_MS)
+        }
+        // Still window interrupts
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 3 * WINDOW_INTERVAL_MS)
+        assertEquals(ActivityState.STILL, gc.getCurrentState())
+
+        // 3 more walking windows — only 3 since reset, not 4
+        for (i in 0 until 3) {
+            val result = gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, (4 + i) * WINDOW_INTERVAL_MS)
+            assertNull("Walking window after reset ($i of 3) should not trigger", result)
+        }
+        assertEquals(ActivityState.STILL, gc.getCurrentState())
+
+        // 4th window after reset triggers transition
+        val result = gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 7 * WINDOW_INTERVAL_MS)
+        assertNotNull("4th consecutive walking window after reset triggers transition", result)
+        assertEquals(ActivityState.WALKING, result!!.toState)
+    }
+
+    // ─── Effective timestamp ──────────────────────────────────────────────────
+
+    @Test
+    fun `effective timestamp - grace period STILL transition uses first still window time`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 10_000L, // short grace for test
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+        )
+        // Enter WALKING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, T0)
+
+        // First still at 5_000
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 5_000L)
+        // Grace period expires at 5_000 + 10_000 = 15_000
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 15_000L)
+        assertNotNull(result)
+        assertEquals(ActivityState.STILL, result!!.toState)
+        assertEquals(5_000L, result.effectiveTimestamp)
+    }
+
+    @Test
+    fun `effective timestamp - non-grace transitions use currentTimeMs`() {
+        // STILL → WALKING: effectiveTimestamp = currentTimeMs
+        val result = classifier.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 42_000L)
+        assertNotNull(result)
+        assertEquals(42_000L, result!!.effectiveTimestamp)
+
+        // WALKING → STILL (grace = 0): effectiveTimestamp = stillWindowStartTimeMs = currentTimeMs
+        val result2 = classifier.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 50_000L)
+        assertNotNull(result2)
+        assertEquals(50_000L, result2!!.effectiveTimestamp)
     }
 
     // ─── Thread safety ────────────────────────────────────────────────────────

@@ -375,7 +375,7 @@ class StepTrackingService : Service() {
                 }
             }
             if (transition.fromState == ActivityState.CYCLING) {
-                val endedSession = cyclingSessionManager.endSession(now) // fast, clears step pause
+                val endedSession = cyclingSessionManager.endSession(transition.effectiveTimestamp) // fast, clears step pause
                 if (endedSession != null) {
                     val durationMs = endedSession.endTime!! - endedSession.startTime
                     if (durationMs < CyclingSessionManager.MIN_SESSION_DURATION_MS) {
@@ -401,7 +401,7 @@ class StepTrackingService : Service() {
             }
 
             val transitionEntity = ActivityTransition(
-                timestamp = System.currentTimeMillis(),
+                timestamp = transition.effectiveTimestamp,
                 fromActivity = transition.fromState.name,
                 toActivity = transition.toState.name,
                 isManualOverride = false,
