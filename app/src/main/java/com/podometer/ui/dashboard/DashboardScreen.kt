@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
 import com.podometer.data.sensor.SensorType
+import com.podometer.service.startTrackingServiceIfPermitted
 import com.podometer.util.DateTimeUtils
 import com.podometer.util.checkEssentialPermissions
 
@@ -78,13 +79,18 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Re-check permissions every time the screen resumes (e.g. after returning from Settings).
+    // Re-check permissions and ensure the tracking service is running every time the
+    // screen resumes (e.g. after returning from Settings, or after an app update that
+    // killed the previous service instance). startTrackingServiceIfPermitted is
+    // idempotent — it checks permissions and the service handles duplicate onStartCommand
+    // calls gracefully.
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshPermissions(checkEssentialPermissions(context))
+                startTrackingServiceIfPermitted(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
