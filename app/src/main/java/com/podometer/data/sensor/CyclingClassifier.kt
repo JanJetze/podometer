@@ -33,7 +33,7 @@ import javax.inject.Singleton
  * ```
  * STILL            ──4+ walking windows (~20s)─────────────►  WALKING
  * STILL / WALKING  ──2+ cycling windows & >=60 s───────────►  CYCLING
- * CYCLING          ──non-still, non-cycling window─────────►  WALKING
+ * CYCLING          ──4+ walking windows (~20s)──────────────►  WALKING
  * WALKING          ──still for >= 2 min────────────────────►  STILL
  * CYCLING          ──still for >= 3 min────────────────────►  STILL
  * ```
@@ -81,6 +81,10 @@ import javax.inject.Singleton
  *   required before STILL transitions to WALKING. Filters spurious walking from
  *   kitchen steps or brief hand movements. Default:
  *   [DEFAULT_CONSECUTIVE_WALKING_WINDOWS] (~20 seconds at 5-second evaluation).
+ * @param consecutiveWalkingWindowsForCyclingExit Number of consecutive walking
+ *   windows required while in CYCLING before transitioning to WALKING. Prevents
+ *   brief step-frequency spikes (phone bounce) from breaking cycling state.
+ *   Default: [DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT] (~20 seconds).
  */
 @Singleton
 class CyclingClassifier(
@@ -92,6 +96,7 @@ class CyclingClassifier(
     private val walkingGracePeriodMs: Long = DEFAULT_WALKING_GRACE_PERIOD_MS,
     private val cyclingGracePeriodMs: Long = DEFAULT_CYCLING_GRACE_PERIOD_MS,
     private val consecutiveWalkingWindowsRequired: Int = DEFAULT_CONSECUTIVE_WALKING_WINDOWS,
+    private val consecutiveWalkingWindowsForCyclingExit: Int = DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT,
 ) {
 
     /**
@@ -111,6 +116,7 @@ class CyclingClassifier(
         walkingGracePeriodMs = DEFAULT_WALKING_GRACE_PERIOD_MS,
         cyclingGracePeriodMs = DEFAULT_CYCLING_GRACE_PERIOD_MS,
         consecutiveWalkingWindowsRequired = DEFAULT_CONSECUTIVE_WALKING_WINDOWS,
+        consecutiveWalkingWindowsForCyclingExit = DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT,
     )
 
     // Internal state — protected by @Synchronized on each public method.
@@ -132,6 +138,12 @@ class CyclingClassifier(
 
     /** Number of consecutive walking windows observed from STILL (for entry threshold). */
     private var consecutiveWalkingWindows: Int = 0
+
+    /** Number of consecutive walking windows observed while in CYCLING (for exit threshold). */
+    private var consecutiveWalkingWindowsInCycling: Int = 0
+
+    /** Timestamp of the first walking window in the current consecutive streak while CYCLING. */
+    private var walkingInCyclingStartTimeMs: Long = 0L
 
     // ─── Public API ───────────────────────────────────────────────────────────
 
@@ -241,13 +253,27 @@ class CyclingClassifier(
             }
 
             ActivityState.CYCLING -> {
-                // Non-still, non-cycling window → WALKING (immediate, no grace period)
-                if (!isCyclingWindow && !isStillWindow) {
+                // Track consecutive walking windows while in CYCLING
+                if (isWalkingWindow) {
+                    if (consecutiveWalkingWindowsInCycling == 0) {
+                        walkingInCyclingStartTimeMs = currentTimeMs
+                    }
+                    consecutiveWalkingWindowsInCycling++
+                } else {
+                    consecutiveWalkingWindowsInCycling = 0
+                    walkingInCyclingStartTimeMs = 0L
+                }
+
+                // Walking exit requires sustained walking windows to filter phone bounce
+                if (isWalkingWindow && consecutiveWalkingWindowsInCycling >= consecutiveWalkingWindowsForCyclingExit) {
+                    val effectiveTs = walkingInCyclingStartTimeMs
+                    consecutiveWalkingWindowsInCycling = 0
+                    walkingInCyclingStartTimeMs = 0L
                     currentState = ActivityState.WALKING
                     TransitionResult(
                         fromState = previousState,
                         toState = ActivityState.WALKING,
-                        effectiveTimestamp = currentTimeMs,
+                        effectiveTimestamp = effectiveTs,
                     )
                 } else if (isStillWindow) {
                     val stillDuration = currentTimeMs - stillWindowStartTimeMs
@@ -293,6 +319,8 @@ class CyclingClassifier(
         consecutiveStillWindows = 0
         stillWindowStartTimeMs = 0L
         consecutiveWalkingWindows = 0
+        consecutiveWalkingWindowsInCycling = 0
+        walkingInCyclingStartTimeMs = 0L
     }
 
     // ─── Constants ────────────────────────────────────────────────────────────
@@ -368,5 +396,16 @@ class CyclingClassifier(
          * out spurious walking from kitchen steps or brief hand movements.
          */
         const val DEFAULT_CONSECUTIVE_WALKING_WINDOWS = 4
+
+        /**
+         * Default number of consecutive walking windows required while in
+         * CYCLING before transitioning to WALKING.
+         *
+         * Four windows (~20 seconds at a 5-second evaluation period) prevents
+         * brief step-frequency spikes from phone bounce during cycling from
+         * breaking the cycling state. Genuine walking (sustained ~20s of
+         * steps) still triggers the exit.
+         */
+        const val DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT = 4
     }
 }
