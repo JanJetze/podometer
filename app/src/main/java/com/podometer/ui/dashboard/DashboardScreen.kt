@@ -199,10 +199,10 @@ fun DashboardScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Section: Transition Log
-                SectionHeader(title = stringResource(R.string.section_transition_log))
-                TransitionLog(
-                    transitions = uiState.transitions,
+                // Section: Activities
+                SectionHeader(title = stringResource(R.string.section_activities))
+                ActivityLog(
+                    sessions = uiState.activitySessions,
                     onOverride = { transitionId, newActivity ->
                         viewModel.overrideTransition(transitionId, newActivity)
                     },
@@ -220,12 +220,6 @@ fun DashboardScreen(
                     todayDate = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE),
                     modifier = Modifier.fillMaxWidth(),
                 )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Section: Cycling Sessions
-                SectionHeader(title = stringResource(R.string.section_cycling_sessions))
-                CyclingSessionList(sessions = uiState.cyclingSessions)
 
                 Spacer(modifier = Modifier.height(16.dp))
             }

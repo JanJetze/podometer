@@ -25,12 +25,14 @@
     <string name="section_activity_timeline">Activity Timeline</string>
     <string name="section_transition_log">Transition Log</string>
     <string name="section_weekly_steps">Weekly Steps</string>
+    <string name="section_activities">Activities</string>
     <string name="section_cycling_sessions">Cycling Sessions</string>
 
     <!-- Dashboard placeholder text -->
     <string name="placeholder_timeline">Timeline will appear here</string>
     <string name="placeholder_transitions">No activity transitions yet</string>
     <string name="placeholder_weekly">Week chart will appear here</string>
+    <string name="placeholder_activities">No activities detected today</string>
     <string name="placeholder_cycling">No cycling detected today</string>
 
     <!-- ActivityTimeline accessibility -->
@@ -58,6 +60,11 @@
     <string name="cycling_total_duration">Total: %1$s</string>
     <string name="cycling_override_badge">Override</string>
     <string name="cd_cycling_session_item">Cycling session from %1$s to %2$s, %3$d minutes</string>
+
+    <!-- ActivityLog labels -->
+    <string name="activity_session_ongoing">ongoing</string>
+    <string name="cd_activity_session_item">%1$s session, %2$s, %3$s</string>
+    <string name="cd_activity_override_options">Override options for session at %1$s</string>
 
     <!-- WeeklyStepChart accessibility -->
     <string name="cd_weekly_chart_summary">Weekly step chart: %1$s</string>
