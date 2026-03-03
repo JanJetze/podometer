@@ -31,7 +31,7 @@ import javax.inject.Singleton
  * ## State machine
  *
  * ```
- * STILL            ──4+ walking windows (~20s)─────────────►  WALKING
+ * STILL            ──36+ walking windows (3 min) + CV check─►  WALKING
  * STILL / WALKING  ──2+ cycling windows & >=60 s───────────►  CYCLING
  * CYCLING          ──4+ walking windows (~20s)──────────────►  WALKING
  * WALKING          ──still for >= 2 min────────────────────►  STILL
@@ -80,7 +80,11 @@ import javax.inject.Singleton
  * @param consecutiveWalkingWindowsRequired Number of consecutive walking windows
  *   required before STILL transitions to WALKING. Filters spurious walking from
  *   kitchen steps or brief hand movements. Default:
- *   [DEFAULT_CONSECUTIVE_WALKING_WINDOWS] (~20 seconds at 5-second evaluation).
+ *   [DEFAULT_CONSECUTIVE_WALKING_WINDOWS] (3 minutes at 5-second evaluation).
+ * @param cadenceCvThreshold Maximum coefficient of variation (standard deviation
+ *   divided by mean) of step frequency across the walking window streak. A low
+ *   CV indicates steady outdoor walking; a high CV suggests indoor pacing with
+ *   irregular cadence. Default: [DEFAULT_CADENCE_CV_THRESHOLD] (0.35 = 35%).
  * @param consecutiveWalkingWindowsForCyclingExit Number of consecutive walking
  *   windows required while in CYCLING before transitioning to WALKING. Prevents
  *   brief step-frequency spikes (phone bounce) from breaking cycling state.
@@ -96,6 +100,7 @@ class CyclingClassifier(
     private val walkingGracePeriodMs: Long = DEFAULT_WALKING_GRACE_PERIOD_MS,
     private val cyclingGracePeriodMs: Long = DEFAULT_CYCLING_GRACE_PERIOD_MS,
     private val consecutiveWalkingWindowsRequired: Int = DEFAULT_CONSECUTIVE_WALKING_WINDOWS,
+    private val cadenceCvThreshold: Double = DEFAULT_CADENCE_CV_THRESHOLD,
     private val consecutiveWalkingWindowsForCyclingExit: Int = DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT,
 ) {
 
@@ -116,6 +121,7 @@ class CyclingClassifier(
         walkingGracePeriodMs = DEFAULT_WALKING_GRACE_PERIOD_MS,
         cyclingGracePeriodMs = DEFAULT_CYCLING_GRACE_PERIOD_MS,
         consecutiveWalkingWindowsRequired = DEFAULT_CONSECUTIVE_WALKING_WINDOWS,
+        cadenceCvThreshold = DEFAULT_CADENCE_CV_THRESHOLD,
         consecutiveWalkingWindowsForCyclingExit = DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT,
     )
 
@@ -138,6 +144,15 @@ class CyclingClassifier(
 
     /** Number of consecutive walking windows observed from STILL (for entry threshold). */
     private var consecutiveWalkingWindows: Int = 0
+
+    /** Timestamp of the first walking window in the current consecutive walking streak from STILL. */
+    private var walkingWindowStartTimeMs: Long = 0L
+
+    /** Running sum of step frequencies across consecutive walking windows (for CV calculation). */
+    private var walkingFrequencySum: Double = 0.0
+
+    /** Running sum of squared step frequencies across consecutive walking windows. */
+    private var walkingFrequencySquaredSum: Double = 0.0
 
     /** Number of consecutive walking windows observed while in CYCLING (for exit threshold). */
     private var consecutiveWalkingWindowsInCycling: Int = 0
@@ -197,9 +212,19 @@ class CyclingClassifier(
 
         // Update consecutive walking windows (for STILL → WALKING threshold)
         if (isWalkingWindow) {
+            if (consecutiveWalkingWindows == 0) {
+                walkingWindowStartTimeMs = currentTimeMs
+                walkingFrequencySum = 0.0
+                walkingFrequencySquaredSum = 0.0
+            }
             consecutiveWalkingWindows++
+            walkingFrequencySum += stepFrequency
+            walkingFrequencySquaredSum += stepFrequency * stepFrequency
         } else {
             consecutiveWalkingWindows = 0
+            walkingWindowStartTimeMs = 0L
+            walkingFrequencySum = 0.0
+            walkingFrequencySquaredSum = 0.0
         }
 
         val previousState = currentState
@@ -221,14 +246,27 @@ class CyclingClassifier(
 
         return when (currentState) {
             ActivityState.STILL -> {
-                // Walking entry requires sustained walking to filter kitchen steps
+                // Walking entry requires sustained walking with consistent cadence
                 if (isWalkingWindow && consecutiveWalkingWindows >= consecutiveWalkingWindowsRequired) {
-                    currentState = ActivityState.WALKING
-                    TransitionResult(
-                        fromState = previousState,
-                        toState = ActivityState.WALKING,
-                        effectiveTimestamp = currentTimeMs,
-                    )
+                    val count = consecutiveWalkingWindows.toDouble()
+                    val mean = walkingFrequencySum / count
+                    val variance = (walkingFrequencySquaredSum / count) - mean * mean
+                    // Guard against floating-point edge cases
+                    val cv = if (mean > 0.0 && variance > 0.0) {
+                        kotlin.math.sqrt(variance) / mean
+                    } else {
+                        0.0
+                    }
+                    if (cv < cadenceCvThreshold) {
+                        currentState = ActivityState.WALKING
+                        TransitionResult(
+                            fromState = previousState,
+                            toState = ActivityState.WALKING,
+                            effectiveTimestamp = walkingWindowStartTimeMs,
+                        )
+                    } else {
+                        null // cadence too irregular — likely indoor pacing
+                    }
                 } else {
                     null
                 }
@@ -319,6 +357,9 @@ class CyclingClassifier(
         consecutiveStillWindows = 0
         stillWindowStartTimeMs = 0L
         consecutiveWalkingWindows = 0
+        walkingWindowStartTimeMs = 0L
+        walkingFrequencySum = 0.0
+        walkingFrequencySquaredSum = 0.0
         consecutiveWalkingWindowsInCycling = 0
         walkingInCyclingStartTimeMs = 0L
     }
@@ -392,10 +433,23 @@ class CyclingClassifier(
          * Default number of consecutive walking windows required before
          * STILL transitions to WALKING.
          *
-         * Four windows (~20 seconds at a 5-second evaluation period) filters
-         * out spurious walking from kitchen steps or brief hand movements.
+         * 36 windows (36 x 5 s = 180 s = 3 minutes at a 5-second evaluation
+         * period) filters out indoor movement such as walking to the kitchen
+         * or bathroom. The transition timestamp is back-dated to when the
+         * sustained walking started.
          */
-        const val DEFAULT_CONSECUTIVE_WALKING_WINDOWS = 4
+        const val DEFAULT_CONSECUTIVE_WALKING_WINDOWS = 36
+
+        /**
+         * Default maximum coefficient of variation for step frequency during
+         * the consecutive walking window streak.
+         *
+         * CV = standard deviation / mean. A value of 0.35 means up to 35%
+         * variation is allowed. Outdoor walking typically has a steady cadence
+         * (CV < 0.2); indoor pacing with turns and stops tends to have higher
+         * variability.
+         */
+        const val DEFAULT_CADENCE_CV_THRESHOLD = 0.35
 
         /**
          * Default number of consecutive walking windows required while in

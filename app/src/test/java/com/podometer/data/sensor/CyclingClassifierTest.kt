@@ -601,8 +601,13 @@ class CyclingClassifierTest {
     }
 
     @Test
-    fun `DEFAULT_CONSECUTIVE_WALKING_WINDOWS is 4`() {
-        assertEquals(4, CyclingClassifier.DEFAULT_CONSECUTIVE_WALKING_WINDOWS)
+    fun `DEFAULT_CONSECUTIVE_WALKING_WINDOWS is 36`() {
+        assertEquals(36, CyclingClassifier.DEFAULT_CONSECUTIVE_WALKING_WINDOWS)
+    }
+
+    @Test
+    fun `DEFAULT_CADENCE_CV_THRESHOLD is 0_35`() {
+        assertEquals(0.35, CyclingClassifier.DEFAULT_CADENCE_CV_THRESHOLD, DELTA)
     }
 
     // ─── Walking grace period ─────────────────────────────────────────────────
@@ -800,6 +805,144 @@ class CyclingClassifierTest {
         // 4th window after reset triggers transition
         val result = gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 7 * WINDOW_INTERVAL_MS)
         assertNotNull("4th consecutive walking window after reset triggers transition", result)
+        assertEquals(ActivityState.WALKING, result!!.toState)
+    }
+
+    // ─── 3-minute walking entry threshold ────────────────────────────────────
+
+    @Test
+    fun `walking entry - 35 walking windows stays STILL`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 36,
+        )
+        for (i in 0 until 35) {
+            val result = gc.evaluate(
+                featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ,
+                i * WINDOW_INTERVAL_MS,
+            )
+            assertNull("Walking window $i of 35 should not trigger transition (need 36)", result)
+            assertEquals(ActivityState.STILL, gc.getCurrentState())
+        }
+    }
+
+    @Test
+    fun `walking entry - 36 walking windows transitions to WALKING`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 36,
+        )
+        for (i in 0 until 35) {
+            gc.evaluate(
+                featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ,
+                i * WINDOW_INTERVAL_MS,
+            )
+        }
+        val result = gc.evaluate(
+            featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ,
+            35 * WINDOW_INTERVAL_MS,
+        )
+        assertNotNull("36th walking window should trigger STILL → WALKING", result)
+        assertEquals(ActivityState.STILL, result!!.fromState)
+        assertEquals(ActivityState.WALKING, result.toState)
+    }
+
+    @Test
+    fun `walking entry - effective timestamp is back-dated to first walking window`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 4,
+        )
+        // 4 walking windows starting at 10_000
+        for (i in 0 until 3) {
+            gc.evaluate(
+                featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ,
+                10_000L + i * WINDOW_INTERVAL_MS,
+            )
+        }
+        val result = gc.evaluate(
+            featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ,
+            10_000L + 3 * WINDOW_INTERVAL_MS,
+        )
+        assertNotNull(result)
+        assertEquals(ActivityState.WALKING, result!!.toState)
+        assertEquals(10_000L, result.effectiveTimestamp)
+    }
+
+    // ─── Cadence CV check ─────────────────────────────────────────────────────
+
+    @Test
+    fun `walking entry - high CV step frequency does not trigger WALKING`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 4,
+            cadenceCvThreshold = 0.35,
+        )
+        // Alternate between 0.5 Hz and 2.0 Hz — high variability
+        // mean = (0.5 + 2.0 + 0.5 + 2.0) / 4 = 1.25
+        // variance = ((0.5^2 + 2.0^2 + 0.5^2 + 2.0^2)/4) - 1.25^2
+        //          = (0.25 + 4.0 + 0.25 + 4.0)/4 - 1.5625 = 2.125 - 1.5625 = 0.5625
+        // CV = sqrt(0.5625) / 1.25 = 0.75 / 1.25 = 0.6 > 0.35
+        val frequencies = listOf(0.5, 2.0, 0.5, 2.0)
+        for (i in frequencies.indices) {
+            val result = gc.evaluate(
+                featuresWithVariance(HIGH_VARIANCE), frequencies[i],
+                i * WINDOW_INTERVAL_MS,
+            )
+            assertNull("High CV should prevent WALKING transition at window $i", result)
+        }
+        assertEquals(ActivityState.STILL, gc.getCurrentState())
+    }
+
+    @Test
+    fun `walking entry - low CV step frequency triggers WALKING`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 4,
+            cadenceCvThreshold = 0.35,
+        )
+        // Steady cadence: 1.8, 1.9, 1.8, 1.9 Hz
+        // mean = 1.85, variance = very small, CV << 0.35
+        val frequencies = listOf(1.8, 1.9, 1.8, 1.9)
+        var lastResult: TransitionResult? = null
+        for (i in frequencies.indices) {
+            lastResult = gc.evaluate(
+                featuresWithVariance(HIGH_VARIANCE), frequencies[i],
+                i * WINDOW_INTERVAL_MS,
+            )
+        }
+        assertNotNull("Low CV should allow WALKING transition", lastResult)
+        assertEquals(ActivityState.WALKING, lastResult!!.toState)
+    }
+
+    @Test
+    fun `walking entry - identical frequencies have zero CV and pass`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 0L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 4,
+            cadenceCvThreshold = 0.35,
+        )
+        // All windows at exactly 2.0 Hz → CV = 0.0
+        for (i in 0 until 3) {
+            gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 2.0, i * WINDOW_INTERVAL_MS)
+        }
+        val result = gc.evaluate(
+            featuresWithVariance(HIGH_VARIANCE), 2.0,
+            3 * WINDOW_INTERVAL_MS,
+        )
+        assertNotNull("Identical frequencies (CV=0) should trigger WALKING", result)
         assertEquals(ActivityState.WALKING, result!!.toState)
     }
 
