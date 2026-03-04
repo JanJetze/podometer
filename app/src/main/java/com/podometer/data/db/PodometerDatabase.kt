@@ -3,6 +3,8 @@ package com.podometer.data.db
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * Room database for the Podometer app.
@@ -10,9 +12,8 @@ import androidx.room.RoomDatabase
  * Version history:
  *   1 — Initial schema: hourly step aggregates, activity transitions,
  *       daily summaries, and cycling sessions.
- *
- * No migration strategy is needed for version 1. A migration path will be
- * added when the schema is updated in a future version.
+ *   2 — Added sensor_windows table for raw classifier window storage
+ *       (7-day retention, ~6 MB).
  */
 @Database(
     entities = [
@@ -20,8 +21,9 @@ import androidx.room.RoomDatabase
         ActivityTransition::class,
         DailySummary::class,
         CyclingSession::class,
+        SensorWindow::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class PodometerDatabase : RoomDatabase() {
@@ -31,4 +33,27 @@ abstract class PodometerDatabase : RoomDatabase() {
     abstract fun activityTransitionDao(): ActivityTransitionDao
 
     abstract fun cyclingSessionDao(): CyclingSessionDao
+
+    abstract fun sensorWindowDao(): SensorWindowDao
+
+    companion object {
+        /**
+         * Migration from version 1 to 2: creates the `sensor_windows` table.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sensor_windows (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        magnitudeVariance REAL NOT NULL,
+                        stepFrequencyHz REAL NOT NULL,
+                        stepCount INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+    }
 }

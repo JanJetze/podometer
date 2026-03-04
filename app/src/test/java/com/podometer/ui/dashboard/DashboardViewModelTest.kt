@@ -3,7 +3,6 @@ package com.podometer.ui.dashboard
 
 import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.CyclingSession
-import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.model.StepData
@@ -130,7 +129,6 @@ class DashboardViewModelTest {
     fun `DashboardUiState default has empty lists`() {
         val state = DashboardUiState()
         assertTrue(state.transitions.isEmpty())
-        assertTrue(state.activitySessions.isEmpty())
         assertTrue(state.weeklySteps.isEmpty())
         assertTrue(state.cyclingSessions.isEmpty())
     }
@@ -266,33 +264,6 @@ class DashboardViewModelTest {
         val state = viewModel.uiState.first { !it.isLoading }
 
         assertEquals(ActivityState.WALKING, state.currentActivity)
-    }
-
-    // ─── activitySessions derivation ───────────────────────────────────────────
-
-    @Test
-    fun `ViewModel derives activitySessions from transitions`() = runTest {
-        val transitions = listOf(
-            TransitionEvent(id = 1, timestamp = 10_000L, fromActivity = ActivityState.STILL, toActivity = ActivityState.WALKING, isManualOverride = false),
-            TransitionEvent(id = 2, timestamp = 20_000L, fromActivity = ActivityState.WALKING, toActivity = ActivityState.STILL, isManualOverride = false),
-        )
-        val viewModel = buildViewModel(transitions = transitions)
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(1, state.activitySessions.size)
-        assertEquals(ActivityState.WALKING, state.activitySessions[0].activity)
-        assertEquals(10_000L, state.activitySessions[0].startTime)
-        assertEquals(20_000L, state.activitySessions[0].endTime)
-    }
-
-    @Test
-    fun `ViewModel activitySessions is empty when no transitions`() = runTest {
-        val viewModel = buildViewModel(transitions = emptyList())
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertTrue(state.activitySessions.isEmpty())
     }
 
     // ─── isLoading state ─────────────────────────────────────────────────────

@@ -12,8 +12,10 @@ import androidx.annotation.VisibleForTesting
 import androidx.core.app.ServiceCompat
 import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.HourlyStepAggregate
+import com.podometer.data.db.SensorWindow
 import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.PreferencesManager
+import com.podometer.data.repository.SensorWindowRepository
 import com.podometer.data.repository.StepRepository
 import com.podometer.data.sensor.AccelerometerSampler
 import com.podometer.data.sensor.CyclingClassifier
@@ -85,6 +87,9 @@ class StepTrackingService : Service() {
 
     @Inject
     lateinit var notificationHelper: NotificationHelper
+
+    @Inject
+    lateinit var sensorWindowRepository: SensorWindowRepository
 
     @Inject
     lateinit var preferencesManager: PreferencesManager
@@ -164,6 +169,16 @@ class StepTrackingService : Service() {
         // can join() it before its first evaluation (see launchClassifier).
         if (orphanCleanupJob == null || orphanCleanupJob?.isActive != true) {
             closeOrphanedSession()
+        }
+        // Purge sensor windows older than 7 days on each service start.
+        serviceScope.launch {
+            try {
+                sensorWindowRepository.deleteOlderThan(
+                    System.currentTimeMillis() - SENSOR_WINDOW_RETENTION_MS,
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to purge old sensor windows", e)
+            }
         }
         if (classifierJob == null || classifierJob?.isActive != true) {
             classifierJob = launchClassifier()
@@ -355,6 +370,23 @@ class StepTrackingService : Service() {
                 ?: continue // not enough samples yet
             val now = System.currentTimeMillis()
             val stepFreq = stepFrequencyTracker.computeStepFrequency(now)
+
+            // Persist raw sensor window for retroactive recomputation (7-day retention).
+            serviceScope.launch {
+                try {
+                    sensorWindowRepository.insertWindow(
+                        SensorWindow(
+                            timestamp = now,
+                            magnitudeVariance = features.magnitudeVariance,
+                            stepFrequencyHz = stepFreq,
+                            stepCount = 0, // per-window step count not tracked; reserved for future use
+                        ),
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to insert sensor window", e)
+                }
+            }
+
             val transition = cyclingClassifier.evaluate(features, stepFreq, now) ?: continue
 
             Log.d(TAG, "Activity transition: ${transition.fromState} → ${transition.toState}")
@@ -484,11 +516,15 @@ class StepTrackingService : Service() {
         private const val NOTIFICATION_CHANNEL_NAME = "Step Tracking"
         private const val NOTIFICATION_UPDATE_INTERVAL_MS = 30_000L
 
+        /** Sensor window retention period: 7 days in milliseconds. */
+        private const val SENSOR_WINDOW_RETENTION_MS = 7L * 24 * 60 * 60 * 1000
+
         /**
          * Classifier evaluation interval in milliseconds (~5 seconds).
          *
          * At SENSOR_DELAY_NORMAL (~5 Hz) this gives ~25 new accelerometer
          * samples per evaluation — sufficient for a stable variance estimate.
+         * Each evaluation is stored as a [SensorWindow] for retroactive replay.
          */
         private const val CLASSIFIER_INTERVAL_MS = 5_000L
 

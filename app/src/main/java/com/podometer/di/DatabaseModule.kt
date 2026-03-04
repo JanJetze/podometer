@@ -6,6 +6,7 @@ import androidx.room.Room
 import com.podometer.data.db.ActivityTransitionDao
 import com.podometer.data.db.CyclingSessionDao
 import com.podometer.data.db.PodometerDatabase
+import com.podometer.data.db.SensorWindowDao
 import com.podometer.data.db.StepDao
 import dagger.Module
 import dagger.Provides
@@ -33,7 +34,9 @@ object DatabaseModule {
             context,
             PodometerDatabase::class.java,
             "podometer.db",
-        ).build()
+        )
+            .addMigrations(PodometerDatabase.MIGRATION_1_2)
+            .build()
 
     @Provides
     @Singleton
@@ -49,4 +52,9 @@ object DatabaseModule {
     @Singleton
     fun provideCyclingSessionDao(database: PodometerDatabase): CyclingSessionDao =
         database.cyclingSessionDao()
+
+    @Provides
+    @Singleton
+    fun provideSensorWindowDao(database: PodometerDatabase): SensorWindowDao =
+        database.sensorWindowDao()
 }

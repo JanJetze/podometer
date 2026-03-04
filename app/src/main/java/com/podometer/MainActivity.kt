@@ -10,19 +10,24 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.podometer.service.startTrackingServiceIfPermitted
 import com.podometer.ui.Screen
+import com.podometer.ui.activities.ActivitiesScreen
 import com.podometer.ui.dashboard.DashboardScreen
+import com.podometer.ui.donate.DonateScreen
+import com.podometer.ui.navigation.BottomNavBar
 import com.podometer.ui.onboarding.OnboardingScreen
 import com.podometer.ui.onboarding.OnboardingViewModel
-import com.podometer.ui.donate.DonateScreen
 import com.podometer.ui.settings.SettingsScreen
 import com.podometer.ui.settings.SettingsViewModel
 import com.podometer.ui.theme.PodometerTheme
@@ -64,11 +69,34 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route
+                val showBottomBar = currentRoute == Screen.Dashboard.route ||
+                    currentRoute == Screen.Activities.route
+
+                Scaffold(
+                    bottomBar = {
+                        if (showBottomBar) {
+                            BottomNavBar(
+                                currentRoute = currentRoute,
+                                onNavigate = { screen ->
+                                    navController.navigate(screen.route) {
+                                        popUpTo(Screen.Dashboard.route) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                            )
+                        }
+                    },
+                ) { scaffoldPadding ->
 
                 NavHost(
                     navController = navController,
                     startDestination = startDestination!!,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(scaffoldPadding),
                 ) {
                     composable(Screen.Onboarding.route) {
                         OnboardingScreen(
@@ -132,6 +160,10 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    composable(Screen.Activities.route) {
+                        ActivitiesScreen()
+                    }
+
                     composable(Screen.Donate.route) {
                         DonateScreen(
                             onNavigateBack = {
@@ -154,6 +186,8 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+
+                } // end Scaffold
             }
         }
     }

@@ -3,8 +3,10 @@ package com.podometer.di
 
 import com.podometer.data.db.ActivityTransitionDao
 import com.podometer.data.db.CyclingSessionDao
+import com.podometer.data.db.SensorWindowDao
 import com.podometer.data.db.StepDao
 import com.podometer.data.repository.CyclingRepository
+import com.podometer.data.repository.SensorWindowRepository
 import com.podometer.data.repository.StepRepository
 import dagger.Module
 import dagger.Provides
@@ -34,4 +36,10 @@ object RepositoryModule {
     fun provideCyclingRepository(
         cyclingSessionDao: CyclingSessionDao,
     ): CyclingRepository = CyclingRepository(cyclingSessionDao)
+
+    @Provides
+    @Singleton
+    fun provideSensorWindowRepository(
+        sensorWindowDao: SensorWindowDao,
+    ): SensorWindowRepository = SensorWindowRepository(sensorWindowDao)
 }

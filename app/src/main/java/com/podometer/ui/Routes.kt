@@ -16,6 +16,9 @@ sealed class Screen(val route: String) {
     /** First-run onboarding flow. */
     data object Onboarding : Screen("onboarding")
 
+    /** Activities tab — date-navigable activity log with recomputed sessions. */
+    data object Activities : Screen("activities")
+
     /** Donate / support development screen. */
     data object Donate : Screen("donate")
 }

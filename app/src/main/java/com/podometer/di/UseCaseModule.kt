@@ -15,6 +15,8 @@ import com.podometer.domain.usecase.GetWeeklyStepsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCaseImpl
 import com.podometer.domain.usecase.OverrideActivityUseCase
 import com.podometer.domain.usecase.OverrideActivityUseCaseImpl
+import com.podometer.domain.usecase.RecomputeActivitySessionsUseCase
+import com.podometer.domain.usecase.RecomputeActivitySessionsUseCaseImpl
 import com.podometer.domain.usecase.TransactionRunner
 import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.StepRepository
@@ -58,6 +60,11 @@ abstract class UseCaseModule {
     @Binds
     @Singleton
     abstract fun bindOverrideActivityUseCase(impl: OverrideActivityUseCaseImpl): OverrideActivityUseCase
+
+    /** Binds [RecomputeActivitySessionsUseCaseImpl] to the [RecomputeActivitySessionsUseCase] interface. */
+    @Binds
+    @Singleton
+    abstract fun bindRecomputeActivitySessionsUseCase(impl: RecomputeActivitySessionsUseCaseImpl): RecomputeActivitySessionsUseCase
 
     companion object {
         /**

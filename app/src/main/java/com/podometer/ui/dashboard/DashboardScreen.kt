@@ -45,7 +45,6 @@ import com.podometer.R
 import com.podometer.data.sensor.SensorType
 import com.podometer.domain.model.ActivityState
 import com.podometer.service.startTrackingServiceIfPermitted
-import com.podometer.util.DateTimeUtils
 import com.podometer.util.checkEssentialPermissions
 
 /**
@@ -181,34 +180,6 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Section: Activity Timeline — wired up to real transition data
-                SectionHeader(title = stringResource(R.string.section_activity_timeline))
-                val dayStartMillis = DateTimeUtils.todayStartMillis()
-                ActivityTimeline(
-                    segments = buildTimelineSegments(
-                        transitions = uiState.transitions,
-                        dayStartMillis = dayStartMillis,
-                        dayEndMillis = dayStartMillis + 86_400_000L,
-                        nowMillis = System.currentTimeMillis(),
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Section: Activities
-                SectionHeader(title = stringResource(R.string.section_activities))
-                ActivityLog(
-                    sessions = uiState.activitySessions,
-                    onOverride = { transitionId, newActivity ->
-                        viewModel.overrideTransition(transitionId, newActivity)
-                    },
-                    snackbarHostState = snackbarHostState,
-                    onUndo = { viewModel.undoLastOverride() },
-                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 

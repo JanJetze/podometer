@@ -5,11 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.CyclingSession
-import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.model.TransitionEvent
-import com.podometer.domain.model.buildActivitySessions
 import com.podometer.data.sensor.SensorType
 import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCase
 import com.podometer.domain.usecase.GetTodayStepsUseCase
@@ -40,8 +38,6 @@ import javax.inject.Inject
  *                            transition or [ActivityState.STILL] if none.
  * @property transitions      All activity transitions detected today.
  * @property weeklySteps      Per-day summaries for the current calendar week.
- * @property activitySessions Consolidated activity sessions derived from [transitions].
- *                            Each session represents a continuous WALKING or CYCLING period.
  * @property cyclingSessions  Cycling sessions recorded today.
  * @property isLoading        True while the initial data is loading; false once all
  *                            flows have emitted at least one value.
@@ -60,7 +56,6 @@ data class DashboardUiState(
     val distanceKm: Float = 0f,
     val currentActivity: ActivityState = ActivityState.STILL,
     val transitions: List<TransitionEvent> = emptyList(),
-    val activitySessions: List<ActivitySession> = emptyList(),
     val weeklySteps: List<DaySummary> = emptyList(),
     val cyclingSessions: List<CyclingSession> = emptyList(),
     val isLoading: Boolean = true,
@@ -114,7 +109,6 @@ class DashboardViewModel @Inject constructor(
             distanceKm = stepData.distanceKm,
             currentActivity = transitions.lastOrNull()?.toActivity ?: ActivityState.STILL,
             transitions = transitions,
-            activitySessions = buildActivitySessions(transitions, System.currentTimeMillis()),
             weeklySteps = weekly,
             cyclingSessions = cycling,
             isLoading = false,

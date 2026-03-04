@@ -34,6 +34,18 @@ object DateTimeUtils {
             .toEpochMilli()
 
     /**
+     * Returns the epoch-millisecond timestamp for midnight (00:00:00.000) at
+     * the start of [date] in the system-default time zone.
+     *
+     * @param date The [LocalDate] to convert.
+     * @return Epoch-millisecond timestamp at the start of [date].
+     */
+    fun startOfDayMillis(date: LocalDate): Long =
+        date.atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+
+    /**
      * Converts [epochMillis] to the local [LocalDate] in the system-default
      * time zone.
      *

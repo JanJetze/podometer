@@ -212,4 +212,40 @@ class EntityTest {
         assertEquals(30, completed.durationMinutes)
         assertEquals(ongoing.startTime, completed.startTime)
     }
+
+    // ─── SensorWindow ────────────────────────────────────────────────────────
+
+    @Test
+    fun `SensorWindow default id is 0`() {
+        val window = SensorWindow(
+            timestamp = 1_700_000_000_000L,
+            magnitudeVariance = 2.5,
+            stepFrequencyHz = 1.8,
+            stepCount = 9,
+        )
+        assertEquals(0L, window.id)
+    }
+
+    @Test
+    fun `SensorWindow stores all fields correctly`() {
+        val window = SensorWindow(
+            id = 42,
+            timestamp = 1_700_000_000_000L,
+            magnitudeVariance = 3.14,
+            stepFrequencyHz = 0.5,
+            stepCount = 3,
+        )
+        assertEquals(42L, window.id)
+        assertEquals(1_700_000_000_000L, window.timestamp)
+        assertEquals(3.14, window.magnitudeVariance, 0.001)
+        assertEquals(0.5, window.stepFrequencyHz, 0.001)
+        assertEquals(3, window.stepCount)
+    }
+
+    @Test
+    fun `SensorWindow data class equality works`() {
+        val a = SensorWindow(id = 1, timestamp = 1000L, magnitudeVariance = 1.0, stepFrequencyHz = 0.0, stepCount = 0)
+        val b = SensorWindow(id = 1, timestamp = 1000L, magnitudeVariance = 1.0, stepFrequencyHz = 0.0, stepCount = 0)
+        assertEquals(a, b)
+    }
 }

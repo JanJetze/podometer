@@ -6,6 +6,7 @@
     <string name="screen_dashboard">Dashboard</string>
     <string name="screen_settings">Settings</string>
     <string name="screen_onboarding">Onboarding</string>
+    <string name="screen_activities">Activities</string>
 
     <!-- Content descriptions -->
     <string name="cd_open_settings">Open settings</string>
@@ -34,6 +35,12 @@
     <string name="placeholder_weekly">Week chart will appear here</string>
     <string name="placeholder_activities">No activities detected today</string>
     <string name="placeholder_cycling">No cycling detected today</string>
+
+    <!-- Activities screen -->
+    <string name="activities_today">Today</string>
+    <string name="activities_no_data">No sensor data available for this date</string>
+    <string name="activities_previous_day">Previous day</string>
+    <string name="activities_next_day">Next day</string>
 
     <!-- ActivityTimeline accessibility -->
     <string name="cd_timeline_no_data">Activity timeline: no activity data available.</string>

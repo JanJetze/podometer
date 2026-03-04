@@ -35,11 +35,25 @@ class ScreenRoutesTest {
     }
 
     @Test
+    fun `Activities route is not blank`() {
+        assert(Screen.Activities.route.isNotBlank()) {
+            "Activities route must not be blank"
+        }
+    }
+
+    @Test
+    fun `Activities route equals expected string`() {
+        assertEquals("activities", Screen.Activities.route)
+    }
+
+    @Test
     fun `All routes are unique`() {
         val routes = listOf(
             Screen.Dashboard.route,
             Screen.Settings.route,
             Screen.Onboarding.route,
+            Screen.Activities.route,
+            Screen.Donate.route,
         )
         assertEquals(
             "All Screen routes must be unique",
