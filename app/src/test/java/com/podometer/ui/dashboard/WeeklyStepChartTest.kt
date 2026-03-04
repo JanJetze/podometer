@@ -288,6 +288,56 @@ class WeeklyStepChartTest {
         )
     }
 
+    // ─── buildChartBars — detail fields from DaySummary ───────────────────────
+
+    @Test
+    fun `buildChartBars populates distanceKm walkingMinutes cyclingMinutes from summary`() {
+        val summaries = listOf(
+            DaySummary(
+                date = "2026-02-23",
+                totalSteps = 8_000,
+                totalDistanceKm = 6.1f,
+                walkingMinutes = 55,
+                cyclingMinutes = 12,
+            ),
+        )
+        val bars = buildChartBars(
+            daySummaries = summaries,
+            goal = goal,
+            todayDate = "2026-02-23",
+        )
+        val dataBar = bars.first { !it.isPlaceholder }
+        assertEquals(6.1f, dataBar.distanceKm, 0.01f)
+        assertEquals(55, dataBar.walkingMinutes)
+        assertEquals(12, dataBar.cyclingMinutes)
+    }
+
+    @Test
+    fun `buildChartBars placeholder bars have zero detail fields`() {
+        val bars = buildChartBars(
+            daySummaries = emptyList(),
+            goal = goal,
+            todayDate = "2026-02-23",
+        )
+        bars.forEach { bar ->
+            assertEquals(0f, bar.distanceKm, 0.001f)
+            assertEquals(0, bar.walkingMinutes)
+            assertEquals(0, bar.cyclingMinutes)
+        }
+    }
+
+    // ─── formatChartDate ───────────────────────────────────────────────────────
+
+    @Test
+    fun `formatChartDate returns short human-readable date`() {
+        val result = formatChartDate("2026-03-02")
+        // Should contain abbreviated day name and month
+        assertTrue(
+            "Expected short date format but got: $result",
+            result.contains("Mon") && result.contains("Mar") && result.contains("2"),
+        )
+    }
+
     // ─── WeeklyStepChartKt class existence ────────────────────────────────────
 
     @Test

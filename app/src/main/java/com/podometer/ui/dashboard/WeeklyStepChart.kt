@@ -1,15 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -17,10 +28,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -47,13 +60,16 @@ private val GoalLineColor = Color(0xFF546E7A)
 /**
  * Represents a single bar in the 7-day step chart.
  *
- * @property date          Calendar date in "yyyy-MM-dd" format, or empty string for placeholders.
- * @property dayLabel      Single-character day label: M, T, W, T, F, S, or S.
- * @property steps         Total steps for this day; 0 for placeholders.
- * @property heightFraction Normalised bar height in [0f, 1f] relative to the chart Y-axis ceiling.
- * @property aboveGoal     True when [steps] strictly exceeds the daily goal.
- * @property isToday       True when this bar represents the current calendar day.
- * @property isPlaceholder True when no [DaySummary] data exists for this day.
+ * @property date            Calendar date in "yyyy-MM-dd" format, or empty string for placeholders.
+ * @property dayLabel        Single-character day label: M, T, W, T, F, S, or S.
+ * @property steps           Total steps for this day; 0 for placeholders.
+ * @property heightFraction  Normalised bar height in [0f, 1f] relative to the chart Y-axis ceiling.
+ * @property aboveGoal       True when [steps] strictly exceeds the daily goal.
+ * @property isToday         True when this bar represents the current calendar day.
+ * @property isPlaceholder   True when no [DaySummary] data exists for this day.
+ * @property distanceKm      Total distance in kilometres for this day; 0f for placeholders.
+ * @property walkingMinutes  Total walking minutes for this day; 0 for placeholders.
+ * @property cyclingMinutes  Total cycling minutes for this day; 0 for placeholders.
  */
 data class ChartBar(
     val date: String,
@@ -63,6 +79,9 @@ data class ChartBar(
     val aboveGoal: Boolean,
     val isToday: Boolean,
     val isPlaceholder: Boolean,
+    val distanceKm: Float = 0f,
+    val walkingMinutes: Int = 0,
+    val cyclingMinutes: Int = 0,
 )
 
 // ─── Day-label mapping ────────────────────────────────────────────────────────
@@ -78,6 +97,9 @@ private val DAY_LABELS = mapOf(
 )
 
 private val DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE
+
+/** Short date formatter for the bar detail card, e.g. "Mon, Mar 2". */
+private val CHART_DATE_FORMATTER = DateTimeFormatter.ofPattern("EEE, MMM d")
 
 // ─── Pure helper functions (unit-testable) ────────────────────────────────────
 
@@ -160,6 +182,9 @@ fun buildChartBars(
                 aboveGoal = summary.totalSteps > goal,
                 isToday = isToday,
                 isPlaceholder = false,
+                distanceKm = summary.totalDistanceKm,
+                walkingMinutes = summary.walkingMinutes,
+                cyclingMinutes = summary.cyclingMinutes,
             )
         }
     }
@@ -186,22 +211,33 @@ fun weeklyChartContentDescription(bars: List<ChartBar>): String {
     return "Weekly step chart: ${parts.joinToString(", ")}."
 }
 
+/**
+ * Formats a chart date string ("yyyy-MM-dd") into a short human-readable form.
+ *
+ * Example: "2026-03-02" becomes "Mon, Mar 2".
+ *
+ * @param dateStr Date in ISO local-date format.
+ * @return Human-readable short date string.
+ */
+fun formatChartDate(dateStr: String): String {
+    val date = LocalDate.parse(dateStr, DATE_FORMATTER)
+    return date.format(CHART_DATE_FORMATTER)
+}
+
 // ─── Composable ───────────────────────────────────────────────────────────────
 
 /**
- * 7-day vertical bar chart displaying daily step counts for the current week.
+ * 7-day vertical bar chart displaying daily step counts with tap-to-reveal details.
  *
  * Features:
- * - 7 vertical bars, one per day (Monday–Sunday)
+ * - 7 vertical bars, one per day (rolling 7-day window ending today)
+ * - Tap any bar to reveal a detail card showing steps, distance, and activity time
  * - Today's bar has a highlighted outline in [MaterialTheme.colorScheme.primary]
  * - Y-axis auto-scaled to `max(goal, maxSteps)` so bars above goal are never clipped
  * - Day labels (M T W T F S S) displayed below the bars
  * - Dashed horizontal goal line at the computed [computeGoalFraction] height
  * - Bars above goal use [MaterialTheme.colorScheme.tertiary]; others use a neutral colour
  * - Days with no [DaySummary] data show gray placeholder bars
- *
- * This is a pure presentational composable — it holds no internal state and receives
- * all data via parameters. Use [buildChartBars] to convert [DaySummary] lists into bars.
  *
  * Accessibility: the component carries a `contentDescription` describing each day's step
  * count so TalkBack can read the chart without visuals.
@@ -219,6 +255,7 @@ fun WeeklyStepChart(
     modifier: Modifier = Modifier,
 ) {
     val bars = buildChartBars(daySummaries, goal, todayDate)
+    var selectedBarIndex by remember { mutableIntStateOf(-1) }
 
     // Build localised content description for TalkBack
     val accessibilityText = run {
@@ -248,6 +285,9 @@ fun WeeklyStepChart(
             goalFraction = goalFraction,
             accentColor = accentColor,
             todayOutlineColor = todayOutlineColor,
+            onBarTap = { index ->
+                selectedBarIndex = if (selectedBarIndex == index) -1 else index
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(160.dp),
@@ -256,18 +296,32 @@ fun WeeklyStepChart(
             bars = bars,
             todayOutlineColor = todayOutlineColor,
             labelColor = labelColor,
+            selectedBarIndex = selectedBarIndex,
         )
+        AnimatedVisibility(
+            visible = selectedBarIndex in bars.indices,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            if (selectedBarIndex in bars.indices) {
+                BarDetailCard(bar = bars[selectedBarIndex])
+            }
+        }
     }
 }
 
 /**
  * Canvas that draws the 7 vertical bars, the dashed goal line, and today's highlight outline.
  *
- * @param bars            The 7 [ChartBar]s to render.
- * @param goalFraction    Normalised height of the goal line in [0f, 1f].
- * @param accentColor     Colour used for bars that exceed the goal.
- * @param todayOutlineColor Colour used for the highlight outline on today's bar.
- * @param modifier        Applied to the [Canvas].
+ * Supports tap gestures to select individual bars. Each bar occupies an equal-width
+ * tap zone across the full chart width for forgiving touch targets.
+ *
+ * @param bars               The 7 [ChartBar]s to render.
+ * @param goalFraction       Normalised height of the goal line in [0f, 1f].
+ * @param accentColor        Colour used for bars that exceed the goal.
+ * @param todayOutlineColor  Colour used for the highlight outline on today's bar.
+ * @param onBarTap           Callback invoked with the tapped bar index (0–6).
+ * @param modifier           Applied to the [Canvas].
  */
 @Composable
 private fun WeeklyStepChartCanvas(
@@ -275,6 +329,7 @@ private fun WeeklyStepChartCanvas(
     goalFraction: Float,
     accentColor: Color,
     todayOutlineColor: Color,
+    onBarTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -292,7 +347,15 @@ private fun WeeklyStepChartCanvas(
     val goalDashOffPx = with(density) { goalDashOffDp.toPx() }
     val minBarHeightPx = with(density) { minBarHeightDp.toPx() }
 
-    Canvas(modifier = modifier) {
+    Canvas(
+        modifier = modifier.pointerInput(Unit) {
+            detectTapGestures { offset ->
+                val slotWidth = size.width.toFloat() / bars.size
+                val index = (offset.x / slotWidth).toInt().coerceIn(0, bars.size - 1)
+                onBarTap(index)
+            }
+        },
+    ) {
         val totalWidth = size.width
         val totalHeight = size.height
         val barCount = bars.size
@@ -391,28 +454,94 @@ private fun DrawScope.drawRoundedBar(
  * Row of day labels displayed below the chart canvas.
  *
  * Today's label is rendered in [todayOutlineColor] to match the highlighted bar.
+ * The selected bar's label (if any) is rendered in bold with [todayOutlineColor].
  *
  * @param bars              The 7 [ChartBar]s whose [ChartBar.dayLabel]s are displayed.
- * @param todayOutlineColor Colour for the label of today's day.
+ * @param todayOutlineColor Colour for the label of today's day and the selected day.
  * @param labelColor        Default colour for all other labels.
+ * @param selectedBarIndex  Index of the currently selected bar, or -1 if none.
  */
 @Composable
 private fun WeeklyStepChartLabels(
     bars: List<ChartBar>,
     todayOutlineColor: Color,
     labelColor: Color,
+    selectedBarIndex: Int = -1,
 ) {
     Row(modifier = Modifier.fillMaxWidth()) {
-        bars.forEach { bar ->
+        bars.forEachIndexed { index, bar ->
+            val isSelected = index == selectedBarIndex
             Text(
                 text = bar.dayLabel,
                 style = MaterialTheme.typography.labelSmall,
                 textAlign = TextAlign.Center,
-                color = if (bar.isToday) todayOutlineColor else labelColor,
+                fontWeight = if (isSelected) FontWeight.Bold else null,
+                color = if (bar.isToday || isSelected) todayOutlineColor else labelColor,
                 modifier = Modifier
                     .weight(1f)
                     .padding(top = 4.dp),
             )
+        }
+    }
+}
+
+/**
+ * Detail card showing step count, distance, and activity time for a selected bar.
+ *
+ * Appears below the chart labels when the user taps a bar. For placeholder bars
+ * (days with no data), shows a "No data" message.
+ *
+ * @param bar The selected [ChartBar] to display details for.
+ */
+@Composable
+private fun BarDetailCard(bar: ChartBar) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        tonalElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = formatChartDate(bar.date),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (bar.isPlaceholder) {
+                Text(
+                    text = stringResource(R.string.chart_tooltip_no_data),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            } else {
+                Text(
+                    text = stringResource(
+                        R.string.chart_tooltip_steps_distance,
+                        formatStepCount(bar.steps),
+                        bar.distanceKm,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                val activityParts = buildList {
+                    if (bar.walkingMinutes > 0) {
+                        add(stringResource(R.string.chart_tooltip_walking, bar.walkingMinutes))
+                    }
+                    if (bar.cyclingMinutes > 0) {
+                        add(stringResource(R.string.chart_tooltip_cycling, bar.cyclingMinutes))
+                    }
+                }
+                if (activityParts.isNotEmpty()) {
+                    Text(
+                        text = activityParts.joinToString(" \u00B7 "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -513,6 +642,69 @@ private fun PreviewWeeklyStepChartEmpty() {
             goal = 10_000,
             todayDate = "2026-02-23",
             modifier = Modifier.padding(16.dp),
+        )
+    }
+}
+
+/** Preview: bar detail card with activity data. */
+@Preview(showBackground = true, name = "BarDetailCard — With data")
+@Composable
+private fun PreviewBarDetailCard() {
+    PodometerTheme {
+        BarDetailCard(
+            bar = ChartBar(
+                date = "2026-02-19",
+                dayLabel = "W",
+                steps = 13_000,
+                heightFraction = 1f,
+                aboveGoal = true,
+                isToday = false,
+                isPlaceholder = false,
+                distanceKm = 9.7f,
+                walkingMinutes = 90,
+                cyclingMinutes = 15,
+            ),
+        )
+    }
+}
+
+/** Preview: bar detail card for a placeholder day. */
+@Preview(showBackground = true, name = "BarDetailCard — No data")
+@Composable
+private fun PreviewBarDetailCardNoData() {
+    PodometerTheme {
+        BarDetailCard(
+            bar = ChartBar(
+                date = "2026-02-17",
+                dayLabel = "M",
+                steps = 0,
+                heightFraction = 0f,
+                aboveGoal = false,
+                isToday = false,
+                isPlaceholder = true,
+            ),
+        )
+    }
+}
+
+/** Preview: bar detail card with walking only (no cycling). */
+@Preview(showBackground = true, name = "BarDetailCard — Walking only")
+@Composable
+private fun PreviewBarDetailCardWalkingOnly() {
+    PodometerTheme {
+        BarDetailCard(
+            bar = ChartBar(
+                date = "2026-02-20",
+                dayLabel = "F",
+                steps = 8_400,
+                heightFraction = 0.7f,
+                aboveGoal = false,
+                isToday = false,
+                isPlaceholder = false,
+                distanceKm = 6.3f,
+                walkingMinutes = 65,
+                cyclingMinutes = 0,
+            ),
         )
     }
 }

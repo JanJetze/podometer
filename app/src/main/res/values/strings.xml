@@ -79,6 +79,12 @@
     <string name="cd_weekly_chart_day_today">%1$s (today): %2$d steps</string>
     <string name="cd_weekly_chart_day_no_data">%1$s: no data</string>
 
+    <!-- WeeklyStepChart bar detail card -->
+    <string name="chart_tooltip_no_data">No data</string>
+    <string name="chart_tooltip_steps_distance">%1$s steps \u00B7 %2$.1f km</string>
+    <string name="chart_tooltip_walking">%1$d min walking</string>
+    <string name="chart_tooltip_cycling">%1$d min cycling</string>
+
     <!-- EmptyStates: first launch empty state -->
     <string name="empty_first_launch_message">Start walking! Your steps will appear here.</string>
 
