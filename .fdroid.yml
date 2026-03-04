@@ -6,12 +6,16 @@ Categories:
 
 License: GPL-3.0-or-later
 
-# TODO: Replace with actual repository URL before F-Droid submission
-SourceCode: https://github.com/OWNER/podometer
-IssueTracker: https://github.com/OWNER/podometer/issues
+SourceCode: https://github.com/JanJetze/podometer
+IssueTracker: https://github.com/JanJetze/podometer/issues
+
+Donate: https://liberapay.com/JanJetze
 
 Name: Podometer
 AutoName: Podometer
+
+RepoType: git
+Repo: https://github.com/JanJetze/podometer.git
 
 Builds:
   - versionName: 1.0.0
@@ -20,17 +24,6 @@ Builds:
     subdir: app
     gradle:
       - release
-    prebuild: docker build -f ../Containerfile -t podometer-builder ..
-    build: >
-      docker run --rm
-      -v "$PWD/..":/workspace
-      -w /workspace
-      -e RELEASE_KEYSTORE_PATH=/workspace/release.jks
-      -e RELEASE_KEYSTORE_PASSWORD=$$KEYSTORE_PASS$$
-      -e RELEASE_KEY_ALIAS=$$KEY_ALIAS$$
-      -e RELEASE_KEY_PASSWORD=$$KEY_PASS$$
-      podometer-builder
-      ./gradlew assembleRelease
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags

@@ -39,6 +39,8 @@ android {
             // Signing credentials are supplied via environment variables so that the
             // release build works in CI (from repository secrets) and locally (from a
             // developer's own environment) without committing any key material.
+            // When no env vars are set (e.g. F-Droid builds), the release build
+            // produces an unsigned APK — F-Droid signs with its own keys.
             val keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
             if (keystorePath != null) {
                 storeFile = file(keystorePath)
@@ -53,7 +55,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (System.getenv("RELEASE_KEYSTORE_PATH") != null) {
+                signingConfigs.getByName("release")
+            } else {
+                null
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
