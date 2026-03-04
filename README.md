@@ -10,6 +10,49 @@ activity data stays on device. Distributed via F-Droid.
 - Local-only storage using Room and DataStore
 - No permissions beyond `ACTIVITY_RECOGNITION` and `FOREGROUND_SERVICE`
 
+## Activity Classification
+
+Podometer classifies the user's activity into three states: **STILL**, **WALKING**,
+and **CYCLING**. The classifier evaluates sensor windows every 5 seconds and uses
+grace periods and rolling buffers to avoid noisy fragmentation.
+
+### State machine
+
+```
+STILL    ──36 consecutive walking windows (3 min) + CV check──►  WALKING
+STILL / WALKING  ──2+ cycling windows & >= 60 s───────────────►  CYCLING
+CYCLING  ──4 consecutive walking windows (~20 s)──────────────►  WALKING
+WALKING  ──sustained stillness >= 2 min───────────────────────►  STILL
+WALKING  ──cadence breakdown (3 min rolling window)───────────►  STILL
+CYCLING  ──sustained stillness >= 3 min───────────────────────►  STILL
+```
+
+### Transition details
+
+| Transition | Mechanism | Effective timestamp |
+|---|---|---|
+| STILL to WALKING | 36 consecutive walking windows with steady cadence (CV < 35%) | Back-dated to first walking window |
+| STILL/WALKING to CYCLING | 2+ consecutive cycling windows spanning >= 60 s | Current time |
+| CYCLING to WALKING | 4 consecutive walking windows (~20 s) | Back-dated to first walking window |
+| WALKING to STILL (grace) | Sustained stillness >= 2 min | Back-dated to first still window |
+| WALKING to STILL (cadence) | Rolling 3-min buffer: walking density < 40% OR (CV > 70% and mean < 1.0 Hz) | Oldest buffer entry (~3 min ago) |
+| CYCLING to STILL | Sustained stillness >= 3 min | Back-dated to first still window |
+
+### Cadence breakdown detection
+
+While in WALKING, every evaluation pushes the current step frequency into a 36-entry
+circular buffer (3 minutes at 5 s intervals). When the buffer is full, two checks run
+after the grace-period check:
+
+1. **Low walking density**: fewer than 40% of windows have step frequency >= 0.3 Hz.
+   Catches chores with lots of pauses (e.g., 20 s walk then 40 s standing).
+2. **Puttering**: among walking windows (if >= 3), CV > 70% AND mean < 1.0 Hz.
+   Catches irregular slow stepping without full stops.
+
+The grace period (sustained stillness >= 2 min) is checked first because it handles
+long continuous pauses with precise timestamps. The rolling buffer cannot distinguish
+one long pause from many short pauses.
+
 ## Build Prerequisites
 
 - Docker (or a compatible OCI runtime such as Podman)

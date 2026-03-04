@@ -34,7 +34,7 @@ import javax.inject.Singleton
  * STILL            ──36+ walking windows (3 min) + CV check─►  WALKING
  * STILL / WALKING  ──2+ cycling windows & >=60 s───────────►  CYCLING
  * CYCLING          ──4+ walking windows (~20s)──────────────►  WALKING
- * WALKING          ──still for >= 2 min────────────────────►  STILL
+ * WALKING          ──still for >= 2 min / cadence breakdown────────────────────►  STILL
  * CYCLING          ──still for >= 3 min────────────────────►  STILL
  * ```
  *
@@ -89,6 +89,20 @@ import javax.inject.Singleton
  *   windows required while in CYCLING before transitioning to WALKING. Prevents
  *   brief step-frequency spikes (phone bounce) from breaking cycling state.
  *   Default: [DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT] (~20 seconds).
+ * @param cadenceBreakdownWindowSize Size of the rolling circular buffer used
+ *   to detect cadence breakdown while WALKING. At 5-second evaluation intervals,
+ *   36 entries = 3 minutes. Default: [DEFAULT_CADENCE_BREAKDOWN_WINDOW_SIZE].
+ * @param cadenceBreakdownDensityThreshold Minimum fraction of walking windows
+ *   (stepFreq >= [stepFrequencyThreshold]) in the rolling buffer. Below this
+ *   density the walk is considered ended (e.g., chores with lots of pauses).
+ *   Default: [DEFAULT_CADENCE_BREAKDOWN_DENSITY_THRESHOLD] (0.4 = 40%).
+ * @param cadenceBreakdownCvThreshold Maximum coefficient of variation of step
+ *   frequency among walking windows in the rolling buffer. Above this threshold
+ *   (combined with low mean) the walk is considered puttering.
+ *   Default: [DEFAULT_CADENCE_BREAKDOWN_CV_THRESHOLD] (0.7 = 70%).
+ * @param cadenceBreakdownMeanFloor Maximum mean step frequency (Hz) among
+ *   walking windows that, combined with high CV, indicates puttering rather
+ *   than genuine walking. Default: [DEFAULT_CADENCE_BREAKDOWN_MEAN_FLOOR] (1.0 Hz).
  */
 @Singleton
 class CyclingClassifier(
@@ -102,6 +116,10 @@ class CyclingClassifier(
     private val consecutiveWalkingWindowsRequired: Int = DEFAULT_CONSECUTIVE_WALKING_WINDOWS,
     private val cadenceCvThreshold: Double = DEFAULT_CADENCE_CV_THRESHOLD,
     private val consecutiveWalkingWindowsForCyclingExit: Int = DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT,
+    private val cadenceBreakdownWindowSize: Int = DEFAULT_CADENCE_BREAKDOWN_WINDOW_SIZE,
+    private val cadenceBreakdownDensityThreshold: Double = DEFAULT_CADENCE_BREAKDOWN_DENSITY_THRESHOLD,
+    private val cadenceBreakdownCvThreshold: Double = DEFAULT_CADENCE_BREAKDOWN_CV_THRESHOLD,
+    private val cadenceBreakdownMeanFloor: Double = DEFAULT_CADENCE_BREAKDOWN_MEAN_FLOOR,
 ) {
 
     /**
@@ -123,6 +141,10 @@ class CyclingClassifier(
         consecutiveWalkingWindowsRequired = DEFAULT_CONSECUTIVE_WALKING_WINDOWS,
         cadenceCvThreshold = DEFAULT_CADENCE_CV_THRESHOLD,
         consecutiveWalkingWindowsForCyclingExit = DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT,
+        cadenceBreakdownWindowSize = DEFAULT_CADENCE_BREAKDOWN_WINDOW_SIZE,
+        cadenceBreakdownDensityThreshold = DEFAULT_CADENCE_BREAKDOWN_DENSITY_THRESHOLD,
+        cadenceBreakdownCvThreshold = DEFAULT_CADENCE_BREAKDOWN_CV_THRESHOLD,
+        cadenceBreakdownMeanFloor = DEFAULT_CADENCE_BREAKDOWN_MEAN_FLOOR,
     )
 
     // Internal state — protected by @Synchronized on each public method.
@@ -159,6 +181,12 @@ class CyclingClassifier(
 
     /** Timestamp of the first walking window in the current consecutive streak while CYCLING. */
     private var walkingInCyclingStartTimeMs: Long = 0L
+
+    // Rolling cadence buffer for cadence-breakdown detection in WALKING state.
+    private val walkingRollingFreqs = DoubleArray(cadenceBreakdownWindowSize)
+    private val walkingRollingTimestamps = LongArray(cadenceBreakdownWindowSize)
+    private var walkingRollingIndex: Int = 0
+    private var walkingRollingCount: Int = 0
 
     // ─── Public API ───────────────────────────────────────────────────────────
 
@@ -259,6 +287,7 @@ class CyclingClassifier(
                     }
                     if (cv < cadenceCvThreshold) {
                         currentState = ActivityState.WALKING
+                        resetWalkingRollingBuffer()
                         TransitionResult(
                             fromState = previousState,
                             toState = ActivityState.WALKING,
@@ -273,20 +302,26 @@ class CyclingClassifier(
             }
 
             ActivityState.WALKING -> {
-                if (isStillWindow) {
-                    val stillDuration = currentTimeMs - stillWindowStartTimeMs
-                    if (stillDuration >= walkingGracePeriodMs) {
-                        currentState = ActivityState.STILL
-                        TransitionResult(
-                            fromState = previousState,
-                            toState = ActivityState.STILL,
-                            effectiveTimestamp = stillWindowStartTimeMs,
-                        )
-                    } else {
-                        null // within grace period — stay WALKING
-                    }
+                // Push to rolling cadence buffer
+                walkingRollingFreqs[walkingRollingIndex] = stepFrequency
+                walkingRollingTimestamps[walkingRollingIndex] = currentTimeMs
+                walkingRollingIndex = (walkingRollingIndex + 1) % cadenceBreakdownWindowSize
+                if (walkingRollingCount < cadenceBreakdownWindowSize) walkingRollingCount++
+
+                // 1. Grace period: sustained stillness exits to STILL
+                if (isStillWindow && (currentTimeMs - stillWindowStartTimeMs) >= walkingGracePeriodMs) {
+                    resetWalkingRollingBuffer()
+                    currentState = ActivityState.STILL
+                    TransitionResult(
+                        fromState = previousState,
+                        toState = ActivityState.STILL,
+                        effectiveTimestamp = stillWindowStartTimeMs,
+                    )
+                } else if (walkingRollingCount >= cadenceBreakdownWindowSize) {
+                    // 2. Cadence breakdown: rolling window detects intermittent activity
+                    checkCadenceBreakdown(previousState)
                 } else {
-                    null // non-still window — stay WALKING
+                    null // buffer not full — stay WALKING
                 }
             }
 
@@ -308,6 +343,7 @@ class CyclingClassifier(
                     consecutiveWalkingWindowsInCycling = 0
                     walkingInCyclingStartTimeMs = 0L
                     currentState = ActivityState.WALKING
+                    resetWalkingRollingBuffer()
                     TransitionResult(
                         fromState = previousState,
                         toState = ActivityState.WALKING,
@@ -362,6 +398,74 @@ class CyclingClassifier(
         walkingFrequencySquaredSum = 0.0
         consecutiveWalkingWindowsInCycling = 0
         walkingInCyclingStartTimeMs = 0L
+        resetWalkingRollingBuffer()
+    }
+
+    // ─── Private helpers ──────────────────────────────────────────────────────
+
+    /** Clears the rolling cadence buffer. Called on WALKING entry and exit. */
+    private fun resetWalkingRollingBuffer() {
+        walkingRollingIndex = 0
+        walkingRollingCount = 0
+    }
+
+    /**
+     * Checks the rolling cadence buffer for breakdown patterns that indicate
+     * the user has stopped genuinely walking (e.g., chores, puttering).
+     *
+     * Called only when the buffer is full ([walkingRollingCount] >= [cadenceBreakdownWindowSize]).
+     *
+     * @return [TransitionResult] if breakdown detected, `null` otherwise.
+     */
+    private fun checkCadenceBreakdown(previousState: ActivityState): TransitionResult? {
+        // In a full circular buffer, walkingRollingIndex points to the oldest entry
+        val effectiveTs = walkingRollingTimestamps[walkingRollingIndex]
+
+        var walkingWindows = 0
+        var freqSum = 0.0
+        var freqSqSum = 0.0
+        for (i in 0 until cadenceBreakdownWindowSize) {
+            if (walkingRollingFreqs[i] >= stepFrequencyThreshold) {
+                walkingWindows++
+                freqSum += walkingRollingFreqs[i]
+                freqSqSum += walkingRollingFreqs[i] * walkingRollingFreqs[i]
+            }
+        }
+
+        val density = walkingWindows.toDouble() / cadenceBreakdownWindowSize
+
+        // Low walking density — chores with lots of pauses
+        if (density < cadenceBreakdownDensityThreshold) {
+            resetWalkingRollingBuffer()
+            currentState = ActivityState.STILL
+            return TransitionResult(
+                fromState = previousState,
+                toState = ActivityState.STILL,
+                effectiveTimestamp = effectiveTs,
+            )
+        }
+
+        // High CV + low mean among walking windows — puttering
+        if (walkingWindows >= 3) {
+            val mean = freqSum / walkingWindows
+            val variance = (freqSqSum / walkingWindows) - mean * mean
+            val cv = if (mean > 0.0 && variance > 0.0) {
+                kotlin.math.sqrt(variance) / mean
+            } else {
+                0.0
+            }
+            if (cv > cadenceBreakdownCvThreshold && mean < cadenceBreakdownMeanFloor) {
+                resetWalkingRollingBuffer()
+                currentState = ActivityState.STILL
+                return TransitionResult(
+                    fromState = previousState,
+                    toState = ActivityState.STILL,
+                    effectiveTimestamp = effectiveTs,
+                )
+            }
+        }
+
+        return null
     }
 
     // ─── Constants ────────────────────────────────────────────────────────────
@@ -461,5 +565,42 @@ class CyclingClassifier(
          * steps) still triggers the exit.
          */
         const val DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT = 4
+
+        /**
+         * Default size of the rolling circular buffer for cadence breakdown
+         * detection while in WALKING state.
+         *
+         * 36 entries at a 5-second evaluation period = 180 seconds = 3 minutes.
+         */
+        const val DEFAULT_CADENCE_BREAKDOWN_WINDOW_SIZE = 36
+
+        /**
+         * Default minimum walking-window density in the rolling buffer.
+         *
+         * 0.4 = 40%. Fewer than ~14 of 36 windows with stepFreq >= 0.3 Hz
+         * indicates the user is doing chores (short walks with long pauses)
+         * rather than genuinely walking.
+         */
+        const val DEFAULT_CADENCE_BREAKDOWN_DENSITY_THRESHOLD = 0.4
+
+        /**
+         * Default maximum coefficient of variation of step frequency among
+         * walking windows in the rolling buffer for puttering detection.
+         *
+         * 0.7 = 70%. Combined with a low mean (< [DEFAULT_CADENCE_BREAKDOWN_MEAN_FLOOR]),
+         * a high CV indicates irregular slow stepping (puttering) rather than
+         * genuine walking.
+         */
+        const val DEFAULT_CADENCE_BREAKDOWN_CV_THRESHOLD = 0.7
+
+        /**
+         * Default mean step-frequency ceiling (Hz) for the puttering check.
+         *
+         * 1.0 Hz. Walking windows with mean frequency below this value AND
+         * CV above [DEFAULT_CADENCE_BREAKDOWN_CV_THRESHOLD] are classified as
+         * puttering. Normal outdoor walking cadence (1.5–2.5 Hz) is well above
+         * this floor.
+         */
+        const val DEFAULT_CADENCE_BREAKDOWN_MEAN_FLOOR = 1.0
     }
 }

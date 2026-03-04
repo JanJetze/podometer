@@ -1114,6 +1114,312 @@ class CyclingClassifierTest {
         assertEquals(4, CyclingClassifier.DEFAULT_CONSECUTIVE_WALKING_WINDOWS_FOR_CYCLING_EXIT)
     }
 
+    // ─── Cadence breakdown constants ──────────────────────────────────────────
+
+    @Test
+    fun `DEFAULT_CADENCE_BREAKDOWN_WINDOW_SIZE is 36`() {
+        assertEquals(36, CyclingClassifier.DEFAULT_CADENCE_BREAKDOWN_WINDOW_SIZE)
+    }
+
+    @Test
+    fun `DEFAULT_CADENCE_BREAKDOWN_DENSITY_THRESHOLD is 0_4`() {
+        assertEquals(0.4, CyclingClassifier.DEFAULT_CADENCE_BREAKDOWN_DENSITY_THRESHOLD, DELTA)
+    }
+
+    @Test
+    fun `DEFAULT_CADENCE_BREAKDOWN_CV_THRESHOLD is 0_7`() {
+        assertEquals(0.7, CyclingClassifier.DEFAULT_CADENCE_BREAKDOWN_CV_THRESHOLD, DELTA)
+    }
+
+    @Test
+    fun `DEFAULT_CADENCE_BREAKDOWN_MEAN_FLOOR is 1_0`() {
+        assertEquals(1.0, CyclingClassifier.DEFAULT_CADENCE_BREAKDOWN_MEAN_FLOOR, DELTA)
+    }
+
+    // ─── Cadence breakdown: density exit ──────────────────────────────────────
+
+    @Test
+    fun `cadence breakdown - chores pattern exits WALKING via low density`() {
+        // Small buffer (6 windows) for test tractability. Density threshold 0.4 → need < 2.4 walking windows
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = Long.MAX_VALUE, // disable grace period
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 6,
+            cadenceBreakdownDensityThreshold = 0.4,
+        )
+        // Enter WALKING (this eval runs in STILL branch — no buffer push)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 0L)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+
+        // Chores pattern: 2 walking + 4 still in WALKING state = 6 buffer entries
+        // density = 2/6 = 0.33 < 0.4
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 5_000L)   // walking
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 10_000L)  // walking
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 15_000L)    // still
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 20_000L)    // still
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 25_000L)    // still
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 30_000L) // still → buffer full
+
+        assertNotNull("Low density chores pattern should exit WALKING", result)
+        assertEquals(ActivityState.WALKING, result!!.fromState)
+        assertEquals(ActivityState.STILL, result.toState)
+        assertEquals(ActivityState.STILL, gc.getCurrentState())
+    }
+
+    @Test
+    fun `cadence breakdown - effective timestamp is oldest buffer entry`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = Long.MAX_VALUE,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 4,
+            cadenceBreakdownDensityThreshold = 0.4,
+        )
+        // Enter WALKING at t=100 (STILL branch — no buffer push)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 100L)
+
+        // 4 evals in WALKING to fill buffer: 1 walking + 3 still
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 200L) // buffer[0], ts=200
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 300L)
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 400L)
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 500L)
+
+        // density = 1/4 = 0.25 < 0.4 → exits. Oldest buffer entry is t=200
+        assertNotNull(result)
+        assertEquals(ActivityState.STILL, result!!.toState)
+        assertEquals(200L, result.effectiveTimestamp)
+    }
+
+    @Test
+    fun `cadence breakdown - crosswalk stays WALKING (high density)`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = Long.MAX_VALUE,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 6,
+            cadenceBreakdownDensityThreshold = 0.4,
+        )
+        // Enter WALKING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 0L)
+
+        // 30s crosswalk: 5 walking + 1 still = density 5/6 = 83% > 40%
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 5_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 10_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 15_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 20_000L)
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 25_000L)
+
+        assertNull("Crosswalk with high density should stay WALKING", result)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+    }
+
+    @Test
+    fun `cadence breakdown - slower steady walking stays WALKING`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = Long.MAX_VALUE,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 6,
+            cadenceBreakdownDensityThreshold = 0.4,
+            cadenceBreakdownCvThreshold = 0.7,
+            cadenceBreakdownMeanFloor = 1.0,
+        )
+        // Enter WALKING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 1.2, 0L)
+
+        // Steady 1.2 Hz walking: density = 100%, CV ≈ 0, mean = 1.2 > 1.0
+        for (i in 1 until 6) {
+            gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 1.2, i * WINDOW_INTERVAL_MS)
+        }
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+    }
+
+    // ─── Cadence breakdown: CV + mean exit (puttering) ────────────────────────
+
+    @Test
+    fun `cadence breakdown - puttering exits WALKING via high CV and low mean`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = Long.MAX_VALUE,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 6,
+            cadenceBreakdownDensityThreshold = 0.4,
+            cadenceBreakdownCvThreshold = 0.7,
+            cadenceBreakdownMeanFloor = 1.0,
+        )
+        // Enter WALKING (STILL branch — no buffer push)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 0L)
+
+        // 6 evals in WALKING to fill buffer. Mix of slow walking + one spike:
+        // Buffer: [0.3, 0.3, 0.3, 2.0, 0.0, 0.0]
+        // Walking windows (>= 0.3): 4 → density = 4/6 = 67% > 40% (passes density)
+        // Among walking windows: mean = (0.3+0.3+0.3+2.0)/4 = 0.725 < 1.0 ✓
+        // sum_sq = (0.09+0.09+0.09+4.0)/4 = 4.27/4 = 1.0675
+        // var = 1.0675 - 0.725^2 = 0.5419
+        // CV = sqrt(0.5419)/0.725 = 0.736/0.725 = 1.015 > 0.7 ✓
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 0.3, 5_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 0.3, 10_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 0.3, 15_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 2.0, 20_000L)
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 25_000L)
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 30_000L)
+
+        assertNotNull("Puttering (high CV, low mean) should exit WALKING", result)
+        assertEquals(ActivityState.WALKING, result!!.fromState)
+        assertEquals(ActivityState.STILL, result.toState)
+    }
+
+    @Test
+    fun `cadence breakdown - high CV but high mean stays WALKING`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = Long.MAX_VALUE,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 6,
+            cadenceBreakdownDensityThreshold = 0.4,
+            cadenceBreakdownCvThreshold = 0.7,
+            cadenceBreakdownMeanFloor = 1.0,
+        )
+        // Enter WALKING at 2.0 Hz
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 0L)
+
+        // Alternating 1.0 and 3.0 Hz — high CV but high mean
+        // Buffer: [2.0, 1.0, 3.0, 1.0, 3.0, 1.0]
+        // All >= 0.3 → density 100%. mean = (2+1+3+1+3+1)/6 = 11/6 = 1.833 > 1.0
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 1.0, 5_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 3.0, 10_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 1.0, 15_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 3.0, 20_000L)
+        val result = gc.evaluate(featuresWithVariance(HIGH_VARIANCE), 1.0, 25_000L)
+
+        assertNull("High CV but mean > 1.0 should stay WALKING", result)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+    }
+
+    // ─── Cadence breakdown: buffer management ─────────────────────────────────
+
+    @Test
+    fun `cadence breakdown - buffer not checked before full`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = Long.MAX_VALUE,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 6,
+            cadenceBreakdownDensityThreshold = 0.4,
+        )
+        // Enter WALKING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 0L)
+
+        // 4 still windows — only 5 entries in buffer (not full at 6)
+        // If buffer were checked, density = 1/5 = 20% < 40% would trigger exit
+        for (i in 1 until 5) {
+            val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, i * WINDOW_INTERVAL_MS)
+            assertNull("Buffer not full — should not check cadence breakdown at window $i", result)
+        }
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+    }
+
+    @Test
+    fun `cadence breakdown - buffer resets on WALKING entry from STILL`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = Long.MAX_VALUE,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 4,
+            cadenceBreakdownDensityThreshold = 0.4,
+        )
+        // Enter WALKING, fill buffer with 4 windows (mostly still → would trigger)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 0L)
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 5_000L)
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 10_000L)
+        // 3 entries so far, buffer not yet full
+
+        // Force back to STILL via cycling then still
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, 15_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), CYCLING_STEP_FREQ, 20_000L)
+        assertEquals(ActivityState.CYCLING, gc.getCurrentState())
+
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 25_000L)
+        assertEquals(ActivityState.STILL, gc.getCurrentState())
+
+        // Re-enter WALKING (buffer should be reset)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 30_000L)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+
+        // Feed 3 all-walking windows — buffer has 4 entries (full), all walking
+        // density = 4/4 = 100% → should NOT trigger breakdown
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 35_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 40_000L)
+        val result = gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 45_000L)
+        assertNull("Buffer reset on WALKING entry — all walking windows should stay WALKING", result)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+    }
+
+    @Test
+    fun `cadence breakdown - grace period still fires before cadence check`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = 10_000L,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 4,
+            cadenceBreakdownDensityThreshold = 0.4,
+        )
+        // Enter WALKING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 0L)
+
+        // 3 still windows (buffer at 4 entries = full), still duration = 15s > 10s grace
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 5_000L)
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 10_000L)
+        val result = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 15_000L)
+
+        // Grace period fires (stillStart=5000, current=15000, duration=10000 >= 10000)
+        // Effective timestamp should be stillWindowStartTimeMs (5000), not buffer oldest
+        assertNotNull("Grace period should fire", result)
+        assertEquals(ActivityState.STILL, result!!.toState)
+        assertEquals(5_000L, result.effectiveTimestamp)
+    }
+
+    @Test
+    fun `cadence breakdown - rolling window continues sliding after full`() {
+        val gc = CyclingClassifier(
+            minCyclingDurationMs = 0L,
+            walkingGracePeriodMs = Long.MAX_VALUE,
+            cyclingGracePeriodMs = 0L,
+            consecutiveWalkingWindowsRequired = 1,
+            cadenceBreakdownWindowSize = 4,
+            cadenceBreakdownDensityThreshold = 0.4,
+        )
+        // Enter WALKING
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 0L)
+
+        // Fill buffer with 3 more walking windows (4 total, all walking, density 100%)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 5_000L)
+        gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 10_000L)
+        val r1 = gc.evaluate(featuresWithVariance(HIGH_VARIANCE), WALKING_STEP_FREQ, 15_000L)
+        assertNull("All walking → stays WALKING", r1)
+
+        // Now push 3 still windows — they slide in, pushing out walking windows
+        // After 1 still: [walking, walking, walking, still] → density 3/4 = 75% > 40%
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 20_000L)
+        // After 2 still: [walking, walking, still, still] → density 2/4 = 50% > 40%
+        gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 25_000L)
+        assertEquals(ActivityState.WALKING, gc.getCurrentState())
+        // After 3 still: [walking, still, still, still] → density 1/4 = 25% < 40% → exits!
+        val r2 = gc.evaluate(featuresWithVariance(STILL_VARIANCE), ZERO_STEP_FREQ, 30_000L)
+        assertNotNull("Density dropped below threshold after sliding", r2)
+        assertEquals(ActivityState.STILL, r2!!.toState)
+    }
+
     // ─── Thread safety ────────────────────────────────────────────────────────
 
     @Test
