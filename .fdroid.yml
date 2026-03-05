@@ -3,12 +3,9 @@
 
 Categories:
   - Sports & Health
-
 License: GPL-3.0-or-later
-
 SourceCode: https://github.com/JanJetze/podometer
 IssueTracker: https://github.com/JanJetze/podometer/issues
-
 Liberapay: JanJetze
 
 Name: Podometer
@@ -20,7 +17,7 @@ Repo: https://github.com/JanJetze/podometer.git
 Builds:
   - versionName: 1.0.0
     versionCode: 1
-    commit: v1.0.0
+    commit: 9aecd43a49743485c0224f5517dfc0b6e175cee8
     subdir: app
     gradle:
       - yes
