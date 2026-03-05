@@ -29,6 +29,13 @@ interface SensorWindowDao {
     fun getWindowsBetween(startMs: Long, endMs: Long): Flow<List<SensorWindow>>
 
     /**
+     * Returns all sensor windows ordered by timestamp ascending.
+     * One-shot suspend query intended for data export — not a [Flow].
+     */
+    @Query("SELECT * FROM sensor_windows ORDER BY timestamp ASC")
+    suspend fun getAllWindows(): List<SensorWindow>
+
+    /**
      * Deletes all sensor windows older than [cutoffMs].
      *
      * Called on service start to enforce 7-day retention.

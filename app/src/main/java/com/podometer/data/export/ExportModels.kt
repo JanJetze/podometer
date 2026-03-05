@@ -21,6 +21,8 @@ data class ExportData(
     val activityTransitions: List<ExportActivityTransition>,
     /** All cycling sessions, ordered by start time ascending. */
     val cyclingSessions: List<ExportCyclingSession>,
+    /** All raw sensor classifier windows, ordered by timestamp ascending. */
+    val sensorWindows: List<ExportSensorWindow> = emptyList(),
 )
 
 /**
@@ -103,4 +105,21 @@ data class ExportCyclingSession(
     val durationMinutes: Int,
     /** True when the user manually created or overrode this session. */
     val isManualOverride: Boolean,
+)
+
+/**
+ * Export model mirroring the Room [com.podometer.data.db.SensorWindow] entity.
+ */
+@Serializable
+data class ExportSensorWindow(
+    /** Database row ID. */
+    val id: Long,
+    /** Epoch-millisecond timestamp for the start of this window. */
+    val timestamp: Long,
+    /** Accelerometer magnitude variance (m/s²)² for this window. */
+    val magnitudeVariance: Double,
+    /** Step cadence in Hz. */
+    val stepFrequencyHz: Double,
+    /** Number of steps detected during this window. */
+    val stepCount: Int,
 )

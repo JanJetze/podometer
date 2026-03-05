@@ -7,6 +7,8 @@ import com.podometer.data.export.ExportDailySummary
 import com.podometer.data.export.ExportData
 import com.podometer.data.export.ExportHourlyAggregate
 import com.podometer.data.export.ExportMetadata
+import com.podometer.data.export.ExportSensorWindow
+import com.podometer.data.db.SensorWindowDao
 import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.StepRepository
 import kotlinx.serialization.json.Json
@@ -26,6 +28,7 @@ import java.time.Instant
 class ExportDataUseCase(
     private val stepRepository: StepRepository,
     private val cyclingRepository: CyclingRepository,
+    private val sensorWindowDao: SensorWindowDao,
     private val deviceModel: String,
 ) {
 
@@ -54,6 +57,7 @@ class ExportDataUseCase(
         val hourlyAggregates = stepRepository.getAllHourlyAggregates()
         val transitions = stepRepository.getAllTransitions()
         val sessions = cyclingRepository.getAllSessions()
+        val sensorWindows = sensorWindowDao.getAllWindows()
 
         return ExportData(
             metadata = ExportMetadata(
@@ -94,6 +98,15 @@ class ExportDataUseCase(
                     endTime = session.endTime,
                     durationMinutes = session.durationMinutes,
                     isManualOverride = session.isManualOverride,
+                )
+            },
+            sensorWindows = sensorWindows.map { window ->
+                ExportSensorWindow(
+                    id = window.id,
+                    timestamp = window.timestamp,
+                    magnitudeVariance = window.magnitudeVariance,
+                    stepFrequencyHz = window.stepFrequencyHz,
+                    stepCount = window.stepCount,
                 )
             },
         )

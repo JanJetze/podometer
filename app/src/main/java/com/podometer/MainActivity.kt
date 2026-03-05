@@ -146,6 +146,7 @@ class MainActivity : ComponentActivity() {
                             onSetAutoStartEnabled = viewModel::setAutoStartEnabled,
                             onSetNotificationStyle = viewModel::setNotificationStyle,
                             onExportData = viewModel::exportData,
+                            onImportData = viewModel::importData,
                             onResetExportState = viewModel::resetExportState,
                             onNavigateToDonate = {
                                 navController.navigate(Screen.Donate.route)

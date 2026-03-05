@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Podometer</string>
+    <!-- app_name is defined via resValue in build.gradle.kts per build type -->
 
     <!-- Screen titles -->
     <string name="screen_dashboard">Dashboard</string>
@@ -124,6 +124,7 @@
     <string name="settings_export_error">Export failed</string>
     <string name="settings_export_file_name">podometer_export.json</string>
     <string name="cd_settings_export_button">Export all app data to a JSON file</string>
+    <string name="settings_import_button">Import Data</string>
 
     <!-- Settings: Goals section -->
     <string name="settings_section_goals">Goals</string>

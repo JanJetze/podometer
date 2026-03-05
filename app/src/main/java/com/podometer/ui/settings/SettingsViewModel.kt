@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.domain.usecase.ExportDataUseCase
+import com.podometer.domain.usecase.ImportDataUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +73,7 @@ data class SettingsUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val exportDataUseCase: ExportDataUseCase,
+    private val importDataUseCase: ImportDataUseCase,
     private val preferencesManager: PreferencesManager,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -174,6 +176,31 @@ class SettingsViewModel @Inject constructor(
                     outputStream.use { stream ->
                         stream.write(jsonString.toByteArray(Charsets.UTF_8))
                     }
+                }
+                _exportState.value = ExportState.Success
+            } catch (e: Exception) {
+                _exportState.value = ExportState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
+    /**
+     * Imports data from a previously exported JSON file at the given SAF [uri].
+     *
+     * Reads the file contents, deserializes the JSON, and inserts all records
+     * into the local database.
+     *
+     * @param uri The URI of the JSON file chosen by the user.
+     */
+    fun importData(uri: Uri) {
+        viewModelScope.launch {
+            _exportState.value = ExportState.InProgress
+            try {
+                withContext(Dispatchers.IO) {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                        ?: throw IOException("Cannot open input stream for URI")
+                    val jsonString = inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+                    importDataUseCase.importFromJson(jsonString)
                 }
                 _exportState.value = ExportState.Success
             } catch (e: Exception) {

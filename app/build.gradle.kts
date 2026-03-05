@@ -52,7 +52,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // applicationIdSuffix = ".dev"  // Temporarily disabled for one-time migration
+            resValue("string", "app_name", "Podometer-dev")
+        }
         release {
+            resValue("string", "app_name", "Podometer")
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = if (System.getenv("RELEASE_KEYSTORE_PATH") != null) {

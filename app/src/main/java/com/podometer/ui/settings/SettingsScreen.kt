@@ -87,6 +87,7 @@ fun SettingsScreen(
     onSetAutoStartEnabled: (Boolean) -> Unit,
     onSetNotificationStyle: (String) -> Unit,
     onExportData: (Uri) -> Unit,
+    onImportData: (Uri) -> Unit,
     onResetExportState: () -> Unit,
     onNavigateToDonate: () -> Unit = {},
     onOpenFeedbackUrl: () -> Unit = {},
@@ -132,6 +133,15 @@ fun SettingsScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             onExportData(uri)
+        }
+    }
+
+    // SAF launcher for data import — opens the file picker for a JSON file
+    val openDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onImportData(uri)
         }
     }
 
@@ -252,6 +262,13 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(text = stringResource(R.string.settings_export_button))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { openDocumentLauncher.launch(arrayOf("application/json")) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = stringResource(R.string.settings_import_button))
                 }
             }
 
@@ -643,6 +660,7 @@ private fun SettingsScreenIdlePreview() {
             onSetAutoStartEnabled = {},
             onSetNotificationStyle = {},
             onExportData = {},
+            onImportData = {},
             onResetExportState = {},
         )
     }
@@ -661,6 +679,7 @@ private fun SettingsScreenExportingPreview() {
             onSetAutoStartEnabled = {},
             onSetNotificationStyle = {},
             onExportData = {},
+            onImportData = {},
             onResetExportState = {},
         )
     }
@@ -685,6 +704,7 @@ private fun SettingsScreenDetailedPreview() {
             onSetAutoStartEnabled = {},
             onSetNotificationStyle = {},
             onExportData = {},
+            onImportData = {},
             onResetExportState = {},
         )
     }
@@ -703,6 +723,7 @@ private fun SettingsScreenSuccessPreview() {
             onSetAutoStartEnabled = {},
             onSetNotificationStyle = {},
             onExportData = {},
+            onImportData = {},
             onResetExportState = {},
         )
     }
@@ -721,6 +742,7 @@ private fun SettingsScreenErrorPreview() {
             onSetAutoStartEnabled = {},
             onSetNotificationStyle = {},
             onExportData = {},
+            onImportData = {},
             onResetExportState = {},
         )
     }

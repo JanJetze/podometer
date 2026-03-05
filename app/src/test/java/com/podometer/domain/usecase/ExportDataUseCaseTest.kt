@@ -7,6 +7,8 @@ import com.podometer.data.db.CyclingSession
 import com.podometer.data.db.CyclingSessionDao
 import com.podometer.data.db.DailySummary
 import com.podometer.data.db.HourlyStepAggregate
+import com.podometer.data.db.SensorWindow
+import com.podometer.data.db.SensorWindowDao
 import com.podometer.data.db.StepDao
 import com.podometer.data.export.ExportData
 import com.podometer.data.repository.CyclingRepository
@@ -68,6 +70,10 @@ class ExportDataUseCaseTest {
         override suspend fun getAllDailySummaries(): List<DailySummary> = dailySummaries
 
         override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = hourlyAggregates
+
+        override suspend fun insertAllDailySummaries(summaries: List<DailySummary>) { }
+
+        override suspend fun insertAllHourlyAggregates(aggregates: List<HourlyStepAggregate>) { }
     }
 
     private class FakeActivityTransitionDao(
@@ -83,6 +89,8 @@ class ExportDataUseCaseTest {
         override suspend fun getAllTransitions(): List<ActivityTransition> = transitions
 
         override suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? = null
+
+        override suspend fun insertAllTransitions(transitions: List<ActivityTransition>) { }
     }
 
     private class FakeCyclingSessionDao(
@@ -102,6 +110,16 @@ class ExportDataUseCaseTest {
         override suspend fun getOngoingSession(): CyclingSession? = null
 
         override suspend fun getSessionCoveringTimestamp(timestamp: Long): CyclingSession? = null
+
+        override suspend fun insertAllSessions(sessions: List<CyclingSession>) { }
+    }
+
+    private class FakeSensorWindowDao : SensorWindowDao {
+        override suspend fun insert(window: SensorWindow) = Unit
+        override fun getWindowsBetween(startMs: Long, endMs: Long): Flow<List<SensorWindow>> =
+            flowOf(emptyList())
+        override suspend fun getAllWindows(): List<SensorWindow> = emptyList()
+        override suspend fun deleteOlderThan(cutoffMs: Long) = Unit
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -118,7 +136,7 @@ class ExportDataUseCaseTest {
             FakeActivityTransitionDao(transitions),
         )
         val cyclingRepo = CyclingRepository(FakeCyclingSessionDao(sessions))
-        return ExportDataUseCase(stepRepo, cyclingRepo, deviceModel)
+        return ExportDataUseCase(stepRepo, cyclingRepo, FakeSensorWindowDao(), deviceModel)
     }
 
     // ─── Tests ───────────────────────────────────────────────────────────────
