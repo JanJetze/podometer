@@ -364,8 +364,8 @@ class AccelerometerSampleBufferTest {
     }
 
     @Test
-    fun `DEFAULT_CAPACITY is 75 to cover 15 seconds at 5Hz`() {
-        assertEquals(75, AccelerometerSampleBuffer.DEFAULT_CAPACITY)
+    fun `DEFAULT_CAPACITY is 150 to cover 30 seconds at 5Hz`() {
+        assertEquals(150, AccelerometerSampleBuffer.DEFAULT_CAPACITY)
     }
 
     @Test

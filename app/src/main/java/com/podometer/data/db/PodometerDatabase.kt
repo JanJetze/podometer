@@ -14,6 +14,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *       daily summaries, and cycling sessions.
  *   2 — Added sensor_windows table for raw classifier window storage
  *       (7-day retention, ~6 MB).
+ *   3 — Consolidate 5-second sensor windows into 30-second windows.
+ *       Keeps the window with the highest magnitudeVariance per 30 s slot.
  */
 @Database(
     entities = [
@@ -23,7 +25,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CyclingSession::class,
         SensorWindow::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class PodometerDatabase : RoomDatabase() {
@@ -50,6 +52,33 @@ abstract class PodometerDatabase : RoomDatabase() {
                         magnitudeVariance REAL NOT NULL,
                         stepFrequencyHz REAL NOT NULL,
                         stepCount INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        /**
+         * Migration from version 2 to 3: consolidate 5-second sensor windows
+         * into 30-second windows.
+         *
+         * For each 30-second time slot (timestamp / 30000), keeps only the
+         * window with the highest magnitudeVariance. This preserves the
+         * cycling signal (which depends on variance) while reducing storage
+         * by ~6x. The stepFrequencyHz already encodes a 30-second sliding
+         * window, so no information is lost from the step frequency perspective.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    DELETE FROM sensor_windows WHERE id NOT IN (
+                        SELECT id FROM (
+                            SELECT id, ROW_NUMBER() OVER (
+                                PARTITION BY timestamp / 30000
+                                ORDER BY magnitudeVariance DESC
+                            ) AS rn FROM sensor_windows
+                        ) WHERE rn = 1
                     )
                     """.trimIndent(),
                 )

@@ -357,7 +357,7 @@ class StepTrackingService : Service() {
      * The [ActivityTransition] DB insert runs asynchronously because it has no
      * downstream effect on classifier state.
      *
-     * Runs every [CLASSIFIER_INTERVAL_MS] (~5 seconds) until the service
+     * Runs every [CLASSIFIER_INTERVAL_MS] (~30 seconds) until the service
      * scope is cancelled.
      */
     private fun launchClassifier(): Job = serviceScope.launch {
@@ -520,13 +520,15 @@ class StepTrackingService : Service() {
         private const val SENSOR_WINDOW_RETENTION_MS = 7L * 24 * 60 * 60 * 1000
 
         /**
-         * Classifier evaluation interval in milliseconds (~5 seconds).
+         * Classifier evaluation interval in milliseconds (~30 seconds).
          *
-         * At SENSOR_DELAY_NORMAL (~5 Hz) this gives ~25 new accelerometer
+         * Aligned with [StepFrequencyTracker.DEFAULT_WINDOW_MS] so each
+         * evaluation samples an independent 30-second step-frequency reading.
+         * At SENSOR_DELAY_NORMAL (~5 Hz) this gives ~150 new accelerometer
          * samples per evaluation — sufficient for a stable variance estimate.
          * Each evaluation is stored as a [SensorWindow] for retroactive replay.
          */
-        private const val CLASSIFIER_INTERVAL_MS = 5_000L
+        private const val CLASSIFIER_INTERVAL_MS = 30_000L
 
         /**
          * Distributes [delta] step events evenly between [lastEventMs] and [nowMs],

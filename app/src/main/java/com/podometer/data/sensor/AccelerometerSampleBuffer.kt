@@ -43,7 +43,7 @@ data class WindowFeatures(
  *   so contention overhead is negligible.
  *
  * @param capacity Maximum number of samples to retain. Default: [DEFAULT_CAPACITY]
- *   (75 slots = 15 seconds at ~5 Hz SENSOR_DELAY_NORMAL rate).
+ *   (150 slots = 30 seconds at ~5 Hz SENSOR_DELAY_NORMAL rate).
  */
 class AccelerometerSampleBuffer(val capacity: Int = DEFAULT_CAPACITY) {
 
@@ -184,10 +184,10 @@ class AccelerometerSampleBuffer(val capacity: Int = DEFAULT_CAPACITY) {
         /**
          * Default circular buffer capacity.
          *
-         * 75 slots covers 15 seconds at SENSOR_DELAY_NORMAL (~5 Hz delivery rate).
-         * This is sufficient for activity-classification sliding windows.
+         * 150 slots covers 30 seconds at SENSOR_DELAY_NORMAL (~5 Hz delivery rate),
+         * aligned with the 30-second classifier evaluation interval.
          */
-        const val DEFAULT_CAPACITY = 75
+        const val DEFAULT_CAPACITY = 150
 
         /**
          * Minimum number of samples required before [computeWindowFeatures] will
