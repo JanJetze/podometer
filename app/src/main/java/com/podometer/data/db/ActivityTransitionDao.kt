@@ -27,6 +27,10 @@ interface ActivityTransitionDao {
     @Insert
     suspend fun insertTransition(transition: ActivityTransition)
 
+    /** Inserts multiple [ActivityTransition] rows. */
+    @Insert
+    suspend fun insertAllTransitions(transitions: List<ActivityTransition>)
+
     /** Updates an existing [ActivityTransition] row (matched by primary key). */
     @Update
     suspend fun updateTransition(transition: ActivityTransition)

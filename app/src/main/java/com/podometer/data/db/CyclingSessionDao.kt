@@ -30,6 +30,10 @@ interface CyclingSessionDao {
     @Insert
     suspend fun insertSession(session: CyclingSession): Long
 
+    /** Inserts multiple [CyclingSession] rows. */
+    @Insert
+    suspend fun insertAllSessions(sessions: List<CyclingSession>)
+
     /** Updates an existing [CyclingSession] row (matched by primary key). */
     @Update
     suspend fun updateSession(session: CyclingSession)

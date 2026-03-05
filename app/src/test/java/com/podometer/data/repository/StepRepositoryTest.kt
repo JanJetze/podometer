@@ -91,6 +91,10 @@ class StepRepositoryTest {
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
 
         override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = emptyList()
+
+        override suspend fun insertAllDailySummaries(summaries: List<DailySummary>) { }
+
+        override suspend fun insertAllHourlyAggregates(aggregates: List<HourlyStepAggregate>) { }
     }
 
     private class FakeActivityTransitionDao(
@@ -113,6 +117,8 @@ class StepRepositoryTest {
         override suspend fun getAllTransitions(): List<ActivityTransition> = emptyList()
 
         override suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? = null
+
+        override suspend fun insertAllTransitions(transitions: List<ActivityTransition>) { }
     }
 
     // ─── getTodaySteps: null → 0 mapping ────────────────────────────────────

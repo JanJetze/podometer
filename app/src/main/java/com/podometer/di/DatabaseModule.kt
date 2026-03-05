@@ -35,7 +35,7 @@ object DatabaseModule {
             PodometerDatabase::class.java,
             "podometer.db",
         )
-            .addMigrations(PodometerDatabase.MIGRATION_1_2)
+            .addMigrations(PodometerDatabase.MIGRATION_1_2, PodometerDatabase.MIGRATION_2_3)
             .build()
 
     @Provides

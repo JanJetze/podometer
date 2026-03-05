@@ -76,6 +76,8 @@ class UseCaseTest {
         override suspend fun addCyclingMinutes(date: String, minutes: Int) = Unit
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
         override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = emptyList()
+        override suspend fun insertAllDailySummaries(summaries: List<DailySummary>) { }
+        override suspend fun insertAllHourlyAggregates(aggregates: List<HourlyStepAggregate>) { }
     }
 
     private class FakeActivityTransitionDao(
@@ -97,6 +99,8 @@ class UseCaseTest {
 
         override suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? =
             nextTransitionAfter
+
+        override suspend fun insertAllTransitions(transitions: List<ActivityTransition>) { }
     }
 
     private class FakeCyclingSessionDao(
@@ -122,6 +126,8 @@ class UseCaseTest {
         override suspend fun getOngoingSession(): CyclingSession? = null
         override suspend fun getSessionCoveringTimestamp(timestamp: Long): CyclingSession? =
             sessionCoveringTimestamp
+
+        override suspend fun insertAllSessions(sessions: List<CyclingSession>) { }
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

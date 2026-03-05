@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.room.withTransaction
 import com.podometer.data.db.PodometerDatabase
 import com.podometer.domain.usecase.ExportDataUseCase
+import com.podometer.domain.usecase.ImportDataUseCase
 import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCase
 import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCaseImpl
 import com.podometer.domain.usecase.GetTodayStepsUseCase
@@ -18,6 +19,10 @@ import com.podometer.domain.usecase.OverrideActivityUseCaseImpl
 import com.podometer.domain.usecase.RecomputeActivitySessionsUseCase
 import com.podometer.domain.usecase.RecomputeActivitySessionsUseCaseImpl
 import com.podometer.domain.usecase.TransactionRunner
+import com.podometer.data.db.ActivityTransitionDao
+import com.podometer.data.db.CyclingSessionDao
+import com.podometer.data.db.SensorWindowDao
+import com.podometer.data.db.StepDao
 import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.StepRepository
 import dagger.Binds
@@ -93,10 +98,24 @@ abstract class UseCaseModule {
         fun provideExportDataUseCase(
             stepRepository: StepRepository,
             cyclingRepository: CyclingRepository,
+            sensorWindowDao: SensorWindowDao,
         ): ExportDataUseCase = ExportDataUseCase(
             stepRepository = stepRepository,
             cyclingRepository = cyclingRepository,
+            sensorWindowDao = sensorWindowDao,
             deviceModel = Build.MODEL,
+        )
+
+        @Provides
+        @Singleton
+        fun provideImportDataUseCase(
+            stepDao: StepDao,
+            activityTransitionDao: ActivityTransitionDao,
+            cyclingSessionDao: CyclingSessionDao,
+        ): ImportDataUseCase = ImportDataUseCase(
+            stepDao = stepDao,
+            activityTransitionDao = activityTransitionDao,
+            cyclingSessionDao = cyclingSessionDao,
         )
     }
 }

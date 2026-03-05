@@ -137,6 +137,14 @@ interface StepDao {
     """)
     suspend fun addCyclingMinutes(date: String, minutes: Int)
 
+    /** Inserts multiple [DailySummary] rows, replacing on conflict. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllDailySummaries(summaries: List<DailySummary>)
+
+    /** Inserts multiple [HourlyStepAggregate] rows, replacing on conflict. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllHourlyAggregates(aggregates: List<HourlyStepAggregate>)
+
     /**
      * Returns all [DailySummary] rows ordered by date ascending.
      * One-shot suspend query intended for data export — not a [Flow].
