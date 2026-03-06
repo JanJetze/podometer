@@ -24,8 +24,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DailySummary::class,
         CyclingSession::class,
         SensorWindow::class,
+        ManualSessionOverride::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class PodometerDatabase : RoomDatabase() {
@@ -37,6 +38,8 @@ abstract class PodometerDatabase : RoomDatabase() {
     abstract fun cyclingSessionDao(): CyclingSessionDao
 
     abstract fun sensorWindowDao(): SensorWindowDao
+
+    abstract fun manualSessionOverrideDao(): ManualSessionOverrideDao
 
     companion object {
         /**
@@ -79,6 +82,26 @@ abstract class PodometerDatabase : RoomDatabase() {
                                 ORDER BY magnitudeVariance DESC
                             ) AS rn FROM sensor_windows
                         ) WHERE rn = 1
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        /**
+         * Migration from version 3 to 4: creates the `manual_session_overrides`
+         * table for user-edited activity session boundaries.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS manual_session_overrides (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        startTime INTEGER NOT NULL,
+                        endTime INTEGER NOT NULL,
+                        activity TEXT NOT NULL,
+                        date TEXT NOT NULL
                     )
                     """.trimIndent(),
                 )
