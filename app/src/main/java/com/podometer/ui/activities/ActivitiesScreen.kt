@@ -16,6 +16,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -23,8 +24,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,10 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
-import com.podometer.domain.model.TransitionEvent
 import com.podometer.ui.dashboard.ActivityLog
-import com.podometer.ui.dashboard.ActivityTimeline
-import com.podometer.ui.dashboard.buildTimelineSegments
 import com.podometer.util.DateTimeUtils
 import java.time.Instant
 import java.time.LocalDate
@@ -62,6 +62,8 @@ fun ActivitiesScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var showDatePicker by remember { mutableStateOf(false) }
+    var highlightedSessionIndex by remember { mutableIntStateOf(-1) }
+    var editingSession by remember { mutableStateOf<com.podometer.domain.model.ActivitySession?>(null) }
 
     Scaffold(
         topBar = {
@@ -101,39 +103,68 @@ fun ActivitiesScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                if (uiState.sessions.isEmpty()) {
+                // Step Graph (shown even when sessions are empty, as long as windows exist)
+                val dayStartMillis = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
+                val dayEndMillis = dayStartMillis + 86_400_000L
+                val nowMillis = System.currentTimeMillis()
+
+                if (uiState.windows.isNotEmpty()) {
+                    val graphData = remember(uiState.windows, uiState.sessions, uiState.bucketSizeMs) {
+                        buildStepGraphData(
+                            windows = uiState.windows,
+                            sessions = uiState.sessions,
+                            bucketSizeMs = uiState.bucketSizeMs,
+                            dayStartMillis = dayStartMillis,
+                            dayEndMillis = dayEndMillis,
+                        )
+                    }
+
+                    StepGraph(
+                        graphData = graphData,
+                        sessions = uiState.sessions,
+                        dayStartMillis = dayStartMillis,
+                        dayEndMillis = dayEndMillis,
+                        highlightedSessionIndex = highlightedSessionIndex,
+                        onSessionHighlight = { index ->
+                            highlightedSessionIndex = if (highlightedSessionIndex == index) -1 else index
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    BucketSizeSelector(
+                        selectedMs = uiState.bucketSizeMs,
+                        onBucketSelected = { viewModel.setBucketSize(it) },
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                if (uiState.sessions.isEmpty() && uiState.windows.isEmpty()) {
                     Text(
                         text = stringResource(R.string.activities_no_data),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 16.dp),
                     )
-                } else {
-                    // Activity Timeline
-                    val dayStartMillis = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
-                    val dayEndMillis = dayStartMillis + 86_400_000L
-                    val nowMillis = System.currentTimeMillis()
+                }
 
-                    // Build transitions from sessions for the timeline.
-                    // The recomputed sessions already have correct timestamps.
-                    val transitions = sessionsToTransitions(uiState.sessions)
-
-                    ActivityTimeline(
-                        segments = buildTimelineSegments(
-                            transitions = transitions,
-                            dayStartMillis = dayStartMillis,
-                            dayEndMillis = dayEndMillis,
-                            nowMillis = if (uiState.isToday) nowMillis else dayEndMillis,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Activity Log (read-only on past days — override is disabled)
+                if (uiState.sessions.isNotEmpty()) {
                     ActivityLog(
                         sessions = uiState.sessions,
-                        onOverride = { _, _ -> }, // overrides not supported on recomputed data
+                        onOverride = { transitionId, _ ->
+                            // Open edit sheet for the tapped session
+                            val session = uiState.sessions.find {
+                                it.startTransitionId == transitionId
+                            }
+                            if (session != null && uiState.windows.isNotEmpty()) {
+                                editingSession = session
+                                // Also highlight the session on the graph
+                                val idx = uiState.sessions.indexOf(session)
+                                highlightedSessionIndex = idx
+                            }
+                        },
                         snackbarHostState = snackbarHostState,
                         onUndo = {},
                         nowMillis = if (uiState.isToday) nowMillis else dayEndMillis,
@@ -175,41 +206,46 @@ fun ActivitiesScreen(
             DatePicker(state = datePickerState)
         }
     }
-}
 
-/**
- * Converts a list of [com.podometer.domain.model.ActivitySession]s into
- * [TransitionEvent]s suitable for [buildTimelineSegments].
- *
- * Each session produces a start transition (STILL → activity) and, if closed,
- * an end transition (activity → STILL).
- */
-private fun sessionsToTransitions(
-    sessions: List<com.podometer.domain.model.ActivitySession>,
-): List<TransitionEvent> {
-    val transitions = mutableListOf<TransitionEvent>()
-    var id = 1
-    for (session in sessions) {
-        transitions.add(
-            TransitionEvent(
-                id = id++,
-                timestamp = session.startTime,
-                fromActivity = com.podometer.domain.model.ActivityState.STILL,
-                toActivity = session.activity,
-                isManualOverride = false,
-            ),
-        )
-        if (session.endTime != null) {
-            transitions.add(
-                TransitionEvent(
-                    id = id++,
-                    timestamp = session.endTime,
-                    fromActivity = session.activity,
-                    toActivity = com.podometer.domain.model.ActivityState.STILL,
-                    isManualOverride = false,
-                ),
+    // Session edit bottom sheet
+    if (editingSession != null) {
+        val session = editingSession!!
+        val dayStartMillis = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
+        val dayEndMillis = dayStartMillis + 86_400_000L
+        val isManualOverride = session.isManualOverride
+
+        ModalBottomSheet(
+            onDismissRequest = {
+                editingSession = null
+                highlightedSessionIndex = -1
+            },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            SessionEditSheet(
+                session = session,
+                windows = uiState.windows,
+                dayStartMillis = dayStartMillis,
+                dayEndMillis = dayEndMillis,
+                onSave = { startMs, endMs, activity ->
+                    viewModel.saveSessionOverride(startMs, endMs, activity)
+                    editingSession = null
+                    highlightedSessionIndex = -1
+                },
+                onCancel = {
+                    editingSession = null
+                    highlightedSessionIndex = -1
+                },
+                onDelete = if (isManualOverride) {
+                    {
+                        // startTransitionId is negated override ID
+                        viewModel.deleteSessionOverride(-session.startTransitionId.toLong())
+                        editingSession = null
+                        highlightedSessionIndex = -1
+                    }
+                } else {
+                    null
+                },
             )
         }
     }
-    return transitions
 }

@@ -4,7 +4,12 @@ package com.podometer.ui.activities
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import com.podometer.data.db.ManualSessionOverride
+import com.podometer.data.db.ManualSessionOverrideDao
+import com.podometer.data.db.SensorWindow
+import com.podometer.data.db.SensorWindowDao
 import com.podometer.data.repository.PreferencesManager
+import com.podometer.data.repository.SensorWindowRepository
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.usecase.RecomputeActivitySessionsUseCase
@@ -60,6 +65,23 @@ class ActivitiesViewModelTest {
             flowOf(sessions)
     }
 
+    private class FakeSensorWindowDao : SensorWindowDao {
+        override suspend fun insert(window: SensorWindow) {}
+        override suspend fun insertAll(windows: List<SensorWindow>) {}
+        override fun getWindowsBetween(startMs: Long, endMs: Long): Flow<List<SensorWindow>> =
+            flowOf(emptyList())
+        override suspend fun getAllWindows(): List<SensorWindow> = emptyList()
+        override suspend fun deleteOlderThan(cutoffMs: Long) {}
+    }
+
+    private class FakeManualSessionOverrideDao : ManualSessionOverrideDao {
+        override suspend fun insert(override: ManualSessionOverride): Long = 1L
+        override suspend fun update(override: ManualSessionOverride) {}
+        override suspend fun deleteById(id: Long) {}
+        override fun getOverridesForDate(date: String): Flow<List<ManualSessionOverride>> =
+            flowOf(emptyList())
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private fun buildPreferencesManager(): PreferencesManager {
@@ -73,6 +95,8 @@ class ActivitiesViewModelTest {
         sessions: List<ActivitySession> = emptyList(),
     ): ActivitiesViewModel = ActivitiesViewModel(
         recomputeActivitySessions = FakeRecomputeUseCase(sessions),
+        sensorWindowRepository = SensorWindowRepository(FakeSensorWindowDao()),
+        manualSessionOverrideDao = FakeManualSessionOverrideDao(),
         preferencesManager = buildPreferencesManager(),
     )
 
