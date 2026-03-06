@@ -293,6 +293,82 @@ class StepGraphTest {
 
     // ─── Dominant activity ──────────────────────────────────────────────────
 
+    // ─── niceAxisMax ─────────────────────────────────────────────────────
+
+    @Test
+    fun `niceAxisMax returns 100 for zero`() {
+        assertEquals(100, niceAxisMax(0))
+    }
+
+    @Test
+    fun `niceAxisMax returns 100 for negative`() {
+        assertEquals(100, niceAxisMax(-5))
+    }
+
+    @Test
+    fun `niceAxisMax rounds small values to 1-2-5 multiples`() {
+        assertEquals(1, niceAxisMax(1))
+        assertEquals(2, niceAxisMax(2))
+        assertEquals(5, niceAxisMax(3))
+        assertEquals(5, niceAxisMax(5))
+        assertEquals(10, niceAxisMax(6))
+        assertEquals(10, niceAxisMax(9))
+        assertEquals(10, niceAxisMax(10))
+    }
+
+    @Test
+    fun `niceAxisMax rounds hundreds correctly`() {
+        assertEquals(100, niceAxisMax(100))
+        assertEquals(200, niceAxisMax(150))
+        assertEquals(200, niceAxisMax(200))
+        assertEquals(500, niceAxisMax(300))
+        assertEquals(500, niceAxisMax(500))
+        assertEquals(1000, niceAxisMax(600))
+    }
+
+    @Test
+    fun `niceAxisMax rounds thousands correctly`() {
+        assertEquals(1000, niceAxisMax(1000))
+        assertEquals(2000, niceAxisMax(1500))
+        assertEquals(5000, niceAxisMax(3000))
+        assertEquals(10000, niceAxisMax(8000))
+        assertEquals(20000, niceAxisMax(15000))
+    }
+
+    @Test
+    fun `niceAxisMax result is always gte input`() {
+        val testValues = listOf(1, 7, 42, 99, 123, 567, 1234, 5678, 9999, 15000)
+        for (v in testValues) {
+            assertTrue("niceAxisMax($v) = ${niceAxisMax(v)} should be >= $v", niceAxisMax(v) >= v)
+        }
+    }
+
+    // ─── formatAxisLabel ─────────────────────────────────────────────────
+
+    @Test
+    fun `formatAxisLabel shows plain number below 1000`() {
+        assertEquals("0", formatAxisLabel(0))
+        assertEquals("500", formatAxisLabel(500))
+        assertEquals("999", formatAxisLabel(999))
+    }
+
+    @Test
+    fun `formatAxisLabel shows thousands with decimal`() {
+        assertEquals("1k", formatAxisLabel(1000))
+        assertEquals("1.5k", formatAxisLabel(1500))
+        assertEquals("2.5k", formatAxisLabel(2500))
+        assertEquals("9.9k", formatAxisLabel(9900))
+    }
+
+    @Test
+    fun `formatAxisLabel shows plain k for 10000 and above`() {
+        assertEquals("10k", formatAxisLabel(10000))
+        assertEquals("15k", formatAxisLabel(15000))
+        assertEquals("20k", formatAxisLabel(20000))
+    }
+
+    // ─── Dominant activity ──────────────────────────────────────────────
+
     @Test
     fun `dominant activity assigned to graph points from sessions`() {
         val sessions = listOf(

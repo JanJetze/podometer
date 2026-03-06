@@ -366,7 +366,7 @@ internal fun niceAxisMax(value: Int): Int {
 /**
  * Formats a step count for Y-axis labels: "1.2k" for thousands, plain number otherwise.
  */
-private fun formatAxisLabel(value: Int): String = when {
+internal fun formatAxisLabel(value: Int): String = when {
     value >= 10_000 -> "${value / 1_000}k"
     value >= 1_000 -> {
         val thousands = value / 1_000
