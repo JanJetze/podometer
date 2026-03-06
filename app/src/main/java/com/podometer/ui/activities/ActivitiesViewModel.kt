@@ -67,9 +67,16 @@ class ActivitiesViewModel @Inject constructor(
 
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     private val _bucketSizeMs = MutableStateFlow(300_000L)
+    private val _useTestData = MutableStateFlow(false)
 
     /** The currently selected date. */
     val selectedDate: StateFlow<LocalDate> = _selectedDate
+
+    /** Returns the override date key, prefixed for test data to avoid leaking. */
+    private fun overrideDateKey(date: LocalDate, isTestData: Boolean): String {
+        val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        return if (isTestData) "test:$dateStr" else dateStr
+    }
 
     /** Combined UI state emitted to the Activities screen. */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -77,15 +84,18 @@ class ActivitiesViewModel @Inject constructor(
         _selectedDate,
         preferencesManager.useTestData(),
     ) { date, useTest -> date to useTest }.flatMapLatest { (date, useTestData) ->
+        _useTestData.value = useTestData
         val nowMillis = System.currentTimeMillis()
-        val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val dateKey = overrideDateKey(date, useTestData)
 
         if (useTestData) {
             combine(
                 flowOf(TestDataGenerator.generateSessions(date)),
                 flowOf(TestDataGenerator.generateWindows(date)),
+                manualSessionOverrideDao.getOverridesForDate(dateKey),
                 _bucketSizeMs,
-            ) { sessions, windows, bucketSizeMs ->
+            ) { generatedSessions, windows, overrides, bucketSizeMs ->
+                val sessions = mergeSessionOverrides(generatedSessions, overrides)
                 ActivitiesUiState(
                     selectedDate = date,
                     sessions = sessions,
@@ -100,7 +110,7 @@ class ActivitiesViewModel @Inject constructor(
             combine(
                 recomputeActivitySessions(date, nowMillis),
                 sensorWindowRepository.getWindowsForDay(date),
-                manualSessionOverrideDao.getOverridesForDate(dateStr),
+                manualSessionOverrideDao.getOverridesForDate(dateKey),
                 _bucketSizeMs,
             ) { recomputedSessions, windows, overrides, bucketSizeMs ->
                 val sessions = mergeSessionOverrides(recomputedSessions, overrides)
@@ -127,17 +137,34 @@ class ActivitiesViewModel @Inject constructor(
     }
 
     /** Saves a new or updated manual session override. */
-    fun saveSessionOverride(startMs: Long, endMs: Long, activity: ActivityState) {
-        val dateStr = _selectedDate.value.format(DateTimeFormatter.ISO_LOCAL_DATE)
+    fun saveSessionOverride(
+        startMs: Long,
+        endMs: Long,
+        activity: ActivityState,
+        existingOverrideId: Long = 0,
+    ) {
         viewModelScope.launch {
-            manualSessionOverrideDao.insert(
-                ManualSessionOverride(
-                    startTime = startMs,
-                    endTime = endMs,
-                    activity = activity.name,
-                    date = dateStr,
-                ),
-            )
+            val dateKey = overrideDateKey(_selectedDate.value, _useTestData.value)
+            if (existingOverrideId > 0) {
+                manualSessionOverrideDao.update(
+                    ManualSessionOverride(
+                        id = existingOverrideId,
+                        startTime = startMs,
+                        endTime = endMs,
+                        activity = activity.name,
+                        date = dateKey,
+                    ),
+                )
+            } else {
+                manualSessionOverrideDao.insert(
+                    ManualSessionOverride(
+                        startTime = startMs,
+                        endTime = endMs,
+                        activity = activity.name,
+                        date = dateKey,
+                    ),
+                )
+            }
         }
     }
 

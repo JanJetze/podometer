@@ -136,4 +136,30 @@ class MergeSessionOverridesUseCaseTest {
         assertEquals(1, result.size)
         assertEquals(ActivityState.CYCLING, result[0].activity)
     }
+
+    @Test
+    fun `STILL override suppresses detected session without appearing in result`() {
+        val sessions = listOf(
+            session(ActivityState.WALKING, 9 * hour, 10 * hour),
+        )
+        val overrides = listOf(
+            override("STILL", 9 * hour, 10 * hour),
+        )
+        val result = mergeSessionOverrides(sessions, overrides)
+        assertTrue("STILL override should suppress the session entirely", result.isEmpty())
+    }
+
+    @Test
+    fun `STILL override only suppresses overlapping sessions`() {
+        val sessions = listOf(
+            session(ActivityState.WALKING, 9 * hour, 10 * hour, id = 1),
+            session(ActivityState.WALKING, 14 * hour, 15 * hour, id = 2),
+        )
+        val overrides = listOf(
+            override("STILL", 9 * hour, 10 * hour),
+        )
+        val result = mergeSessionOverrides(sessions, overrides)
+        assertEquals(1, result.size)
+        assertEquals(14 * hour, result[0].startTime)
+    }
 }

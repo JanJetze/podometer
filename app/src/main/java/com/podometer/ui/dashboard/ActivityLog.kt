@@ -10,23 +10,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -38,15 +25,9 @@ import com.podometer.R
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 import com.podometer.ui.theme.PodometerTheme
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-
-/** Snackbar auto-dismiss timeout in milliseconds (5 seconds per spec). */
-private const val SNACKBAR_TIMEOUT_MS = 5_000L
 
 // ─── Pure helper functions (unit-testable) ────────────────────────────────────
 
@@ -122,40 +103,23 @@ fun activityLabel(activity: ActivityState): String = when (activity) {
 /**
  * Renders a consolidated list of today's activity sessions.
  *
- * Replaces both [TransitionLog] and [CyclingSessionList] with a unified view.
  * Each row shows an icon, activity label, time range, and duration.
- *
- * Tapping a row opens a [ModalBottomSheet] with reclassification options.
- * On override, [onOverride] is called and a snackbar is shown with an "Undo" action.
+ * Tapping a row invokes [onSessionClick] so the parent can open an edit sheet.
  *
  * **Empty state**: When [sessions] is empty, shows "No activities detected today".
  *
- * @param sessions          List of [ActivitySession]s to display.
- * @param onOverride        Callback invoked when the user confirms an override.
- *                          Receives the transition id and the new [ActivityState].
- * @param snackbarHostState [SnackbarHostState] used to show the "Activity overridden" snackbar.
- * @param onUndo            Callback invoked when the user taps "Undo" in the snackbar.
- * @param nowMillis         Current wall-clock time for calculating ongoing session duration.
- * @param modifier          Optional [Modifier] applied to the root [Column].
+ * @param sessions       List of [ActivitySession]s to display.
+ * @param onSessionClick Callback invoked when the user taps a session row.
+ * @param nowMillis      Current wall-clock time for calculating ongoing session duration.
+ * @param modifier       Optional [Modifier] applied to the root [Column].
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActivityLog(
     sessions: List<ActivitySession>,
-    onOverride: (transitionId: Int, newActivity: ActivityState) -> Unit,
-    snackbarHostState: SnackbarHostState,
-    onUndo: () -> Unit,
+    onSessionClick: (ActivitySession) -> Unit,
     nowMillis: Long = System.currentTimeMillis(),
     modifier: Modifier = Modifier,
 ) {
-    val overriddenLabel = stringResource(R.string.transition_overridden)
-    val undoLabel = stringResource(R.string.transition_undo)
-    val scope = rememberCoroutineScope()
-
-    var selectedSession by remember { mutableStateOf<ActivitySession?>(null) }
-    var snackbarJob by remember { mutableStateOf<Job?>(null) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
     Column(modifier = modifier) {
         if (sessions.isEmpty()) {
             Text(
@@ -168,43 +132,9 @@ fun ActivityLog(
                 ActivityLogItem(
                     session = session,
                     nowMillis = nowMillis,
-                    onClick = { selectedSession = session },
+                    onClick = { onSessionClick(session) },
                 )
             }
-        }
-    }
-
-    // Bottom sheet — rendered outside the Column so it overlays the full screen
-    if (selectedSession != null) {
-        val session = selectedSession!!
-        ModalBottomSheet(
-            onDismissRequest = { selectedSession = null },
-            sheetState = sheetState,
-        ) {
-            ActivityOverrideSheet(
-                session = session,
-                onOptionSelected = { newActivity ->
-                    selectedSession = null
-                    onOverride(session.startTransitionId, newActivity)
-                    snackbarJob?.cancel()
-                    snackbarJob = scope.launch {
-                        try {
-                            val result = withTimeoutOrNull(SNACKBAR_TIMEOUT_MS) {
-                                snackbarHostState.showSnackbar(
-                                    message = overriddenLabel,
-                                    actionLabel = undoLabel,
-                                    duration = SnackbarDuration.Indefinite,
-                                )
-                            }
-                            if (result == SnackbarResult.ActionPerformed) {
-                                onUndo()
-                            }
-                        } finally {
-                            snackbarHostState.currentSnackbarData?.dismiss()
-                        }
-                    }
-                },
-            )
         }
     }
 }
@@ -239,7 +169,6 @@ private fun ActivityLogItem(
     } else {
         stringResource(R.string.activity_session_ongoing)
     }
-    val overrideBadgeLabel = stringResource(R.string.transition_override_badge)
     val itemContentDescription = stringResource(
         R.string.cd_activity_session_item,
         label,
@@ -295,97 +224,6 @@ private fun ActivityLogItem(
             )
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-
-        if (session.isManualOverride) {
-            Spacer(modifier = Modifier.width(8.dp))
-            AssistChip(
-                onClick = onClick,
-                label = {
-                    Text(
-                        text = overrideBadgeLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                },
-            )
-        }
-    }
-}
-
-/**
- * Content of the override bottom sheet for an activity session.
- *
- * Shows buttons for each [ActivityState] that differs from the session's current activity.
- *
- * @param session          The [ActivitySession] being overridden.
- * @param onOptionSelected Callback invoked with the chosen [ActivityState].
- */
-@Composable
-private fun ActivityOverrideSheet(
-    session: ActivitySession,
-    onOptionSelected: (ActivityState) -> Unit,
-) {
-    val sheetCdLabel = stringResource(
-        R.string.cd_activity_override_options,
-        formatActivityTime(session.startTime),
-    )
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .padding(bottom = 24.dp)
-            .semantics { contentDescription = sheetCdLabel },
-    ) {
-        if (session.activity != ActivityState.WALKING) {
-            TextButton(
-                onClick = { onOptionSelected(ActivityState.WALKING) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-            ) {
-                Icon(
-                    imageVector = ActivityState.WALKING.icon(),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = stringResource(R.string.transition_mark_as_walking))
-            }
-        }
-
-        if (session.activity != ActivityState.CYCLING) {
-            TextButton(
-                onClick = { onOptionSelected(ActivityState.CYCLING) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-            ) {
-                Icon(
-                    imageVector = ActivityState.CYCLING.icon(),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = stringResource(R.string.transition_mark_as_cycling))
-            }
-        }
-
-        if (session.activity != ActivityState.STILL) {
-            TextButton(
-                onClick = { onOptionSelected(ActivityState.STILL) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-            ) {
-                Icon(
-                    imageVector = ActivityState.STILL.icon(),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = stringResource(R.string.transition_mark_as_still))
-            }
-        }
     }
 }
 
@@ -398,9 +236,7 @@ private fun PreviewActivityLogEmpty() {
     PodometerTheme {
         ActivityLog(
             sessions = emptyList(),
-            onOverride = { _, _ -> },
-            snackbarHostState = remember { SnackbarHostState() },
-            onUndo = {},
+            onSessionClick = {},
             modifier = Modifier.padding(16.dp),
         )
     }
@@ -439,9 +275,7 @@ private fun PreviewActivityLogMultiple() {
     PodometerTheme {
         ActivityLog(
             sessions = sessions,
-            onOverride = { _, _ -> },
-            snackbarHostState = remember { SnackbarHostState() },
-            onUndo = {},
+            onSessionClick = {},
             nowMillis = 14L * hour + 30L * 60_000L,
             modifier = Modifier.padding(16.dp),
         )
@@ -472,9 +306,7 @@ private fun PreviewActivityLogWithOverride() {
     PodometerTheme {
         ActivityLog(
             sessions = sessions,
-            onOverride = { _, _ -> },
-            snackbarHostState = remember { SnackbarHostState() },
-            onUndo = {},
+            onSessionClick = {},
             modifier = Modifier.padding(16.dp),
         )
     }

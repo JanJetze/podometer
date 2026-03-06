@@ -11,15 +11,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -38,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
+import com.podometer.domain.model.ActivitySession
+import com.podometer.domain.model.ActivityState
 import com.podometer.ui.dashboard.ActivityLog
 import com.podometer.util.DateTimeUtils
 import java.time.Instant
@@ -60,10 +64,9 @@ fun ActivitiesScreen(
     viewModel: ActivitiesViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
     var showDatePicker by remember { mutableStateOf(false) }
     var highlightedSessionIndex by remember { mutableIntStateOf(-1) }
-    var editingSession by remember { mutableStateOf<com.podometer.domain.model.ActivitySession?>(null) }
+    var editingSession by remember { mutableStateOf<ActivitySession?>(null) }
 
     Scaffold(
         topBar = {
@@ -71,7 +74,25 @@ fun ActivitiesScreen(
                 title = { Text(text = stringResource(R.string.screen_activities)) },
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        floatingActionButton = {
+            if (!uiState.isLoading && uiState.windows.isNotEmpty()) {
+                FloatingActionButton(
+                    onClick = {
+                        val dayStart = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
+                        val noon = dayStart + 12 * 3_600_000L
+                        editingSession = ActivitySession(
+                            activity = ActivityState.WALKING,
+                            startTime = noon,
+                            endTime = noon + 30 * 60_000L,
+                            startTransitionId = 0,
+                            isManualOverride = false,
+                        )
+                    },
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add activity")
+                }
+            }
+        },
         modifier = modifier,
     ) { innerPadding ->
         if (uiState.isLoading) {
@@ -153,20 +174,11 @@ fun ActivitiesScreen(
                 if (uiState.sessions.isNotEmpty()) {
                     ActivityLog(
                         sessions = uiState.sessions,
-                        onOverride = { transitionId, _ ->
-                            // Open edit sheet for the tapped session
-                            val session = uiState.sessions.find {
-                                it.startTransitionId == transitionId
-                            }
-                            if (session != null && uiState.windows.isNotEmpty()) {
-                                editingSession = session
-                                // Also highlight the session on the graph
-                                val idx = uiState.sessions.indexOf(session)
-                                highlightedSessionIndex = idx
-                            }
+                        onSessionClick = { session ->
+                            editingSession = session
+                            val idx = uiState.sessions.indexOf(session)
+                            highlightedSessionIndex = idx
                         },
-                        snackbarHostState = snackbarHostState,
-                        onUndo = {},
                         nowMillis = if (uiState.isToday) nowMillis else dayEndMillis,
                     )
 
@@ -212,7 +224,7 @@ fun ActivitiesScreen(
         val session = editingSession!!
         val dayStartMillis = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
         val dayEndMillis = dayStartMillis + 86_400_000L
-        val isManualOverride = session.isManualOverride
+        val isNew = session.startTransitionId == 0
 
         ModalBottomSheet(
             onDismissRequest = {
@@ -227,7 +239,12 @@ fun ActivitiesScreen(
                 dayStartMillis = dayStartMillis,
                 dayEndMillis = dayEndMillis,
                 onSave = { startMs, endMs, activity ->
-                    viewModel.saveSessionOverride(startMs, endMs, activity)
+                    val overrideId = if (session.isManualOverride) {
+                        -session.startTransitionId.toLong()
+                    } else {
+                        0L
+                    }
+                    viewModel.saveSessionOverride(startMs, endMs, activity, overrideId)
                     editingSession = null
                     highlightedSessionIndex = -1
                 },
@@ -235,10 +252,19 @@ fun ActivitiesScreen(
                     editingSession = null
                     highlightedSessionIndex = -1
                 },
-                onDelete = if (isManualOverride) {
+                onDelete = if (!isNew) {
                     {
-                        // startTransitionId is negated override ID
-                        viewModel.deleteSessionOverride(-session.startTransitionId.toLong())
+                        if (session.isManualOverride) {
+                            // Delete the manual override directly
+                            viewModel.deleteSessionOverride(-session.startTransitionId.toLong())
+                        } else {
+                            // "Delete" a detected session by overriding it as STILL
+                            viewModel.saveSessionOverride(
+                                session.startTime,
+                                session.endTime ?: (session.startTime + 30 * 60_000L),
+                                ActivityState.STILL,
+                            )
+                        }
                         editingSession = null
                         highlightedSessionIndex = -1
                     }

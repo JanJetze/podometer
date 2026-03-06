@@ -44,6 +44,8 @@ fun mergeSessionOverrides(
         }
     }
 
-    // Merge and sort by start time
-    return (filteredRecomputed + overrideSessions).sortedBy { it.startTime }
+    // Merge, exclude STILL overrides (they only suppress detected sessions),
+    // and sort by start time
+    val activeOverrides = overrideSessions.filter { it.activity != ActivityState.STILL }
+    return (filteredRecomputed + activeOverrides).sortedBy { it.startTime }
 }

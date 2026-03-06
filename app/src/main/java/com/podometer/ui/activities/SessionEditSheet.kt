@@ -54,18 +54,18 @@ private val EDIT_GRAPH_HEIGHT = 150.dp
 private const val SELECTED_REGION_ALPHA = 0.2f
 
 /**
- * Bottom sheet content for editing an activity session's boundaries and type.
+ * Bottom sheet content for editing or creating an activity session.
  *
  * Shows a zoomed step graph for the session's time range with draggable start/end
  * markers. Activity type chips allow reclassifying the session.
  *
- * @param session        The session being edited.
+ * @param session        The session being edited (or a template for a new session).
  * @param windows        Sensor windows for the day (used to draw the zoomed graph).
  * @param dayStartMillis Start of the day in epoch millis.
  * @param dayEndMillis   End of the day in epoch millis.
  * @param onSave         Callback with the edited start time, end time, and activity.
  * @param onCancel       Callback when the user cancels editing.
- * @param onDelete       Callback to delete a manual override (null if not deletable).
+ * @param onDelete       Callback to delete the session (null hides the button).
  */
 @Composable
 fun SessionEditSheet(
@@ -77,6 +77,7 @@ fun SessionEditSheet(
     onCancel: () -> Unit,
     onDelete: (() -> Unit)? = null,
 ) {
+    val isNew = session.startTransitionId == 0
     val paddingMs = SESSION_PADDING_MINUTES * 60_000L
     val sessionEnd = session.endTime ?: (session.startTime + 30 * 60_000L)
     val viewStart = (session.startTime - paddingMs).coerceAtLeast(dayStartMillis)
@@ -115,7 +116,7 @@ fun SessionEditSheet(
             .padding(bottom = 24.dp),
     ) {
         Text(
-            text = "Edit Activity",
+            text = if (isNew) "New Activity" else "Edit Activity",
             style = MaterialTheme.typography.titleMedium,
         )
 
