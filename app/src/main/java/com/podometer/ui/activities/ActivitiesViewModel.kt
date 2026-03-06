@@ -3,9 +3,14 @@ package com.podometer.ui.activities
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.podometer.data.db.ManualSessionOverride
+import com.podometer.data.db.ManualSessionOverrideDao
+import com.podometer.data.db.SensorWindow
+import com.podometer.data.repository.SensorWindowRepository
 import com.podometer.domain.model.ActivitySession
-import com.podometer.domain.model.TransitionEvent
+import com.podometer.domain.model.ActivityState
 import com.podometer.domain.usecase.RecomputeActivitySessionsUseCase
+import com.podometer.domain.usecase.mergeSessionOverrides
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +19,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 /**
@@ -22,6 +29,8 @@ import javax.inject.Inject
  *
  * @property selectedDate     The date whose activity sessions are displayed.
  * @property sessions         Recomputed activity sessions for [selectedDate].
+ * @property windows          Raw sensor windows for the step graph.
+ * @property bucketSizeMs     Time bucket size for step graph aggregation.
  * @property isToday          True when [selectedDate] is the current day.
  * @property dateLabel        Formatted date label for display (e.g. "Monday, Mar 3").
  * @property isLoading        True while initial data is loading.
@@ -29,6 +38,8 @@ import javax.inject.Inject
 data class ActivitiesUiState(
     val selectedDate: LocalDate = LocalDate.now(),
     val sessions: List<ActivitySession> = emptyList(),
+    val windows: List<SensorWindow> = emptyList(),
+    val bucketSizeMs: Long = 300_000L,
     val isToday: Boolean = true,
     val dateLabel: String = "",
     val isLoading: Boolean = true,
@@ -43,6 +54,8 @@ data class ActivitiesUiState(
 @HiltViewModel
 class ActivitiesViewModel @Inject constructor(
     private val recomputeActivitySessions: RecomputeActivitySessionsUseCase,
+    private val sensorWindowRepository: SensorWindowRepository,
+    private val manualSessionOverrideDao: ManualSessionOverrideDao,
 ) : ViewModel() {
 
     companion object {
@@ -50,6 +63,7 @@ class ActivitiesViewModel @Inject constructor(
     }
 
     private val _selectedDate = MutableStateFlow(LocalDate.now())
+    private val _bucketSizeMs = MutableStateFlow(300_000L)
 
     /** The currently selected date. */
     val selectedDate: StateFlow<LocalDate> = _selectedDate
@@ -58,14 +72,21 @@ class ActivitiesViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ActivitiesUiState> = _selectedDate.flatMapLatest { date ->
         val nowMillis = System.currentTimeMillis()
-        recomputeActivitySessions(date, nowMillis).combine(
-            MutableStateFlow(date),
-        ) { sessions, selectedDate ->
+        val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        combine(
+            recomputeActivitySessions(date, nowMillis),
+            sensorWindowRepository.getWindowsForDay(date),
+            manualSessionOverrideDao.getOverridesForDate(dateStr),
+            _bucketSizeMs,
+        ) { recomputedSessions, windows, overrides, bucketSizeMs ->
+            val sessions = mergeSessionOverrides(recomputedSessions, overrides)
             ActivitiesUiState(
-                selectedDate = selectedDate,
+                selectedDate = date,
                 sessions = sessions,
-                isToday = selectedDate == LocalDate.now(),
-                dateLabel = formatDateLabel(selectedDate),
+                windows = windows,
+                bucketSizeMs = bucketSizeMs,
+                isToday = date == LocalDate.now(),
+                dateLabel = formatDateLabel(date),
                 isLoading = false,
             )
         }
@@ -74,6 +95,33 @@ class ActivitiesViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
         initialValue = ActivitiesUiState(),
     )
+
+    /** Updates the bucket size for the step graph. */
+    fun setBucketSize(ms: Long) {
+        _bucketSizeMs.value = ms
+    }
+
+    /** Saves a new or updated manual session override. */
+    fun saveSessionOverride(startMs: Long, endMs: Long, activity: ActivityState) {
+        val dateStr = _selectedDate.value.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        viewModelScope.launch {
+            manualSessionOverrideDao.insert(
+                ManualSessionOverride(
+                    startTime = startMs,
+                    endTime = endMs,
+                    activity = activity.name,
+                    date = dateStr,
+                ),
+            )
+        }
+    }
+
+    /** Deletes a manual session override by its session's transition ID. */
+    fun deleteSessionOverride(overrideId: Long) {
+        viewModelScope.launch {
+            manualSessionOverrideDao.deleteById(overrideId)
+        }
+    }
 
     /** Navigates to the given [date]. */
     fun selectDate(date: LocalDate) {
