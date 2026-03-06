@@ -2,6 +2,7 @@
 package com.podometer.domain.usecase
 
 import com.podometer.data.db.SensorWindow
+import com.podometer.data.db.sumStepsInRange
 import com.podometer.data.repository.SensorWindowRepository
 import com.podometer.data.sensor.AccelerometerSampleBuffer
 import com.podometer.data.sensor.CyclingClassifier
@@ -109,10 +110,7 @@ class RecomputeActivitySessionsUseCaseImpl @Inject constructor(
             if (sessions.isEmpty() || windows.isEmpty()) return sessions
             return sessions.map { session ->
                 val endTime = session.endTime ?: Long.MAX_VALUE
-                val steps = windows
-                    .filter { it.timestamp in session.startTime until endTime }
-                    .sumOf { it.stepCount }
-                session.copy(stepCount = steps)
+                session.copy(stepCount = windows.sumStepsInRange(session.startTime, endTime))
             }
         }
     }

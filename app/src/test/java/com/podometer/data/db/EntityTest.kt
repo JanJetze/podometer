@@ -248,4 +248,37 @@ class EntityTest {
         val b = SensorWindow(id = 1, timestamp = 1000L, magnitudeVariance = 1.0, stepFrequencyHz = 0.0, stepCount = 0)
         assertEquals(a, b)
     }
+
+    // ─── sumStepsInRange ─────────────────────────────────────────────────────
+
+    private fun window(timestamp: Long, stepCount: Int) = SensorWindow(
+        timestamp = timestamp,
+        magnitudeVariance = 0.0,
+        stepFrequencyHz = 0.0,
+        stepCount = stepCount,
+    )
+
+    @Test
+    fun `sumStepsInRange sums windows within range`() {
+        val windows = listOf(window(100, 10), window(200, 20), window(300, 30))
+        assertEquals(60, windows.sumStepsInRange(100, 400))
+    }
+
+    @Test
+    fun `sumStepsInRange includes start boundary and excludes end boundary`() {
+        val windows = listOf(window(100, 10), window(200, 20), window(300, 30))
+        assertEquals(10, windows.sumStepsInRange(100, 200)) // only 100 included
+        assertEquals(20, windows.sumStepsInRange(200, 300)) // only 200 included
+    }
+
+    @Test
+    fun `sumStepsInRange returns zero for empty list`() {
+        assertEquals(0, emptyList<SensorWindow>().sumStepsInRange(0, 1000))
+    }
+
+    @Test
+    fun `sumStepsInRange returns zero when no windows in range`() {
+        val windows = listOf(window(100, 10), window(200, 20))
+        assertEquals(0, windows.sumStepsInRange(300, 400))
+    }
 }

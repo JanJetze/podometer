@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -36,8 +35,8 @@ import androidx.compose.ui.unit.dp
 import com.podometer.data.db.SensorWindow
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
+import com.podometer.ui.dashboard.activityLabel
 import com.podometer.ui.dashboard.formatActivityTime
-import com.podometer.ui.theme.ActivityColors
 import com.podometer.ui.theme.LocalActivityColors
 import com.podometer.ui.theme.PodometerTheme
 
@@ -54,18 +53,18 @@ private val EDIT_GRAPH_HEIGHT = 150.dp
 private const val SELECTED_REGION_ALPHA = 0.2f
 
 /**
- * Bottom sheet content for editing an activity session's boundaries and type.
+ * Bottom sheet content for editing or creating an activity session.
  *
  * Shows a zoomed step graph for the session's time range with draggable start/end
  * markers. Activity type chips allow reclassifying the session.
  *
- * @param session        The session being edited.
+ * @param session        The session being edited (or a template for a new session).
  * @param windows        Sensor windows for the day (used to draw the zoomed graph).
  * @param dayStartMillis Start of the day in epoch millis.
  * @param dayEndMillis   End of the day in epoch millis.
  * @param onSave         Callback with the edited start time, end time, and activity.
  * @param onCancel       Callback when the user cancels editing.
- * @param onDelete       Callback to delete a manual override (null if not deletable).
+ * @param onDelete       Callback to delete the session (null hides the button).
  */
 @Composable
 fun SessionEditSheet(
@@ -78,7 +77,7 @@ fun SessionEditSheet(
     onDelete: (() -> Unit)? = null,
 ) {
     val paddingMs = SESSION_PADDING_MINUTES * 60_000L
-    val sessionEnd = session.endTime ?: (session.startTime + 30 * 60_000L)
+    val sessionEnd = session.effectiveEndTime()
     val viewStart = (session.startTime - paddingMs).coerceAtLeast(dayStartMillis)
     val viewEnd = (sessionEnd + paddingMs).coerceAtMost(dayEndMillis)
     val viewDuration = (viewEnd - viewStart).toFloat()
@@ -115,7 +114,7 @@ fun SessionEditSheet(
             .padding(bottom = 24.dp),
     ) {
         Text(
-            text = "Edit Activity",
+            text = if (session.isNew) "New Activity" else "Edit Activity",
             style = MaterialTheme.typography.titleMedium,
         )
 
@@ -168,7 +167,7 @@ fun SessionEditSheet(
                 val chartHeight = size.height
 
                 // Draw selected region background
-                val regionColor = selectedActivity.regionColor(activityColors)
+                val regionColor = activityColors.colorFor(selectedActivity)
                 val x1 = startFraction * chartWidth
                 val x2 = endFraction * chartWidth
                 drawRect(
@@ -247,15 +246,7 @@ fun SessionEditSheet(
                 FilterChip(
                     selected = selectedActivity == activity,
                     onClick = { selectedActivity = activity },
-                    label = {
-                        Text(
-                            when (activity) {
-                                ActivityState.WALKING -> "Walking"
-                                ActivityState.CYCLING -> "Cycling"
-                                ActivityState.STILL -> "Still"
-                            },
-                        )
-                    },
+                    label = { Text(activityLabel(activity)) },
                 )
             }
         }
@@ -294,14 +285,6 @@ fun SessionEditSheet(
     }
 }
 
-/**
- * Returns the region color for an [ActivityState].
- */
-private fun ActivityState.regionColor(colors: ActivityColors): Color = when (this) {
-    ActivityState.WALKING -> colors.walking
-    ActivityState.CYCLING -> colors.cycling
-    ActivityState.STILL -> colors.still
-}
 
 // ─── Preview ────────────────────────────────────────────────────────────────
 

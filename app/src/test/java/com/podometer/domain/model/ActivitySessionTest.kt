@@ -189,4 +189,66 @@ class ActivitySessionTest {
         assertEquals(20_000L, result[1].startTime)
         assertNull(result[1].endTime)
     }
+
+    // ─── isNew property ─────────────────────────────────────────────────────
+
+    @Test
+    fun `isNew returns true when startTransitionId is zero`() {
+        val session = ActivitySession(
+            activity = ActivityState.WALKING,
+            startTime = 1000L,
+            endTime = 2000L,
+            startTransitionId = 0,
+            isManualOverride = false,
+        )
+        assertTrue(session.isNew)
+    }
+
+    @Test
+    fun `isNew returns false for detected or override sessions`() {
+        assertFalse(
+            ActivitySession(
+                activity = ActivityState.WALKING,
+                startTime = 1000L,
+                endTime = 2000L,
+                startTransitionId = 5,
+                isManualOverride = false,
+            ).isNew,
+        )
+        assertFalse(
+            ActivitySession(
+                activity = ActivityState.CYCLING,
+                startTime = 1000L,
+                endTime = 2000L,
+                startTransitionId = -3,
+                isManualOverride = true,
+            ).isNew,
+        )
+    }
+
+    // ─── effectiveEndTime ───────────────────────────────────────────────────
+
+    @Test
+    fun `effectiveEndTime returns endTime when present`() {
+        val session = ActivitySession(
+            activity = ActivityState.WALKING,
+            startTime = 1000L,
+            endTime = 5000L,
+            startTransitionId = 1,
+            isManualOverride = false,
+        )
+        assertEquals(5000L, session.effectiveEndTime())
+    }
+
+    @Test
+    fun `effectiveEndTime returns startTime plus 30 min when endTime is null`() {
+        val session = ActivitySession(
+            activity = ActivityState.WALKING,
+            startTime = 1000L,
+            endTime = null,
+            startTransitionId = 1,
+            isManualOverride = false,
+        )
+        assertEquals(1000L + ActivitySession.DEFAULT_DURATION_MS, session.effectiveEndTime())
+    }
 }

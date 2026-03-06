@@ -534,7 +534,7 @@ fun StepGraph(
                         val x2 = fractionToX(region.endFraction).coerceIn(0f, chartWidth)
                         if (x2 > x1) {
                             drawRect(
-                                color = region.activity.regionColor(activityColors),
+                                color = activityColors.colorFor(region.activity),
                                 topLeft = Offset(x1, 0f),
                                 size = Size(x2 - x1, chartHeight),
                                 alpha = REGION_ALPHA,
@@ -549,7 +549,7 @@ fun StepGraph(
                         val x2 = fractionToX(region.endFraction).coerceIn(0f, chartWidth)
                         if (x2 > x1) {
                             drawRect(
-                                color = region.activity.regionColor(activityColors),
+                                color = activityColors.colorFor(region.activity),
                                 topLeft = Offset(x1, 0f),
                                 size = Size(x2 - x1, chartHeight),
                                 alpha = HIGHLIGHT_ALPHA,
@@ -895,15 +895,6 @@ private fun StepGraphLegend(
             )
         }
     }
-}
-
-/**
- * Returns the background region color for an [ActivityState].
- */
-private fun ActivityState.regionColor(colors: ActivityColors): Color = when (this) {
-    ActivityState.WALKING -> colors.walking
-    ActivityState.CYCLING -> colors.cycling
-    ActivityState.STILL -> colors.still
 }
 
 // ─── Bucket Size Selector ─────────────────────────────────────────────────────

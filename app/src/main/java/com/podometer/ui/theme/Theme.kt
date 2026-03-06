@@ -13,6 +13,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.podometer.domain.model.ActivityState
 
 // ─── Activity colour container ────────────────────────────────────────────────
 
@@ -33,7 +34,14 @@ data class ActivityColors(
     val cycling: Color,
     val still: Color,
     val contentColor: Color = Color.White,
-)
+) {
+    /** Returns the background color for the given [ActivityState]. */
+    fun colorFor(activity: ActivityState): Color = when (activity) {
+        ActivityState.WALKING -> walking
+        ActivityState.CYCLING -> cycling
+        ActivityState.STILL -> still
+    }
+}
 
 /**
  * Default [ActivityColors] for the **light** theme.
