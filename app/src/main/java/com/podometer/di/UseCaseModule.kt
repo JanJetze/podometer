@@ -112,10 +112,12 @@ abstract class UseCaseModule {
             stepDao: StepDao,
             activityTransitionDao: ActivityTransitionDao,
             cyclingSessionDao: CyclingSessionDao,
+            sensorWindowDao: SensorWindowDao,
         ): ImportDataUseCase = ImportDataUseCase(
             stepDao = stepDao,
             activityTransitionDao = activityTransitionDao,
             cyclingSessionDao = cyclingSessionDao,
+            sensorWindowDao = sensorWindowDao,
         )
     }
 }
