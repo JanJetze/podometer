@@ -16,6 +16,7 @@ package com.podometer.domain.model
  *                              this session. Used for override/reclassification.
  * @property isManualOverride   True when the opening transition was manually
  *                              overridden by the user.
+ * @property stepCount          Total steps detected during this session.
  */
 data class ActivitySession(
     val activity: ActivityState,
@@ -23,6 +24,7 @@ data class ActivitySession(
     val endTime: Long?,
     val startTransitionId: Int,
     val isManualOverride: Boolean,
+    val stepCount: Int = 0,
 )
 
 /**

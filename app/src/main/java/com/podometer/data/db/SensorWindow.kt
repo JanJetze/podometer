@@ -5,7 +5,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Room entity storing a single 5-second classifier window of raw sensor data.
+ * Room entity storing a single 30-second classifier window of raw sensor data.
  *
  * These windows are recorded continuously by [com.podometer.service.StepTrackingService]
  * and retained for 7 days. They enable retroactive recomputation of activity sessions
