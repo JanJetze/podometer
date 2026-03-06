@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.CyclingSession
+import com.podometer.data.repository.PreferencesManager
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.model.TransitionEvent
@@ -14,14 +15,19 @@ import com.podometer.domain.usecase.GetTodayStepsUseCase
 import com.podometer.domain.usecase.GetTodayTransitionsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCase
 import com.podometer.domain.usecase.OverrideActivityUseCase
+import com.podometer.ui.activities.TestDataGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import javax.inject.Inject
 
 /**
@@ -84,6 +90,7 @@ class DashboardViewModel @Inject constructor(
     getTodayTransitions: GetTodayTransitionsUseCase,
     getTodayCyclingSessions: GetTodayCyclingSessionsUseCase,
     private val overrideActivityUseCase: OverrideActivityUseCase,
+    preferencesManager: PreferencesManager,
 ) : ViewModel() {
 
     companion object {
@@ -95,26 +102,55 @@ class DashboardViewModel @Inject constructor(
     private val _permissionsDenied = MutableStateFlow(false)
 
     /** Combined UI state emitted to the Dashboard Compose screen. */
-    val uiState: StateFlow<DashboardUiState> = combine(
-        getTodaySteps(),
-        getWeeklySteps(),
-        getTodayTransitions(),
-        getTodayCyclingSessions(),
-        _permissionsDenied,
-    ) { stepData, weekly, transitions, cycling, permissionsDenied ->
-        DashboardUiState(
-            todaySteps = stepData.steps,
-            dailyGoal = stepData.goal,
-            progressPercent = stepData.progressPercent,
-            distanceKm = stepData.distanceKm,
-            currentActivity = transitions.lastOrNull()?.toActivity ?: ActivityState.STILL,
-            transitions = transitions,
-            weeklySteps = weekly,
-            cyclingSessions = cycling,
-            isLoading = false,
-            permissionsDenied = permissionsDenied,
-        )
-    }.stateIn(
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<DashboardUiState> = preferencesManager.useTestData()
+        .flatMapLatest { useTestData ->
+            if (useTestData) {
+                val today = LocalDate.now()
+                val stepData = TestDataGenerator.generateTodaySteps()
+                val transitions = TestDataGenerator.generateTransitions(today)
+                val weekly = TestDataGenerator.generateWeeklySummaries()
+                val cycling = TestDataGenerator.generateCyclingSessions(today)
+                combine(
+                    flowOf(Unit),
+                    _permissionsDenied,
+                ) { _, permissionsDenied ->
+                    DashboardUiState(
+                        todaySteps = stepData.steps,
+                        dailyGoal = stepData.goal,
+                        progressPercent = stepData.progressPercent,
+                        distanceKm = stepData.distanceKm,
+                        currentActivity = transitions.lastOrNull()?.toActivity ?: ActivityState.STILL,
+                        transitions = transitions,
+                        weeklySteps = weekly,
+                        cyclingSessions = cycling,
+                        isLoading = false,
+                        permissionsDenied = permissionsDenied,
+                    )
+                }
+            } else {
+                combine(
+                    getTodaySteps(),
+                    getWeeklySteps(),
+                    getTodayTransitions(),
+                    getTodayCyclingSessions(),
+                    _permissionsDenied,
+                ) { stepData, weekly, transitions, cycling, permissionsDenied ->
+                    DashboardUiState(
+                        todaySteps = stepData.steps,
+                        dailyGoal = stepData.goal,
+                        progressPercent = stepData.progressPercent,
+                        distanceKm = stepData.distanceKm,
+                        currentActivity = transitions.lastOrNull()?.toActivity ?: ActivityState.STILL,
+                        transitions = transitions,
+                        weeklySteps = weekly,
+                        cyclingSessions = cycling,
+                        isLoading = false,
+                        permissionsDenied = permissionsDenied,
+                    )
+                }
+            }
+        }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
         initialValue = DashboardUiState(),

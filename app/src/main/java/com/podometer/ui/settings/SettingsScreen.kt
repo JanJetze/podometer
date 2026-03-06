@@ -52,6 +52,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.podometer.BuildConfig
 import com.podometer.R
 import com.podometer.ui.theme.PodometerTheme
 
@@ -91,6 +92,7 @@ fun SettingsScreen(
     onResetExportState: () -> Unit,
     onNavigateToDonate: () -> Unit = {},
     onOpenFeedbackUrl: () -> Unit = {},
+    onSetUseTestData: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -305,6 +307,19 @@ fun SettingsScreen(
                 value = "",
                 onClick = onNavigateToDonate,
             )
+
+            // ── Developer section (debug builds only) ───────────────────────
+            if (BuildConfig.DEBUG) {
+                Spacer(modifier = Modifier.height(16.dp))
+                SettingsSectionHeader(text = "Developer")
+
+                SettingRowWithSwitch(
+                    title = "Use test data",
+                    description = "Replace real sensor data with generated test data for the step graph",
+                    checked = uiState.useTestData,
+                    onCheckedChange = onSetUseTestData,
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
         }

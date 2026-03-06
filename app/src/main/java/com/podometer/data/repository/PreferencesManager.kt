@@ -60,6 +60,11 @@ class PreferencesManager @Inject constructor(
 
         /** Default onboarding complete: false (show onboarding on first launch). */
         const val DEFAULT_ONBOARDING_COMPLETE = false
+
+        val KEY_USE_TEST_DATA = booleanPreferencesKey("use_test_data")
+
+        /** Default use-test-data: false (use real sensor data). */
+        const val DEFAULT_USE_TEST_DATA = false
     }
 
     // ─── Read ────────────────────────────────────────────────────────────────
@@ -99,6 +104,15 @@ class PreferencesManager @Inject constructor(
     fun notificationStyle(): Flow<String> =
         dataStore.data.map { prefs ->
             prefs[KEY_NOTIFICATION_STYLE] ?: DEFAULT_NOTIFICATION_STYLE
+        }
+
+    /**
+     * Emits whether the debug test-data mode is enabled.
+     * Defaults to `false` (use real sensor data).
+     */
+    fun useTestData(): Flow<Boolean> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_USE_TEST_DATA] ?: DEFAULT_USE_TEST_DATA
         }
 
     /**
@@ -160,6 +174,13 @@ class PreferencesManager @Inject constructor(
     suspend fun setNotificationStyle(style: String) {
         dataStore.edit { prefs ->
             prefs[KEY_NOTIFICATION_STYLE] = style
+        }
+    }
+
+    /** Persists the given [enabled] flag for the debug test-data mode. */
+    suspend fun setUseTestData(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[KEY_USE_TEST_DATA] = enabled
         }
     }
 

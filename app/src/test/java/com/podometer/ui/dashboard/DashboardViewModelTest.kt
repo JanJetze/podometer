@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import com.podometer.data.db.ActivityTransition
 import com.podometer.data.db.CyclingSession
+import com.podometer.data.repository.PreferencesManager
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.model.StepData
@@ -27,7 +31,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 /**
  * Unit tests for [DashboardViewModel].
@@ -42,6 +48,16 @@ import org.junit.Test
 class DashboardViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
+
+    @get:Rule
+    val tmpFolder = TemporaryFolder()
+
+    private fun buildPreferencesManager(): PreferencesManager {
+        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create {
+            tmpFolder.newFile("test_prefs.preferences_pb")
+        }
+        return PreferencesManager(dataStore)
+    }
 
     @Before
     fun setUpDispatcher() {
@@ -103,6 +119,7 @@ class DashboardViewModelTest {
         getTodayTransitions = FakeGetTodayTransitionsUseCase(flowOf(transitions)),
         getTodayCyclingSessions = FakeGetTodayCyclingSessionsUseCase(flowOf(cyclingSessions)),
         overrideActivityUseCase = overrideActivityUseCase,
+        preferencesManager = buildPreferencesManager(),
     )
 
     // ─── DashboardUiState default state ──────────────────────────────────────
@@ -290,6 +307,7 @@ class DashboardViewModelTest {
             getTodayTransitions = FakeGetTodayTransitionsUseCase(),
             getTodayCyclingSessions = FakeGetTodayCyclingSessionsUseCase(),
             overrideActivityUseCase = FakeOverrideActivityUseCase(),
+            preferencesManager = buildPreferencesManager(),
         )
 
         val firstState = viewModel.uiState.first { !it.isLoading }
