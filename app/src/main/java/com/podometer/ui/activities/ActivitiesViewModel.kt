@@ -3,6 +3,7 @@ package com.podometer.ui.activities
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.podometer.data.repository.PreferencesManager
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.TransitionEvent
 import com.podometer.domain.usecase.RecomputeActivitySessionsUseCase
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 import javax.inject.Inject
@@ -43,6 +45,7 @@ data class ActivitiesUiState(
 @HiltViewModel
 class ActivitiesViewModel @Inject constructor(
     private val recomputeActivitySessions: RecomputeActivitySessionsUseCase,
+    private val preferencesManager: PreferencesManager,
 ) : ViewModel() {
 
     companion object {
@@ -56,18 +59,37 @@ class ActivitiesViewModel @Inject constructor(
 
     /** Combined UI state emitted to the Activities screen. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<ActivitiesUiState> = _selectedDate.flatMapLatest { date ->
+    val uiState: StateFlow<ActivitiesUiState> = combine(
+        _selectedDate,
+        preferencesManager.useTestData(),
+    ) { date, useTest -> date to useTest }.flatMapLatest { (date, useTestData) ->
         val nowMillis = System.currentTimeMillis()
-        recomputeActivitySessions(date, nowMillis).combine(
-            MutableStateFlow(date),
-        ) { sessions, selectedDate ->
-            ActivitiesUiState(
-                selectedDate = selectedDate,
-                sessions = sessions,
-                isToday = selectedDate == LocalDate.now(),
-                dateLabel = formatDateLabel(selectedDate),
-                isLoading = false,
-            )
+
+        if (useTestData) {
+            combine(
+                flowOf(TestDataGenerator.generateSessions(date)),
+                flowOf(Unit),
+            ) { sessions, _ ->
+                ActivitiesUiState(
+                    selectedDate = date,
+                    sessions = sessions,
+                    isToday = date == LocalDate.now(),
+                    dateLabel = formatDateLabel(date),
+                    isLoading = false,
+                )
+            }
+        } else {
+            recomputeActivitySessions(date, nowMillis).combine(
+                MutableStateFlow(date),
+            ) { sessions, selectedDate ->
+                ActivitiesUiState(
+                    selectedDate = selectedDate,
+                    sessions = sessions,
+                    isToday = selectedDate == LocalDate.now(),
+                    dateLabel = formatDateLabel(selectedDate),
+                    isLoading = false,
+                )
+            }
         }
     }.stateIn(
         scope = viewModelScope,

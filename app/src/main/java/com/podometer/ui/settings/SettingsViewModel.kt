@@ -55,6 +55,7 @@ data class SettingsUiState(
     val autoStartEnabled: Boolean = true,
     val notificationStyle: String = "minimal",
     val exportState: ExportState = ExportState.Idle,
+    val useTestData: Boolean = false,
 )
 
 /**
@@ -89,18 +90,22 @@ class SettingsViewModel @Inject constructor(
      * Starts with default values; updates reactively as preferences or export state change.
      */
     val uiState: StateFlow<SettingsUiState> = combine(
-        preferencesManager.dailyStepGoal(),
-        preferencesManager.strideLengthKm(),
-        preferencesManager.isAutoStartEnabled(),
+        combine(
+            preferencesManager.dailyStepGoal(),
+            preferencesManager.strideLengthKm(),
+            preferencesManager.isAutoStartEnabled(),
+        ) { goal, stride, autoStart -> Triple(goal, stride, autoStart) },
         preferencesManager.notificationStyle(),
         _exportState,
-    ) { dailyStepGoal, strideLengthKm, autoStart, notifStyle, exportState ->
+        preferencesManager.useTestData(),
+    ) { (dailyStepGoal, strideLengthKm, autoStart), notifStyle, exportState, useTestData ->
         SettingsUiState(
             dailyStepGoal = dailyStepGoal,
             strideLengthCm = strideLengthKmToCm(strideLengthKm),
             autoStartEnabled = autoStart,
             notificationStyle = notifStyle,
             exportState = exportState,
+            useTestData = useTestData,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -151,6 +156,17 @@ class SettingsViewModel @Inject constructor(
     fun setNotificationStyle(style: String) {
         viewModelScope.launch {
             preferencesManager.setNotificationStyle(style)
+        }
+    }
+
+    /**
+     * Persists the given [enabled] flag for the debug test-data mode.
+     *
+     * @param enabled `true` to use generated test data; `false` to use real sensor data.
+     */
+    fun setUseTestData(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesManager.setUseTestData(enabled)
         }
     }
 
