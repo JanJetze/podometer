@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.activities
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import com.podometer.data.db.ManualSessionOverride
 import com.podometer.data.db.ManualSessionOverrideDao
 import com.podometer.data.db.SensorWindow
 import com.podometer.data.db.SensorWindowDao
+import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.SensorWindowRepository
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
@@ -23,7 +27,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.time.LocalDate
 
 /**
@@ -36,6 +42,9 @@ import java.time.LocalDate
 class ActivitiesViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
+
+    @get:Rule
+    val tmpFolder = TemporaryFolder()
 
     @Before
     fun setUpDispatcher() {
@@ -75,12 +84,20 @@ class ActivitiesViewModelTest {
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
+    private fun buildPreferencesManager(): PreferencesManager {
+        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create {
+            tmpFolder.newFile("test_prefs.preferences_pb")
+        }
+        return PreferencesManager(dataStore)
+    }
+
     private fun buildViewModel(
         sessions: List<ActivitySession> = emptyList(),
     ): ActivitiesViewModel = ActivitiesViewModel(
         recomputeActivitySessions = FakeRecomputeUseCase(sessions),
         sensorWindowRepository = SensorWindowRepository(FakeSensorWindowDao()),
         manualSessionOverrideDao = FakeManualSessionOverrideDao(),
+        preferencesManager = buildPreferencesManager(),
     )
 
     // ─── Initial state ───────────────────────────────────────────────────────

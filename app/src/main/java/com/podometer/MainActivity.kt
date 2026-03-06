@@ -158,6 +158,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 startActivity(intent)
                             },
+                            onSetUseTestData = viewModel::setUseTestData,
                         )
                     }
 

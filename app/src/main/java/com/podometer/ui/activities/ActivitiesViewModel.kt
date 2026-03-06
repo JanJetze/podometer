@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.podometer.data.db.ManualSessionOverride
 import com.podometer.data.db.ManualSessionOverrideDao
 import com.podometer.data.db.SensorWindow
+import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.SensorWindowRepository
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -56,6 +58,7 @@ class ActivitiesViewModel @Inject constructor(
     private val recomputeActivitySessions: RecomputeActivitySessionsUseCase,
     private val sensorWindowRepository: SensorWindowRepository,
     private val manualSessionOverrideDao: ManualSessionOverrideDao,
+    private val preferencesManager: PreferencesManager,
 ) : ViewModel() {
 
     companion object {
@@ -70,25 +73,47 @@ class ActivitiesViewModel @Inject constructor(
 
     /** Combined UI state emitted to the Activities screen. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<ActivitiesUiState> = _selectedDate.flatMapLatest { date ->
+    val uiState: StateFlow<ActivitiesUiState> = combine(
+        _selectedDate,
+        preferencesManager.useTestData(),
+    ) { date, useTest -> date to useTest }.flatMapLatest { (date, useTestData) ->
         val nowMillis = System.currentTimeMillis()
         val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        combine(
-            recomputeActivitySessions(date, nowMillis),
-            sensorWindowRepository.getWindowsForDay(date),
-            manualSessionOverrideDao.getOverridesForDate(dateStr),
-            _bucketSizeMs,
-        ) { recomputedSessions, windows, overrides, bucketSizeMs ->
-            val sessions = mergeSessionOverrides(recomputedSessions, overrides)
-            ActivitiesUiState(
-                selectedDate = date,
-                sessions = sessions,
-                windows = windows,
-                bucketSizeMs = bucketSizeMs,
-                isToday = date == LocalDate.now(),
-                dateLabel = formatDateLabel(date),
-                isLoading = false,
-            )
+
+        if (useTestData) {
+            combine(
+                flowOf(TestDataGenerator.generateSessions(date)),
+                flowOf(TestDataGenerator.generateWindows(date)),
+                _bucketSizeMs,
+            ) { sessions, windows, bucketSizeMs ->
+                ActivitiesUiState(
+                    selectedDate = date,
+                    sessions = sessions,
+                    windows = windows,
+                    bucketSizeMs = bucketSizeMs,
+                    isToday = date == LocalDate.now(),
+                    dateLabel = formatDateLabel(date),
+                    isLoading = false,
+                )
+            }
+        } else {
+            combine(
+                recomputeActivitySessions(date, nowMillis),
+                sensorWindowRepository.getWindowsForDay(date),
+                manualSessionOverrideDao.getOverridesForDate(dateStr),
+                _bucketSizeMs,
+            ) { recomputedSessions, windows, overrides, bucketSizeMs ->
+                val sessions = mergeSessionOverrides(recomputedSessions, overrides)
+                ActivitiesUiState(
+                    selectedDate = date,
+                    sessions = sessions,
+                    windows = windows,
+                    bucketSizeMs = bucketSizeMs,
+                    isToday = date == LocalDate.now(),
+                    dateLabel = formatDateLabel(date),
+                    isLoading = false,
+                )
+            }
         }
     }.stateIn(
         scope = viewModelScope,
