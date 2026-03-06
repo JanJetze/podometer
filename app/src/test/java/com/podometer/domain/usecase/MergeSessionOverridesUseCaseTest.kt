@@ -2,6 +2,7 @@
 package com.podometer.domain.usecase
 
 import com.podometer.data.db.ManualSessionOverride
+import com.podometer.data.db.SensorWindow
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 import org.junit.Assert.assertEquals
@@ -161,5 +162,56 @@ class MergeSessionOverridesUseCaseTest {
         val result = mergeSessionOverrides(sessions, overrides)
         assertEquals(1, result.size)
         assertEquals(14 * hour, result[0].startTime)
+    }
+
+    private fun window(timestamp: Long, stepCount: Int) = SensorWindow(
+        timestamp = timestamp,
+        magnitudeVariance = 0.0,
+        stepFrequencyHz = 0.0,
+        stepCount = stepCount,
+    )
+
+    @Test
+    fun `override session gets step count from sensor windows`() {
+        val sessions = listOf(
+            session(ActivityState.WALKING, 9 * hour, 10 * hour),
+        )
+        val overrides = listOf(
+            override("CYCLING", 9 * hour, 10 * hour),
+        )
+        val windows = listOf(
+            window(9 * hour, 50),
+            window(9 * hour + 30_000L, 60),
+            window(10 * hour, 100), // outside override range
+        )
+        val result = mergeSessionOverrides(sessions, overrides, windows)
+        assertEquals(1, result.size)
+        assertEquals(110, result[0].stepCount)
+    }
+
+    @Test
+    fun `new activity gets step count from sensor windows in range`() {
+        val overrides = listOf(
+            override("WALKING", 12 * hour, 13 * hour),
+        )
+        val windows = listOf(
+            window(11 * hour, 30), // outside range
+            window(12 * hour, 40),
+            window(12 * hour + 30_000L, 50),
+            window(13 * hour, 20), // outside range (at endTime, exclusive)
+        )
+        val result = mergeSessionOverrides(emptyList(), overrides, windows)
+        assertEquals(1, result.size)
+        assertEquals(90, result[0].stepCount)
+    }
+
+    @Test
+    fun `override without windows has zero step count`() {
+        val overrides = listOf(
+            override("WALKING", 9 * hour, 10 * hour),
+        )
+        val result = mergeSessionOverrides(emptyList(), overrides)
+        assertEquals(1, result.size)
+        assertEquals(0, result[0].stepCount)
     }
 }

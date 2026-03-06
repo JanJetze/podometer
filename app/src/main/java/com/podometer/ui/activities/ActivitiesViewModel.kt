@@ -95,7 +95,7 @@ class ActivitiesViewModel @Inject constructor(
                 manualSessionOverrideDao.getOverridesForDate(dateKey),
                 _bucketSizeMs,
             ) { generatedSessions, windows, overrides, bucketSizeMs ->
-                val sessions = mergeSessionOverrides(generatedSessions, overrides)
+                val sessions = mergeSessionOverrides(generatedSessions, overrides, windows)
                 ActivitiesUiState(
                     selectedDate = date,
                     sessions = sessions,
@@ -113,7 +113,7 @@ class ActivitiesViewModel @Inject constructor(
                 manualSessionOverrideDao.getOverridesForDate(dateKey),
                 _bucketSizeMs,
             ) { recomputedSessions, windows, overrides, bucketSizeMs ->
-                val sessions = mergeSessionOverrides(recomputedSessions, overrides)
+                val sessions = mergeSessionOverrides(recomputedSessions, overrides, windows)
                 ActivitiesUiState(
                     selectedDate = date,
                     sessions = sessions,
