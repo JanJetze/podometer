@@ -19,6 +19,10 @@ interface SensorWindowDao {
     @Insert
     suspend fun insert(window: SensorWindow)
 
+    /** Inserts multiple sensor window rows. */
+    @Insert
+    suspend fun insertAll(windows: List<SensorWindow>)
+
     /**
      * Returns all sensor windows whose [SensorWindow.timestamp] falls within
      * [[startMs], [endMs]] (inclusive), ordered by timestamp ascending.

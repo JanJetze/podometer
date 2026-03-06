@@ -53,7 +53,7 @@ android {
 
     buildTypes {
         debug {
-            // applicationIdSuffix = ".dev"  // Temporarily disabled for one-time migration
+            applicationIdSuffix = ".dev"
             resValue("string", "app_name", "Podometer-dev")
         }
         release {

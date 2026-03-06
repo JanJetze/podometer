@@ -116,6 +116,7 @@ class ExportDataUseCaseTest {
 
     private class FakeSensorWindowDao : SensorWindowDao {
         override suspend fun insert(window: SensorWindow) = Unit
+        override suspend fun insertAll(windows: List<SensorWindow>) = Unit
         override fun getWindowsBetween(startMs: Long, endMs: Long): Flow<List<SensorWindow>> =
             flowOf(emptyList())
         override suspend fun getAllWindows(): List<SensorWindow> = emptyList()
