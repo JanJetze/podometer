@@ -51,6 +51,27 @@ class RecomputeActivitySessionsUseCaseTest {
     }
 
     @Test
+    fun `replayWindows attaches step counts to walking sessions`() {
+        val windows = (0 until 40).map { i ->
+            SensorWindow(
+                id = i.toLong(),
+                timestamp = 1_000_000L + i * 5_000L,
+                magnitudeVariance = 1.0,
+                stepFrequencyHz = 1.8,
+                stepCount = 9,
+            )
+        }
+
+        val sessions = RecomputeActivitySessionsUseCaseImpl.replayWindows(
+            windows = windows,
+            nowMillis = nowMillis,
+        )
+
+        assertTrue("Expected at least one session", sessions.isNotEmpty())
+        assertTrue("Walking session should have steps > 0", sessions[0].stepCount > 0)
+    }
+
+    @Test
     fun `replayWindows detects cycling session from sustained cycling windows`() {
         // First, we need some STILL state, then transition to cycling.
         // Cycling: high variance (> 2.0) and low step frequency (< 0.3).

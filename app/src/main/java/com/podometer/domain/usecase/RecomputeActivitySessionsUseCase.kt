@@ -21,7 +21,7 @@ import javax.inject.Singleton
  * activity sessions for a given date.
  *
  * This enables retroactive recomputation when classifier parameters change —
- * the raw 5-second windows are retained for 7 days and can be replayed at any
+ * the raw 30-second windows are retained for 7 days and can be replayed at any
  * time to generate updated session data.
  */
 interface RecomputeActivitySessionsUseCase {
@@ -94,7 +94,26 @@ class RecomputeActivitySessionsUseCaseImpl @Inject constructor(
                 }
             }
 
-            return buildActivitySessions(transitions, nowMillis)
+            val sessions = buildActivitySessions(transitions, nowMillis)
+            return attachStepCounts(sessions, windows)
+        }
+
+        /**
+         * Sums [SensorWindow.stepCount] for each session's time range and returns
+         * sessions with [ActivitySession.stepCount] populated.
+         */
+        private fun attachStepCounts(
+            sessions: List<ActivitySession>,
+            windows: List<SensorWindow>,
+        ): List<ActivitySession> {
+            if (sessions.isEmpty() || windows.isEmpty()) return sessions
+            return sessions.map { session ->
+                val endTime = session.endTime ?: Long.MAX_VALUE
+                val steps = windows
+                    .filter { it.timestamp in session.startTime until endTime }
+                    .sumOf { it.stepCount }
+                session.copy(stepCount = steps)
+            }
         }
     }
 }

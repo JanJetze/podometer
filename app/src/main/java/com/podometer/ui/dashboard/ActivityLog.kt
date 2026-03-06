@@ -284,8 +284,18 @@ private fun ActivityLogItem(
             text = durationText,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
         )
+
+        if (session.stepCount > 0) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(R.string.activity_session_steps, session.stepCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
 
         if (session.isManualOverride) {
             Spacer(modifier = Modifier.width(8.dp))
@@ -408,6 +418,7 @@ private fun PreviewActivityLogMultiple() {
             endTime = 10L * hour + 30L * 60_000L,
             startTransitionId = 1,
             isManualOverride = false,
+            stepCount = 1247,
         ),
         ActivitySession(
             activity = ActivityState.CYCLING,
@@ -422,6 +433,7 @@ private fun PreviewActivityLogMultiple() {
             endTime = null,
             startTransitionId = 3,
             isManualOverride = false,
+            stepCount = 312,
         ),
     )
     PodometerTheme {

@@ -70,6 +70,7 @@
 
     <!-- ActivityLog labels -->
     <string name="activity_session_ongoing">ongoing</string>
+    <string name="activity_session_steps">%1$d steps</string>
     <string name="cd_activity_session_item">%1$s session, %2$s, %3$s</string>
     <string name="cd_activity_override_options">Override options for session at %1$s</string>
 
