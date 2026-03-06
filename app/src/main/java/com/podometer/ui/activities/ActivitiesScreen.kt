@@ -83,7 +83,7 @@ fun ActivitiesScreen(
                         editingSession = ActivitySession(
                             activity = ActivityState.WALKING,
                             startTime = noon,
-                            endTime = noon + 30 * 60_000L,
+                            endTime = noon + ActivitySession.DEFAULT_DURATION_MS,
                             startTransitionId = 0,
                             isManualOverride = false,
                         )
@@ -224,13 +224,13 @@ fun ActivitiesScreen(
         val session = editingSession!!
         val dayStartMillis = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
         val dayEndMillis = dayStartMillis + 86_400_000L
-        val isNew = session.startTransitionId == 0
+        val closeEditSheet = {
+            editingSession = null
+            highlightedSessionIndex = -1
+        }
 
         ModalBottomSheet(
-            onDismissRequest = {
-                editingSession = null
-                highlightedSessionIndex = -1
-            },
+            onDismissRequest = closeEditSheet,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
             SessionEditSheet(
@@ -245,28 +245,21 @@ fun ActivitiesScreen(
                         0L
                     }
                     viewModel.saveSessionOverride(startMs, endMs, activity, overrideId)
-                    editingSession = null
-                    highlightedSessionIndex = -1
+                    closeEditSheet()
                 },
-                onCancel = {
-                    editingSession = null
-                    highlightedSessionIndex = -1
-                },
-                onDelete = if (!isNew) {
+                onCancel = closeEditSheet,
+                onDelete = if (!session.isNew) {
                     {
                         if (session.isManualOverride) {
-                            // Delete the manual override directly
                             viewModel.deleteSessionOverride(-session.startTransitionId.toLong())
                         } else {
-                            // "Delete" a detected session by overriding it as STILL
                             viewModel.saveSessionOverride(
                                 session.startTime,
-                                session.endTime ?: (session.startTime + 30 * 60_000L),
+                                session.effectiveEndTime(),
                                 ActivityState.STILL,
                             )
                         }
-                        editingSession = null
-                        highlightedSessionIndex = -1
+                        closeEditSheet()
                     }
                 } else {
                     null

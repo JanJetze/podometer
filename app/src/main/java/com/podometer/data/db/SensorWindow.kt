@@ -25,3 +25,14 @@ data class SensorWindow(
     val stepFrequencyHz: Double,
     val stepCount: Int,
 )
+
+/**
+ * Sums [SensorWindow.stepCount] for windows whose [SensorWindow.timestamp]
+ * falls within the half-open range `[startTime, endTime)`.
+ *
+ * @param startTime Inclusive start of the time range in epoch milliseconds.
+ * @param endTime   Exclusive end of the time range in epoch milliseconds.
+ * @return Total step count for the range.
+ */
+fun List<SensorWindow>.sumStepsInRange(startTime: Long, endTime: Long): Int =
+    filter { it.timestamp in startTime until endTime }.sumOf { it.stepCount }

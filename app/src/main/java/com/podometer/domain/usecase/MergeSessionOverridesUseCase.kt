@@ -3,6 +3,7 @@ package com.podometer.domain.usecase
 
 import com.podometer.data.db.ManualSessionOverride
 import com.podometer.data.db.SensorWindow
+import com.podometer.data.db.sumStepsInRange
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 
@@ -30,16 +31,13 @@ fun mergeSessionOverrides(
 
     // Convert overrides to ActivitySessions with step counts from sensor windows
     val overrideSessions = overrides.map { override ->
-        val steps = windows
-            .filter { it.timestamp in override.startTime until override.endTime }
-            .sumOf { it.stepCount }
         ActivitySession(
             activity = ActivityState.fromString(override.activity),
             startTime = override.startTime,
             endTime = override.endTime,
             startTransitionId = -override.id.toInt(), // negative to distinguish
             isManualOverride = true,
-            stepCount = steps,
+            stepCount = windows.sumStepsInRange(override.startTime, override.endTime),
         )
     }
 

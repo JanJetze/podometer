@@ -25,7 +25,18 @@ data class ActivitySession(
     val startTransitionId: Int,
     val isManualOverride: Boolean,
     val stepCount: Int = 0,
-)
+) {
+    companion object {
+        /** Default session duration used for new/ongoing sessions (30 minutes). */
+        const val DEFAULT_DURATION_MS = 30 * 60_000L
+    }
+
+    /** True when this session was created manually and has no backing transition. */
+    val isNew: Boolean get() = startTransitionId == 0
+
+    /** Returns [endTime] or a default end time (start + 30 min) for ongoing sessions. */
+    fun effectiveEndTime(): Long = endTime ?: (startTime + DEFAULT_DURATION_MS)
+}
 
 /**
  * Builds a list of [ActivitySession]s from chronologically ordered [transitions].
