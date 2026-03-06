@@ -6,11 +6,15 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,10 +34,15 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlin.math.pow
 import com.podometer.data.db.SensorWindow
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
@@ -308,11 +317,14 @@ internal fun findNearestMarker(
 
 // ─── Composable ───────────────────────────────────────────────────────────────
 
-/** Left/right padding for Y-axis labels in dp. */
-private val Y_AXIS_WIDTH = 48.dp
+/** Width reserved for left Y-axis labels. */
+private val Y_AXIS_LEFT_WIDTH = 40.dp
+
+/** Width reserved for right Y-axis labels. */
+private val Y_AXIS_RIGHT_WIDTH = 36.dp
 
 /** Bottom padding for X-axis labels in dp. */
-private val X_AXIS_HEIGHT = 20.dp
+private val X_AXIS_HEIGHT = 24.dp
 
 /** Height of the chart canvas area. */
 private val CHART_HEIGHT = 200.dp
@@ -332,22 +344,65 @@ private const val MARKER_ALPHA = 0.5f
 /** Fraction of the visible range within which a tap snaps to a marker. */
 private const val MARKER_TAP_THRESHOLD = 0.02f
 
-/** Time labels for the X-axis. */
-private val TIME_LABELS = listOf(
-    "6am" to 6f / 24f,
-    "9am" to 9f / 24f,
-    "12pm" to 12f / 24f,
-    "3pm" to 15f / 24f,
-    "6pm" to 18f / 24f,
-    "9pm" to 21f / 24f,
+/** Number of Y-axis grid divisions. */
+private const val Y_GRID_DIVISIONS = 4
+
+/**
+ * Rounds a value up to a "nice" number for axis labeling (1, 2, 5 multiples).
+ */
+internal fun niceAxisMax(value: Int): Int {
+    if (value <= 0) return 100
+    val magnitude = 10.0.pow(kotlin.math.floor(kotlin.math.log10(value.toDouble()))).toInt()
+    val normalized = value.toDouble() / magnitude
+    val niceNorm = when {
+        normalized <= 1.0 -> 1.0
+        normalized <= 2.0 -> 2.0
+        normalized <= 5.0 -> 5.0
+        else -> 10.0
+    }
+    return (niceNorm * magnitude).toInt().coerceAtLeast(1)
+}
+
+/**
+ * Formats a step count for Y-axis labels: "1.2k" for thousands, plain number otherwise.
+ */
+private fun formatAxisLabel(value: Int): String = when {
+    value >= 10_000 -> "${value / 1_000}k"
+    value >= 1_000 -> {
+        val thousands = value / 1_000
+        val hundreds = (value % 1_000) / 100
+        if (hundreds > 0) "${thousands}.${hundreds}k" else "${thousands}k"
+    }
+    else -> value.toString()
+}
+
+/** Time labels for the X-axis at various zoom levels. */
+private val TIME_LABELS_COARSE = listOf(
+    "6a" to 6f / 24f,
+    "9a" to 9f / 24f,
+    "12p" to 12f / 24f,
+    "3p" to 15f / 24f,
+    "6p" to 18f / 24f,
+    "9p" to 21f / 24f,
+)
+
+private val TIME_LABELS_FINE = listOf(
+    "12a" to 0f / 24f,
+    "3a" to 3f / 24f,
+    "6a" to 6f / 24f,
+    "9a" to 9f / 24f,
+    "12p" to 12f / 24f,
+    "3p" to 15f / 24f,
+    "6p" to 18f / 24f,
+    "9p" to 21f / 24f,
 )
 
 /**
  * Dual-axis step line graph showing cumulative and per-bucket step counts.
  *
  * Features:
- * - Left Y-axis: cumulative step count (monotonically increasing line)
- * - Right Y-axis: per-bucket step count (spiky intensity line)
+ * - Left Y-axis: cumulative step count with labeled grid lines
+ * - Right Y-axis: per-bucket step count with labeled grid lines
  * - Activity session colored background regions
  * - Tap to show crosshair with tooltip
  * - Horizontal pan and pinch-to-zoom on the time axis
@@ -390,233 +445,277 @@ fun StepGraph(
 
     val dayDuration = (dayEndMillis - dayStartMillis).toFloat()
 
+    // Compute nice axis maximums
+    val niceMaxCumulative = niceAxisMax(graphData.maxCumulative)
+    val niceMaxBucket = niceAxisMax(graphData.maxBucket)
+
     Column(modifier = modifier) {
-        Box {
-            Canvas(
+        // Y-axis labels + chart in a Row
+        Row(modifier = Modifier.fillMaxWidth()) {
+            // Left Y-axis labels (cumulative)
+            YAxisLabels(
+                maxValue = niceMaxCumulative,
+                color = cumulativeLineColor,
+                alignment = Alignment.End,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(CHART_HEIGHT)
-                    .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            // Update scale (horizontal zoom only)
-                            val newScale = (scale * zoom).coerceIn(1f, 10f)
-                            // Adjust offset to keep center stable during zoom
-                            val panFraction = pan.x / size.width / scale
-                            val newOffset = (offsetFraction - panFraction)
-                                .coerceIn(0f, 1f - 1f / newScale)
-                            scale = newScale
-                            offsetFraction = newOffset
-                            // Dismiss crosshair on pan/zoom
-                            crosshairFraction = null
-                        }
-                    }
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = { offset ->
-                                // Convert tap position to day fraction
-                                val chartWidth = size.width.toFloat()
-                                val tapFraction = offset.x / chartWidth
-                                val dayFraction = offsetFraction + tapFraction / scale
-                                val clampedFraction = dayFraction.coerceIn(0f, 1f)
+                    .width(Y_AXIS_LEFT_WIDTH)
+                    .height(CHART_HEIGHT),
+            )
 
-                                // Check if tap is near a marker
-                                val visRange = 1f / scale
-                                val threshold = MARKER_TAP_THRESHOLD * visRange
-                                val marker = findNearestMarker(
-                                    graphData.markers, clampedFraction, threshold,
-                                )
-                                nearMarker = marker
-                                crosshairFraction = if (marker != null) {
-                                    onSessionHighlight(marker.sessionIndex)
-                                    marker.fraction
-                                } else {
-                                    clampedFraction
-                                }
-                            },
-                            onDoubleTap = {
-                                // Reset zoom
-                                scale = 1f
-                                offsetFraction = 0f
-                                crosshairFraction = null
-                                nearMarker = null
-                            },
-                        )
-                    },
+            // Chart area
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(CHART_HEIGHT),
             ) {
-                val chartWidth = size.width
-                val chartHeight = size.height
+                Canvas(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .pointerInput(Unit) {
+                            detectTransformGestures { centroid, pan, zoom, _ ->
+                                val oldScale = scale
+                                val newScale = (scale * zoom).coerceIn(1f, 10f)
+                                // Anchor zoom to the pinch centroid
+                                val centroidFraction = centroid.x / size.width
+                                val centroidDay = offsetFraction + centroidFraction / oldScale
+                                val newOffset = (centroidDay - centroidFraction / newScale)
+                                    .coerceIn(0f, (1f - 1f / newScale).coerceAtLeast(0f))
+                                // Apply pan
+                                val panFraction = pan.x / size.width / newScale
+                                val finalOffset = (newOffset - panFraction)
+                                    .coerceIn(0f, (1f - 1f / newScale).coerceAtLeast(0f))
+                                scale = newScale
+                                offsetFraction = finalOffset
+                                crosshairFraction = null
+                            }
+                        }
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    val chartWidth = size.width.toFloat()
+                                    val tapFraction = offset.x / chartWidth
+                                    val dayFraction = offsetFraction + tapFraction / scale
+                                    val clampedFraction = dayFraction.coerceIn(0f, 1f)
+                                    val visRange = 1f / scale
+                                    val threshold = MARKER_TAP_THRESHOLD * visRange
+                                    val marker = findNearestMarker(
+                                        graphData.markers, clampedFraction, threshold,
+                                    )
+                                    nearMarker = marker
+                                    crosshairFraction = if (marker != null) {
+                                        onSessionHighlight(marker.sessionIndex)
+                                        marker.fraction
+                                    } else {
+                                        clampedFraction
+                                    }
+                                },
+                                onDoubleTap = {
+                                    scale = 1f
+                                    offsetFraction = 0f
+                                    crosshairFraction = null
+                                    nearMarker = null
+                                },
+                            )
+                        },
+                ) {
+                    val chartWidth = size.width
+                    val chartHeight = size.height
+                    val visibleStart = offsetFraction
+                    val visibleEnd = (offsetFraction + 1f / scale).coerceAtMost(1f)
+                    val visibleRange = visibleEnd - visibleStart
+                    if (visibleRange <= 0f) return@Canvas
 
-                // Visible range in day fractions
-                val visibleStart = offsetFraction
-                val visibleEnd = (offsetFraction + 1f / scale).coerceAtMost(1f)
-                val visibleRange = visibleEnd - visibleStart
+                    fun fractionToX(f: Float): Float =
+                        ((f - visibleStart) / visibleRange) * chartWidth
 
-                if (visibleRange <= 0f) return@Canvas
-
-                // Helper: day fraction to x pixel
-                fun fractionToX(f: Float): Float =
-                    ((f - visibleStart) / visibleRange) * chartWidth
-
-                // Draw activity regions
-                for (region in graphData.activityRegions) {
-                    val x1 = fractionToX(region.startFraction).coerceIn(0f, chartWidth)
-                    val x2 = fractionToX(region.endFraction).coerceIn(0f, chartWidth)
-                    if (x2 > x1) {
-                        drawRect(
-                            color = region.activity.regionColor(activityColors),
-                            topLeft = Offset(x1, 0f),
-                            size = Size(x2 - x1, chartHeight),
-                            alpha = REGION_ALPHA,
-                        )
+                    // Activity regions
+                    for (region in graphData.activityRegions) {
+                        val x1 = fractionToX(region.startFraction).coerceIn(0f, chartWidth)
+                        val x2 = fractionToX(region.endFraction).coerceIn(0f, chartWidth)
+                        if (x2 > x1) {
+                            drawRect(
+                                color = region.activity.regionColor(activityColors),
+                                topLeft = Offset(x1, 0f),
+                                size = Size(x2 - x1, chartHeight),
+                                alpha = REGION_ALPHA,
+                            )
+                        }
                     }
-                }
 
-                // Draw highlighted session region
-                if (highlightedSessionIndex in graphData.activityRegions.indices) {
-                    val region = graphData.activityRegions[highlightedSessionIndex]
-                    val x1 = fractionToX(region.startFraction).coerceIn(0f, chartWidth)
-                    val x2 = fractionToX(region.endFraction).coerceIn(0f, chartWidth)
-                    if (x2 > x1) {
-                        drawRect(
-                            color = region.activity.regionColor(activityColors),
-                            topLeft = Offset(x1, 0f),
-                            size = Size(x2 - x1, chartHeight),
-                            alpha = HIGHLIGHT_ALPHA,
-                        )
+                    // Highlighted session
+                    if (highlightedSessionIndex in graphData.activityRegions.indices) {
+                        val region = graphData.activityRegions[highlightedSessionIndex]
+                        val x1 = fractionToX(region.startFraction).coerceIn(0f, chartWidth)
+                        val x2 = fractionToX(region.endFraction).coerceIn(0f, chartWidth)
+                        if (x2 > x1) {
+                            drawRect(
+                                color = region.activity.regionColor(activityColors),
+                                topLeft = Offset(x1, 0f),
+                                size = Size(x2 - x1, chartHeight),
+                                alpha = HIGHLIGHT_ALPHA,
+                            )
+                        }
                     }
-                }
 
-                // Draw session boundary markers
-                for (marker in graphData.markers) {
-                    val mx = fractionToX(marker.fraction)
-                    if (mx in 0f..chartWidth) {
+                    // Session boundary markers
+                    for (marker in graphData.markers) {
+                        val mx = fractionToX(marker.fraction)
+                        if (mx in 0f..chartWidth) {
+                            drawLine(
+                                color = markerColor,
+                                start = Offset(mx, 0f),
+                                end = Offset(mx, chartHeight),
+                                strokeWidth = 1.5f,
+                                alpha = MARKER_ALPHA,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f)),
+                            )
+                        }
+                    }
+
+                    // Grid lines with Y-axis labels
+                    val gridDash = PathEffect.dashPathEffect(floatArrayOf(8f, 4f))
+                    for (i in 1 until Y_GRID_DIVISIONS) {
+                        val y = chartHeight * (1f - i.toFloat() / Y_GRID_DIVISIONS)
                         drawLine(
-                            color = markerColor,
-                            start = Offset(mx, 0f),
-                            end = Offset(mx, chartHeight),
-                            strokeWidth = 1.5f,
-                            alpha = MARKER_ALPHA,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f)),
+                            color = gridLineColor,
+                            start = Offset(0f, y),
+                            end = Offset(chartWidth, y),
+                            strokeWidth = 1f,
+                            pathEffect = gridDash,
                         )
                     }
-                }
 
-                // Draw horizontal grid lines (3 lines for each axis)
-                val gridDash = PathEffect.dashPathEffect(floatArrayOf(8f, 4f))
-                for (i in 1..3) {
-                    val y = chartHeight * (1f - i / 4f)
-                    drawLine(
-                        color = gridLineColor,
-                        start = Offset(0f, y),
-                        end = Offset(chartWidth, y),
-                        strokeWidth = 1f,
-                        pathEffect = gridDash,
-                    )
-                }
+                    if (graphData.points.isEmpty()) return@Canvas
 
-                if (graphData.points.isEmpty()) return@Canvas
+                    // Cumulative line (left axis)
+                    if (niceMaxCumulative > 0) {
+                        val path = Path()
+                        var started = false
+                        for (point in graphData.points) {
+                            val fraction = (point.bucketStartMillis - dayStartMillis) / dayDuration
+                            val x = fractionToX(fraction)
+                            val y = chartHeight * (1f - point.cumulativeSteps.toFloat() / niceMaxCumulative)
+                            if (!started) { path.moveTo(x, y); started = true } else path.lineTo(x, y)
+                        }
+                        drawPath(path, cumulativeLineColor, style = Stroke(width = 2.5f))
+                    }
 
-                // Draw cumulative line (left axis)
-                if (graphData.maxCumulative > 0) {
-                    val cumulativePath = Path()
-                    var started = false
-                    for (point in graphData.points) {
-                        val fraction = (point.bucketStartMillis - dayStartMillis) / dayDuration
-                        val x = fractionToX(fraction)
-                        val y = chartHeight * (1f - point.cumulativeSteps.toFloat() / graphData.maxCumulative)
-                        if (!started) {
-                            cumulativePath.moveTo(x, y)
-                            started = true
-                        } else {
-                            cumulativePath.lineTo(x, y)
+                    // Bucket line (right axis)
+                    if (niceMaxBucket > 0) {
+                        val path = Path()
+                        var started = false
+                        for (point in graphData.points) {
+                            val fraction = (point.bucketStartMillis - dayStartMillis) / dayDuration
+                            val x = fractionToX(fraction)
+                            val y = chartHeight * (1f - point.bucketSteps.toFloat() / niceMaxBucket)
+                            if (!started) { path.moveTo(x, y); started = true } else path.lineTo(x, y)
+                        }
+                        drawPath(path, bucketLineColor, style = Stroke(width = 1.5f), alpha = 0.8f)
+                    }
+
+                    // Crosshair
+                    val cf = crosshairFraction
+                    if (cf != null) {
+                        val cx = fractionToX(cf)
+                        if (cx in 0f..chartWidth) {
+                            drawLine(crosshairColor, Offset(cx, 0f), Offset(cx, chartHeight), 1.5f, alpha = CROSSHAIR_ALPHA)
                         }
                     }
-                    drawPath(
-                        path = cumulativePath,
-                        color = cumulativeLineColor,
-                        style = Stroke(width = 3f),
-                    )
                 }
 
-                // Draw bucket line (right axis)
-                if (graphData.maxBucket > 0) {
-                    val bucketPath = Path()
-                    var started = false
-                    for (point in graphData.points) {
-                        val fraction = (point.bucketStartMillis - dayStartMillis) / dayDuration
-                        val x = fractionToX(fraction)
-                        val y = chartHeight * (1f - point.bucketSteps.toFloat() / graphData.maxBucket)
-                        if (!started) {
-                            bucketPath.moveTo(x, y)
-                            started = true
-                        } else {
-                            bucketPath.lineTo(x, y)
-                        }
-                    }
-                    drawPath(
-                        path = bucketPath,
-                        color = bucketLineColor,
-                        style = Stroke(width = 2f),
-                    )
-                }
-
-                // Draw crosshair
+                // Tooltip overlay
                 val cf = crosshairFraction
                 if (cf != null) {
-                    val cx = fractionToX(cf)
-                    if (cx in 0f..chartWidth) {
-                        drawLine(
-                            color = crosshairColor,
-                            start = Offset(cx, 0f),
-                            end = Offset(cx, chartHeight),
-                            strokeWidth = 2f,
-                            alpha = CROSSHAIR_ALPHA,
-                        )
+                    val markerSession = nearMarker?.let { m -> sessions.getOrNull(m.sessionIndex) }
+                    if (markerSession != null) {
+                        MarkerTooltip(session = markerSession, modifier = Modifier.align(Alignment.TopCenter))
+                    } else if (graphData.points.isNotEmpty()) {
+                        val targetMillis = dayStartMillis + (cf * dayDuration).toLong()
+                        val nearestPoint = graphData.points.minByOrNull {
+                            kotlin.math.abs(it.bucketStartMillis - targetMillis)
+                        }
+                        if (nearestPoint != null) {
+                            CrosshairTooltip(point = nearestPoint, modifier = Modifier.align(Alignment.TopCenter))
+                        }
                     }
                 }
             }
 
-            // Tooltip overlay
-            val cf = crosshairFraction
-            if (cf != null) {
-                val markerSession = nearMarker?.let { m ->
-                    sessions.getOrNull(m.sessionIndex)
-                }
-                if (markerSession != null) {
-                    // Show session detail tooltip when tapping near a marker
-                    MarkerTooltip(
-                        session = markerSession,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                    )
-                } else if (graphData.points.isNotEmpty()) {
-                    // Show regular crosshair tooltip
-                    val targetMillis = dayStartMillis + (cf * dayDuration).toLong()
-                    val nearestPoint = graphData.points.minByOrNull {
-                        kotlin.math.abs(it.bucketStartMillis - targetMillis)
-                    }
-                    if (nearestPoint != null) {
-                        CrosshairTooltip(
-                            point = nearestPoint,
-                            modifier = Modifier.align(Alignment.TopCenter),
-                        )
-                    }
-                }
-            }
+            // Right Y-axis labels (per bucket)
+            YAxisLabels(
+                maxValue = niceMaxBucket,
+                color = bucketLineColor,
+                alignment = Alignment.Start,
+                modifier = Modifier
+                    .width(Y_AXIS_RIGHT_WIDTH)
+                    .height(CHART_HEIGHT),
+            )
         }
 
-        // X-axis time labels
-        StepGraphTimeLabels(
-            scale = scale,
-            offsetFraction = offsetFraction,
-        )
+        // X-axis time labels (indented to match chart area)
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Spacer(modifier = Modifier.width(Y_AXIS_LEFT_WIDTH))
+            StepGraphTimeLabels(
+                scale = scale,
+                offsetFraction = offsetFraction,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(Y_AXIS_RIGHT_WIDTH))
+        }
 
-        // Y-axis legend
+        // Legend
         StepGraphLegend(
             maxCumulative = graphData.maxCumulative,
             maxBucket = graphData.maxBucket,
             cumulativeColor = cumulativeLineColor,
             bucketColor = bucketLineColor,
         )
+    }
+}
+
+/**
+ * Y-axis labels drawn vertically alongside the chart.
+ *
+ * Shows [Y_GRID_DIVISIONS] evenly spaced labels from 0 to [maxValue].
+ *
+ * @param maxValue  The maximum value on this axis.
+ * @param color     Color for the label text.
+ * @param alignment Horizontal alignment of labels within the column.
+ * @param modifier  Modifier (must include width and height constraints).
+ */
+@Composable
+private fun YAxisLabels(
+    maxValue: Int,
+    color: Color,
+    alignment: Alignment.Horizontal,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+    val textMeasurer = rememberTextMeasurer()
+
+    // Measure label height so we can center each label on its grid line
+    val sampleResult = textMeasurer.measure("0", labelStyle)
+    val labelHeightPx = sampleResult.size.height
+
+    BoxWithConstraints(modifier = modifier) {
+        val heightPx = with(density) { maxHeight.toPx() }
+        for (i in 0..Y_GRID_DIVISIONS) {
+            val value = maxValue * i / Y_GRID_DIVISIONS
+            val yFraction = 1f - i.toFloat() / Y_GRID_DIVISIONS
+            val yOffsetPx = (yFraction * heightPx - labelHeightPx / 2f).toInt()
+                .coerceIn(0, (heightPx - labelHeightPx).toInt())
+
+            Text(
+                text = formatAxisLabel(value),
+                style = labelStyle,
+                color = color,
+                textAlign = if (alignment == Alignment.End) TextAlign.End else TextAlign.Start,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(0, yOffsetPx) },
+            )
+        }
     }
 }
 
@@ -700,6 +799,8 @@ private fun MarkerTooltip(
 
 /**
  * Row of time labels below the graph, adjusting for zoom/pan state.
+ *
+ * Uses [TIME_LABELS_COARSE] at default zoom and [TIME_LABELS_FINE] when zoomed in.
  */
 @Composable
 private fun StepGraphTimeLabels(
@@ -710,25 +811,26 @@ private fun StepGraphTimeLabels(
     val visibleStart = offsetFraction
     val visibleEnd = (offsetFraction + 1f / scale).coerceAtMost(1f)
     val visibleRange = visibleEnd - visibleStart
+    val labels = if (scale > 2f) TIME_LABELS_FINE else TIME_LABELS_COARSE
+    val density = LocalDensity.current
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .height(X_AXIS_HEIGHT),
     ) {
-        for ((label, fraction) in TIME_LABELS) {
+        val widthPx = with(density) { maxWidth.toPx() }
+
+        for ((label, fraction) in labels) {
             if (fraction in visibleStart..visibleEnd) {
                 val xFraction = (fraction - visibleStart) / visibleRange
+                val xOffsetPx = (xFraction * widthPx).toInt()
+
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = (xFraction * 300).dp.coerceAtMost(280.dp)),
-                    // Note: using fillMaxWidth with a fraction offset would be
-                    // more precise, but this simple approach works well enough
-                    // for the fixed set of labels.
+                    modifier = Modifier.offset { IntOffset(xOffsetPx - 12, 0) },
                 )
             }
         }
@@ -753,11 +855,16 @@ private fun StepGraphLegend(
             .padding(top = 4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Canvas(modifier = Modifier.padding(end = 4.dp).height(2.dp).padding(horizontal = 0.dp)) {
+            Canvas(
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .width(16.dp)
+                    .height(3.dp),
+            ) {
                 drawLine(
                     color = cumulativeColor,
                     start = Offset(0f, size.height / 2),
-                    end = Offset(12.dp.toPx(), size.height / 2),
+                    end = Offset(size.width, size.height / 2),
                     strokeWidth = 3f,
                 )
             }
@@ -768,11 +875,16 @@ private fun StepGraphLegend(
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Canvas(modifier = Modifier.padding(end = 4.dp).height(2.dp)) {
+            Canvas(
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .width(16.dp)
+                    .height(3.dp),
+            ) {
                 drawLine(
                     color = bucketColor,
                     start = Offset(0f, size.height / 2),
-                    end = Offset(12.dp.toPx(), size.height / 2),
+                    end = Offset(size.width, size.height / 2),
                     strokeWidth = 2f,
                 )
             }
