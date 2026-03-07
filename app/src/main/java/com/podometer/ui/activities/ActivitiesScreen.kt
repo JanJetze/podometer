@@ -17,7 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -73,25 +73,6 @@ fun ActivitiesScreen(
             TopAppBar(
                 title = { Text(text = stringResource(R.string.screen_activities)) },
             )
-        },
-        floatingActionButton = {
-            if (!uiState.isLoading && uiState.windows.isNotEmpty()) {
-                FloatingActionButton(
-                    onClick = {
-                        val dayStart = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
-                        val noon = dayStart + 12 * 3_600_000L
-                        editingSession = ActivitySession(
-                            activity = ActivityState.WALKING,
-                            startTime = noon,
-                            endTime = noon + ActivitySession.DEFAULT_DURATION_MS,
-                            startTransitionId = 0,
-                            isManualOverride = false,
-                        )
-                    },
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add activity")
-                }
-            }
         },
         modifier = modifier,
     ) { innerPadding ->
@@ -181,6 +162,29 @@ fun ActivitiesScreen(
                         },
                         nowMillis = if (uiState.isToday) nowMillis else dayEndMillis,
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                if (uiState.windows.isNotEmpty()) {
+                    FilledTonalButton(
+                        onClick = {
+                            val dayStart = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
+                            val noon = dayStart + 12 * 3_600_000L
+                            editingSession = ActivitySession(
+                                activity = ActivityState.WALKING,
+                                startTime = noon,
+                                endTime = noon + ActivitySession.DEFAULT_DURATION_MS,
+                                startTransitionId = 0,
+                                isManualOverride = false,
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                        Text(text = stringResource(R.string.add_activity))
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
                 }

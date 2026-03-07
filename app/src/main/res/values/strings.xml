@@ -41,6 +41,7 @@
     <string name="activities_no_data">No sensor data available for this date</string>
     <string name="activities_previous_day">Previous day</string>
     <string name="activities_next_day">Next day</string>
+    <string name="add_activity">Add activity</string>
 
     <!-- ActivityTimeline accessibility -->
     <string name="cd_timeline_no_data">Activity timeline: no activity data available.</string>
