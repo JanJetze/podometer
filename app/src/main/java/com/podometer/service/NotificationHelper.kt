@@ -2,7 +2,6 @@
 package com.podometer.service
 
 import android.app.Notification
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -32,9 +31,6 @@ import javax.inject.Singleton
 class NotificationHelper @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-
-    private val notificationManager: NotificationManager =
-        context.getSystemService(NotificationManager::class.java)
 
     private fun buildPendingIntent(): PendingIntent =
         PendingIntent.getActivity(
@@ -67,25 +63,6 @@ class NotificationHelper @Inject constructor(
             .setOngoing(true)
             .setSilent(true)
             .build()
-    }
-
-    /**
-     * Updates the existing foreground notification in-place via
-     * [NotificationManager.notify] so the system does not recreate it.
-     *
-     * @param steps      Current step count.
-     * @param distanceKm Current distance in km.
-     * @param activity   Current activity state.
-     * @param style      Display style to use.
-     */
-    fun updateNotification(
-        steps: Int,
-        distanceKm: Float,
-        activity: ActivityState,
-        style: NotificationStyle,
-    ) {
-        val notification = buildNotification(steps, distanceKm, activity, style)
-        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     // ─── Pure formatting helpers (companion — no Context needed) ─────────────
