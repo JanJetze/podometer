@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Inject
 
@@ -104,6 +105,13 @@ class StepTrackingService : Service() {
     private var notificationTickerJob: Job? = null
     private var classifierJob: Job? = null
     private var orphanCleanupJob: Job? = null
+
+    /**
+     * Accumulates step counts between classifier evaluations so each
+     * [SensorWindow] can record how many steps occurred during its 30-second
+     * interval. Reset to zero each time the classifier persists a window.
+     */
+    private val windowStepAccumulator = AtomicInteger(0)
 
     /**
      * Timestamp (ms) of the most recently processed step event.  Used by
@@ -266,6 +274,7 @@ class StepTrackingService : Service() {
                 stepFrequencyTracker.recordStep(ts)
             }
             lastStepEventMs = nowMs
+            windowStepAccumulator.addAndGet(delta)
 
             // Skip step accumulation while cycling is active.
             if (cyclingSessionManager.isStepCountingPaused) {
@@ -372,6 +381,7 @@ class StepTrackingService : Service() {
             val stepFreq = stepFrequencyTracker.computeStepFrequency(now)
 
             // Persist raw sensor window for retroactive recomputation (7-day retention).
+            val stepsInWindow = windowStepAccumulator.getAndSet(0)
             serviceScope.launch {
                 try {
                     sensorWindowRepository.insertWindow(
@@ -379,7 +389,7 @@ class StepTrackingService : Service() {
                             timestamp = now,
                             magnitudeVariance = features.magnitudeVariance,
                             stepFrequencyHz = stepFreq,
-                            stepCount = 0, // per-window step count not tracked; reserved for future use
+                            stepCount = stepsInWindow,
                         ),
                     )
                 } catch (e: Exception) {
