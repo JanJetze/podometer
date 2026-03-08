@@ -179,4 +179,28 @@ class NotificationHelperTest {
         val clazz = NotificationHelper::class.java
         assertEquals("com.podometer.service", clazz.packageName)
     }
+
+    // ─── NotificationStyle.fromPreference ─────────────────────────────────────
+
+    @Test
+    fun `fromPreference returns MINIMAL for minimal`() {
+        assertEquals(NotificationStyle.MINIMAL, NotificationStyle.fromPreference("minimal"))
+    }
+
+    @Test
+    fun `fromPreference returns DETAILED for detailed`() {
+        assertEquals(NotificationStyle.DETAILED, NotificationStyle.fromPreference("detailed"))
+    }
+
+    @Test
+    fun `fromPreference is case-insensitive`() {
+        assertEquals(NotificationStyle.DETAILED, NotificationStyle.fromPreference("Detailed"))
+        assertEquals(NotificationStyle.DETAILED, NotificationStyle.fromPreference("DETAILED"))
+    }
+
+    @Test
+    fun `fromPreference falls back to MINIMAL for unknown value`() {
+        assertEquals(NotificationStyle.MINIMAL, NotificationStyle.fromPreference("unknown"))
+        assertEquals(NotificationStyle.MINIMAL, NotificationStyle.fromPreference(""))
+    }
 }

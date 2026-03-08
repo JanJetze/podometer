@@ -10,5 +10,18 @@ package com.podometer.service
  */
 enum class NotificationStyle {
     MINIMAL,
-    DETAILED,
+    DETAILED;
+
+    companion object {
+        /**
+         * Converts a DataStore preference string to the corresponding enum value.
+         *
+         * Recognised strings: `"minimal"`, `"detailed"` (case-insensitive).
+         * Unrecognised values fall back to [MINIMAL].
+         */
+        fun fromPreference(value: String): NotificationStyle = when (value.lowercase()) {
+            "detailed" -> DETAILED
+            else -> MINIMAL
+        }
+    }
 }

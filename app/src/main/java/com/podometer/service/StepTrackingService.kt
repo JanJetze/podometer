@@ -30,7 +30,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -103,6 +105,7 @@ class StepTrackingService : Service() {
 
     private var collectorJob: Job? = null
     private var notificationTickerJob: Job? = null
+    private var notificationStyleJob: Job? = null
     private var classifierJob: Job? = null
     private var orphanCleanupJob: Job? = null
 
@@ -124,10 +127,10 @@ class StepTrackingService : Service() {
     private var lastStepEventMs: Long = 0L
 
     /**
-     * Stride length in kilometres, read once from [PreferencesManager] during
-     * [onCreate] and cached here so that [collectStepEvents] can construct
-     * partial-hour [DailySummary] records for live dashboard updates without
-     * re-reading the preference on every step event.
+     * Stride length in kilometres, read from [PreferencesManager] during
+     * [onCreate] and refreshed by the notification ticker every 30 s.
+     * Used by [collectStepEvents] for live dashboard distance updates and
+     * by [updateForegroundNotification] for notification content.
      *
      * Defaults to [StepAccumulator.DEFAULT_STRIDE_LENGTH_KM] if the preference
      * read fails.
@@ -172,6 +175,9 @@ class StepTrackingService : Service() {
         }
         if (notificationTickerJob == null || notificationTickerJob?.isActive != true) {
             notificationTickerJob = launchNotificationTicker()
+        }
+        if (notificationStyleJob == null || notificationStyleJob?.isActive != true) {
+            notificationStyleJob = launchNotificationStyleObserver()
         }
         // Orphan cleanup must be launched before the classifier so the classifier
         // can join() it before its first evaluation (see launchClassifier).
@@ -242,11 +248,15 @@ class StepTrackingService : Service() {
     }
 
     private fun startForegroundWithNotification() {
+        val style = runBlockingWithDefault(
+            default = NotificationStyle.MINIMAL,
+            tag = "read notification style preference",
+        ) { NotificationStyle.fromPreference(preferencesManager.notificationStyle().first()) }
         val notification = notificationHelper.buildNotification(
             steps = accumulator.totalStepsToday,
             distanceKm = 0f,
             activity = ActivityState.STILL,
-            style = NotificationStyle.MINIMAL,
+            style = style,
         )
         ServiceCompat.startForeground(
             this,
@@ -496,6 +506,29 @@ class StepTrackingService : Service() {
     // ─── Notification ticker ──────────────────────────────────────────────────
 
     /**
+     * Re-posts the foreground notification via [ServiceCompat.startForeground]
+     * with the current step data and the given [style].
+     */
+    private fun updateForegroundNotification(style: NotificationStyle) {
+        val strideKm = strideLengthKm
+        val distanceKm = accumulator.totalStepsToday * strideKm
+        val currentActivity = cyclingClassifier.getCurrentState()
+        val notification = notificationHelper.buildNotification(
+            steps = accumulator.totalStepsToday,
+            distanceKm = distanceKm,
+            activity = currentActivity,
+            style = style,
+        )
+        ServiceCompat.startForeground(
+            this,
+            NotificationHelper.NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
+        )
+        Log.d(TAG, "Notification updated: ${accumulator.totalStepsToday} steps, $distanceKm km, style=$style")
+    }
+
+    /**
      * Coroutine that updates the foreground notification every [NOTIFICATION_UPDATE_INTERVAL_MS]
      * milliseconds with the current step count, computed distance, and detected
      * activity state. Runs until the service scope is cancelled.
@@ -503,17 +536,27 @@ class StepTrackingService : Service() {
     private fun launchNotificationTicker(): Job = serviceScope.launch {
         while (isActive) {
             delay(NOTIFICATION_UPDATE_INTERVAL_MS)
-            val strideKm = preferencesManager.strideLengthKm().first()
-            val distanceKm = accumulator.totalStepsToday * strideKm
-            val currentActivity = cyclingClassifier.getCurrentState()
-            notificationHelper.updateNotification(
-                steps = accumulator.totalStepsToday,
-                distanceKm = distanceKm,
-                activity = currentActivity,
-                style = NotificationStyle.MINIMAL,
+            strideLengthKm = preferencesManager.strideLengthKm().first()
+            val style = NotificationStyle.fromPreference(
+                preferencesManager.notificationStyle().first(),
             )
-            Log.d(TAG, "Notification updated: ${accumulator.totalStepsToday} steps, $distanceKm km, activity=$currentActivity")
+            updateForegroundNotification(style)
         }
+    }
+
+    /**
+     * Observes the notification style preference and immediately updates the
+     * notification when it changes.  The initial emission is dropped because
+     * the ticker (or the initial [startForegroundWithNotification]) already
+     * handles the first value.
+     */
+    private fun launchNotificationStyleObserver(): Job = serviceScope.launch {
+        preferencesManager.notificationStyle()
+            .map { NotificationStyle.fromPreference(it) }
+            .drop(1) // skip the initial value — already applied
+            .collect { style ->
+                updateForegroundNotification(style)
+            }
     }
 
     // ─── Constants and helpers ────────────────────────────────────────────────
