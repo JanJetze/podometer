@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.time.DayOfWeek
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,6 +24,8 @@ import javax.inject.Singleton
  * - The daily step goal preference for the progress ring on the dashboard.
  * - The notification style preference controlling the foreground notification detail level.
  * - The onboarding-complete flag that determines the app start destination.
+ * - Multi-tier step goals: [minimumStepGoal], [targetStepGoal], [stretchStepGoal].
+ * - Per-day rest day configuration: [restDays].
  */
 @Singleton
 class PreferencesManager @Inject constructor(
@@ -65,6 +68,26 @@ class PreferencesManager @Inject constructor(
 
         /** Default use-test-data: false (use real sensor data). */
         const val DEFAULT_USE_TEST_DATA = false
+
+        val KEY_MINIMUM_STEP_GOAL = intPreferencesKey("minimum_step_goal")
+
+        /** Default minimum step goal (lower tier). */
+        const val DEFAULT_MINIMUM_STEP_GOAL = 5_000
+
+        val KEY_TARGET_STEP_GOAL = intPreferencesKey("target_step_goal")
+
+        /** Default target step goal (middle tier, replaces legacy dailyStepGoal semantically). */
+        const val DEFAULT_TARGET_STEP_GOAL = 8_000
+
+        val KEY_STRETCH_STEP_GOAL = intPreferencesKey("stretch_step_goal")
+
+        /** Default stretch step goal (upper tier). */
+        const val DEFAULT_STRETCH_STEP_GOAL = 12_000
+
+        val KEY_REST_DAYS = stringPreferencesKey("rest_days")
+
+        /** Separator used when serialising [DayOfWeek] names. */
+        const val REST_DAYS_SEPARATOR = ","
     }
 
     // ─── Read ────────────────────────────────────────────────────────────────
@@ -122,6 +145,47 @@ class PreferencesManager @Inject constructor(
     fun isOnboardingComplete(): Flow<Boolean> =
         dataStore.data.map { prefs ->
             prefs[KEY_ONBOARDING_COMPLETE] ?: DEFAULT_ONBOARDING_COMPLETE
+        }
+
+    /**
+     * Emits the minimum step goal (lower tier).
+     * Defaults to [DEFAULT_MINIMUM_STEP_GOAL] (5,000 steps).
+     */
+    fun minimumStepGoal(): Flow<Int> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_MINIMUM_STEP_GOAL] ?: DEFAULT_MINIMUM_STEP_GOAL
+        }
+
+    /**
+     * Emits the target step goal (middle tier).
+     * Defaults to [DEFAULT_TARGET_STEP_GOAL] (8,000 steps).
+     */
+    fun targetStepGoal(): Flow<Int> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_TARGET_STEP_GOAL] ?: DEFAULT_TARGET_STEP_GOAL
+        }
+
+    /**
+     * Emits the stretch step goal (upper tier).
+     * Defaults to [DEFAULT_STRETCH_STEP_GOAL] (12,000 steps).
+     */
+    fun stretchStepGoal(): Flow<Int> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_STRETCH_STEP_GOAL] ?: DEFAULT_STRETCH_STEP_GOAL
+        }
+
+    /**
+     * Emits the set of days of the week designated as rest days.
+     * On rest days goals are relaxed and the day does not break a streak.
+     * Defaults to an empty set (no rest days).
+     */
+    fun restDays(): Flow<Set<DayOfWeek>> =
+        dataStore.data.map { prefs ->
+            val raw = prefs[KEY_REST_DAYS] ?: return@map emptySet()
+            if (raw.isBlank()) return@map emptySet()
+            raw.split(REST_DAYS_SEPARATOR)
+                .mapNotNull { name -> runCatching { DayOfWeek.valueOf(name.trim()) }.getOrNull() }
+                .toSet()
         }
 
     // ─── Write ───────────────────────────────────────────────────────────────
@@ -195,6 +259,60 @@ class PreferencesManager @Inject constructor(
     suspend fun setOnboardingComplete(complete: Boolean) {
         dataStore.edit { prefs ->
             prefs[KEY_ONBOARDING_COMPLETE] = complete
+        }
+    }
+
+    /**
+     * Persists the given [goal] as the minimum step goal (lower tier).
+     *
+     * @param goal Must be a positive integer (> 0).
+     * @throws IllegalArgumentException if [goal] is zero or negative.
+     */
+    suspend fun setMinimumStepGoal(goal: Int) {
+        require(goal > 0) { "Minimum step goal must be positive, got $goal" }
+        dataStore.edit { prefs ->
+            prefs[KEY_MINIMUM_STEP_GOAL] = goal
+        }
+    }
+
+    /**
+     * Persists the given [goal] as the target step goal (middle tier).
+     *
+     * @param goal Must be a positive integer (> 0).
+     * @throws IllegalArgumentException if [goal] is zero or negative.
+     */
+    suspend fun setTargetStepGoal(goal: Int) {
+        require(goal > 0) { "Target step goal must be positive, got $goal" }
+        dataStore.edit { prefs ->
+            prefs[KEY_TARGET_STEP_GOAL] = goal
+        }
+    }
+
+    /**
+     * Persists the given [goal] as the stretch step goal (upper tier).
+     *
+     * @param goal Must be a positive integer (> 0).
+     * @throws IllegalArgumentException if [goal] is zero or negative.
+     */
+    suspend fun setStretchStepGoal(goal: Int) {
+        require(goal > 0) { "Stretch step goal must be positive, got $goal" }
+        dataStore.edit { prefs ->
+            prefs[KEY_STRETCH_STEP_GOAL] = goal
+        }
+    }
+
+    /**
+     * Persists the given set of [days] as rest days.
+     *
+     * Stored as a comma-separated string of [DayOfWeek] names
+     * (e.g. "SATURDAY,SUNDAY"). Pass an empty set to clear rest days.
+     *
+     * @param days The set of [DayOfWeek] values that are rest days.
+     */
+    suspend fun setRestDays(days: Set<DayOfWeek>) {
+        val encoded = days.joinToString(REST_DAYS_SEPARATOR) { it.name }
+        dataStore.edit { prefs ->
+            prefs[KEY_REST_DAYS] = encoded
         }
     }
 }

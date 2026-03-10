@@ -56,6 +56,7 @@ class UseCaseTest {
         override suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) = Unit
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
         override suspend fun insertAllDailySummaries(summaries: List<DailySummary>) { }
+        override suspend fun getDailySummariesUpTo(endDate: String, limit: Int): List<DailySummary> = emptyList()
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

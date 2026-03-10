@@ -70,4 +70,17 @@ interface StepDao {
      */
     @Query("SELECT * FROM daily_summaries ORDER BY date ASC")
     suspend fun getAllDailySummaries(): List<DailySummary>
+
+    /**
+     * Returns up to [limit] [DailySummary] rows whose [DailySummary.date] is on
+     * or before [endDate], ordered by date descending (most recent first).
+     *
+     * Used by streak calculation to walk backwards through history without
+     * loading the entire table.
+     *
+     * @param endDate Inclusive upper bound in "yyyy-MM-dd" format.
+     * @param limit   Maximum number of rows to return.
+     */
+    @Query("SELECT * FROM daily_summaries WHERE date <= :endDate ORDER BY date DESC LIMIT :limit")
+    suspend fun getDailySummariesUpTo(endDate: String, limit: Int): List<DailySummary>
 }

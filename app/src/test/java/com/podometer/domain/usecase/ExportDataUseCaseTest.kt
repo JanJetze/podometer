@@ -43,6 +43,7 @@ class ExportDataUseCaseTest {
         override suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) = Unit
         override suspend fun getAllDailySummaries(): List<DailySummary> = dailySummaries
         override suspend fun insertAllDailySummaries(summaries: List<DailySummary>) { }
+        override suspend fun getDailySummariesUpTo(endDate: String, limit: Int): List<DailySummary> = emptyList()
     }
 
     private class FakeStepBucketDao(

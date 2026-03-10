@@ -19,6 +19,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.DayOfWeek
 
 /**
  * Unit tests for [PreferencesManager].
@@ -381,5 +382,187 @@ class PreferencesManagerTest {
 
         val key = stringPreferencesKey("notification_style")
         assertEquals("minimal", fakeStore.lastWritten!![key])
+    }
+
+    // ─── minimumStepGoal ──────────────────────────────────────────────────────
+
+    @Test
+    fun `minimumStepGoal emits 5000 by default when key is absent`() = runTest {
+        val fakeStore = FakeDataStore(initial = preferencesOf())
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.minimumStepGoal().first()
+
+        assertEquals(5_000, result)
+    }
+
+    @Test
+    fun `minimumStepGoal emits stored custom value`() = runTest {
+        val key = intPreferencesKey("minimum_step_goal")
+        val fakeStore = FakeDataStore(initial = preferencesOf(key to 3_000))
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.minimumStepGoal().first()
+
+        assertEquals(3_000, result)
+    }
+
+    @Test
+    fun `setMinimumStepGoal writes value under correct key`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setMinimumStepGoal(4_000)
+
+        val key = intPreferencesKey("minimum_step_goal")
+        assertEquals(4_000, fakeStore.lastWritten!![key])
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `setMinimumStepGoal rejects zero`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setMinimumStepGoal(0)
+    }
+
+    // ─── targetStepGoal ───────────────────────────────────────────────────────
+
+    @Test
+    fun `targetStepGoal emits 8000 by default when key is absent`() = runTest {
+        val fakeStore = FakeDataStore(initial = preferencesOf())
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.targetStepGoal().first()
+
+        assertEquals(8_000, result)
+    }
+
+    @Test
+    fun `targetStepGoal emits stored custom value`() = runTest {
+        val key = intPreferencesKey("target_step_goal")
+        val fakeStore = FakeDataStore(initial = preferencesOf(key to 10_000))
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.targetStepGoal().first()
+
+        assertEquals(10_000, result)
+    }
+
+    @Test
+    fun `setTargetStepGoal writes value under correct key`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setTargetStepGoal(9_000)
+
+        val key = intPreferencesKey("target_step_goal")
+        assertEquals(9_000, fakeStore.lastWritten!![key])
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `setTargetStepGoal rejects zero`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setTargetStepGoal(0)
+    }
+
+    // ─── stretchStepGoal ──────────────────────────────────────────────────────
+
+    @Test
+    fun `stretchStepGoal emits 12000 by default when key is absent`() = runTest {
+        val fakeStore = FakeDataStore(initial = preferencesOf())
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.stretchStepGoal().first()
+
+        assertEquals(12_000, result)
+    }
+
+    @Test
+    fun `stretchStepGoal emits stored custom value`() = runTest {
+        val key = intPreferencesKey("stretch_step_goal")
+        val fakeStore = FakeDataStore(initial = preferencesOf(key to 15_000))
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.stretchStepGoal().first()
+
+        assertEquals(15_000, result)
+    }
+
+    @Test
+    fun `setStretchStepGoal writes value under correct key`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setStretchStepGoal(14_000)
+
+        val key = intPreferencesKey("stretch_step_goal")
+        assertEquals(14_000, fakeStore.lastWritten!![key])
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `setStretchStepGoal rejects zero`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setStretchStepGoal(0)
+    }
+
+    // ─── restDays ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `restDays emits empty set by default when key is absent`() = runTest {
+        val fakeStore = FakeDataStore(initial = preferencesOf())
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.restDays().first()
+
+        assertTrue("Default rest days should be empty", result.isEmpty())
+    }
+
+    @Test
+    fun `setRestDays stores Saturday and Sunday and round-trips correctly`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setRestDays(setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY))
+
+        val result = manager.restDays().first()
+        assertEquals(setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY), result)
+    }
+
+    @Test
+    fun `setRestDays stores a single rest day`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setRestDays(setOf(DayOfWeek.SUNDAY))
+
+        val result = manager.restDays().first()
+        assertEquals(setOf(DayOfWeek.SUNDAY), result)
+    }
+
+    @Test
+    fun `setRestDays with empty set produces empty restDays`() = runTest {
+        val fakeStore = FakeDataStore()
+        val manager = PreferencesManager(fakeStore)
+
+        manager.setRestDays(emptySet())
+
+        val result = manager.restDays().first()
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `restDays stored value is decoded from string key rest_days`() = runTest {
+        val key = stringPreferencesKey("rest_days")
+        // Store MONDAY (ordinal 1) and WEDNESDAY (ordinal 3) as comma-separated string
+        val fakeStore = FakeDataStore(initial = preferencesOf(key to "MONDAY,WEDNESDAY"))
+        val manager = PreferencesManager(fakeStore)
+
+        val result = manager.restDays().first()
+        assertEquals(setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY), result)
     }
 }

@@ -3,6 +3,8 @@ package com.podometer.di
 
 import android.os.Build
 import com.podometer.domain.usecase.ExportDataUseCase
+import com.podometer.domain.usecase.GetStreakUseCase
+import com.podometer.domain.usecase.GetStreakUseCaseImpl
 import com.podometer.domain.usecase.ImportDataUseCase
 import com.podometer.domain.usecase.GetTodayStepsUseCase
 import com.podometer.domain.usecase.GetTodayStepsUseCaseImpl
@@ -10,6 +12,7 @@ import com.podometer.domain.usecase.GetWeeklyStepsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCaseImpl
 import com.podometer.data.db.StepBucketDao
 import com.podometer.data.db.StepDao
+import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepBucketRepository
 import com.podometer.data.repository.StepRepository
 import dagger.Binds
@@ -37,6 +40,11 @@ abstract class UseCaseModule {
     @Binds
     @Singleton
     abstract fun bindGetWeeklyStepsUseCase(impl: GetWeeklyStepsUseCaseImpl): GetWeeklyStepsUseCase
+
+    /** Binds [GetStreakUseCaseImpl] to the [GetStreakUseCase] interface. */
+    @Binds
+    @Singleton
+    abstract fun bindGetStreakUseCase(impl: GetStreakUseCaseImpl): GetStreakUseCase
 
     companion object {
         /**

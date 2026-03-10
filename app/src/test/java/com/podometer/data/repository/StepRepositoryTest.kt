@@ -52,6 +52,8 @@ class StepRepositoryTest {
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
 
         override suspend fun insertAllDailySummaries(summaries: List<DailySummary>) { }
+
+        override suspend fun getDailySummariesUpTo(endDate: String, limit: Int): List<DailySummary> = emptyList()
     }
 
     // ─── getTodaySteps ───────────────────────────────────────────────────────
