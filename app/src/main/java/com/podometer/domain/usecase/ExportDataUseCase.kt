@@ -3,8 +3,9 @@ package com.podometer.domain.usecase
 
 import com.podometer.data.export.ExportDailySummary
 import com.podometer.data.export.ExportData
-import com.podometer.data.export.ExportHourlyAggregate
 import com.podometer.data.export.ExportMetadata
+import com.podometer.data.export.ExportStepBucket
+import com.podometer.data.repository.StepBucketRepository
 import com.podometer.data.repository.StepRepository
 import kotlinx.serialization.json.Json
 import java.time.Instant
@@ -16,11 +17,13 @@ import java.time.Instant
  * tested without Android dependencies. The [serializeToJson] function is a
  * pure function operating only on the export model.
  *
- * @param stepRepository Source for daily summaries and hourly aggregates.
+ * @param stepRepository Source for daily summaries.
+ * @param stepBucketRepository Source for 5-minute step buckets.
  * @param deviceModel Device model string included in export metadata (injectable for testing).
  */
 class ExportDataUseCase(
     private val stepRepository: StepRepository,
+    private val stepBucketRepository: StepBucketRepository,
     private val deviceModel: String,
 ) {
 
@@ -46,7 +49,7 @@ class ExportDataUseCase(
      */
     suspend fun buildExportData(): ExportData {
         val dailySummaries = stepRepository.getAllDailySummaries()
-        val hourlyAggregates = stepRepository.getAllHourlyAggregates()
+        val stepBuckets = stepBucketRepository.getAllBuckets()
 
         return ExportData(
             metadata = ExportMetadata(
@@ -61,12 +64,10 @@ class ExportDataUseCase(
                     totalDistance = summary.totalDistance,
                 )
             },
-            hourlyAggregates = hourlyAggregates.map { aggregate ->
-                ExportHourlyAggregate(
-                    id = aggregate.id,
-                    timestamp = aggregate.timestamp,
-                    stepCountDelta = aggregate.stepCountDelta,
-                    detectedActivity = aggregate.detectedActivity,
+            stepBuckets = stepBuckets.map { bucket ->
+                ExportStepBucket(
+                    timestamp = bucket.timestamp,
+                    stepCount = bucket.stepCount,
                 )
             },
         )

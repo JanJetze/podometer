@@ -14,54 +14,51 @@ import org.junit.Test
  */
 class EntityTest {
 
-    // ─── HourlyStepAggregate ────────────────────────────────────────────────
+    // ─── StepBucket ─────────────────────────────────────────────────────────
 
     @Test
-    fun `HourlyStepAggregate default id is 0`() {
-        val aggregate = HourlyStepAggregate(
+    fun `StepBucket stores all fields correctly`() {
+        val bucket = StepBucket(
             timestamp = 1_700_000_000_000L,
-            stepCountDelta = 42,
-            detectedActivity = "WALKING",
+            stepCount = 42,
         )
-        assertEquals(0, aggregate.id)
+        assertEquals(1_700_000_000_000L, bucket.timestamp)
+        assertEquals(42, bucket.stepCount)
     }
 
     @Test
-    fun `HourlyStepAggregate stores all fields correctly`() {
-        val aggregate = HourlyStepAggregate(
-            id = 7,
-            timestamp = 1_700_000_000_000L,
-            stepCountDelta = 100,
-            detectedActivity = "CYCLING",
-        )
-        assertEquals(7, aggregate.id)
-        assertEquals(1_700_000_000_000L, aggregate.timestamp)
-        assertEquals(100, aggregate.stepCountDelta)
-        assertEquals("CYCLING", aggregate.detectedActivity)
-    }
-
-    @Test
-    fun `HourlyStepAggregate data class equality works`() {
-        val a = HourlyStepAggregate(id = 1, timestamp = 1000L, stepCountDelta = 10, detectedActivity = "STILL")
-        val b = HourlyStepAggregate(id = 1, timestamp = 1000L, stepCountDelta = 10, detectedActivity = "STILL")
+    fun `StepBucket data class equality works`() {
+        val a = StepBucket(timestamp = 1000L, stepCount = 10)
+        val b = StepBucket(timestamp = 1000L, stepCount = 10)
         assertEquals(a, b)
     }
 
     @Test
-    fun `HourlyStepAggregate copy changes only specified field`() {
-        val original = HourlyStepAggregate(id = 1, timestamp = 1000L, stepCountDelta = 5, detectedActivity = "WALKING")
-        val copied = original.copy(stepCountDelta = 99)
-        assertEquals(99, copied.stepCountDelta)
+    fun `StepBucket copy changes only specified field`() {
+        val original = StepBucket(timestamp = 1000L, stepCount = 5)
+        val copied = original.copy(stepCount = 99)
+        assertEquals(99, copied.stepCount)
         assertEquals(original.timestamp, copied.timestamp)
-        assertEquals(original.detectedActivity, copied.detectedActivity)
     }
 
     @Test
-    fun `HourlyStepAggregate accepts all three activity strings`() {
-        listOf("WALKING", "CYCLING", "STILL").forEach { activity ->
-            val agg = HourlyStepAggregate(timestamp = 0L, stepCountDelta = 0, detectedActivity = activity)
-            assertEquals(activity, agg.detectedActivity)
-        }
+    fun `StepBucket not equal when timestamps differ`() {
+        val a = StepBucket(timestamp = 1000L, stepCount = 10)
+        val b = StepBucket(timestamp = 2000L, stepCount = 10)
+        assertNotEquals(a, b)
+    }
+
+    @Test
+    fun `StepBucket not equal when step counts differ`() {
+        val a = StepBucket(timestamp = 1000L, stepCount = 10)
+        val b = StepBucket(timestamp = 1000L, stepCount = 20)
+        assertNotEquals(a, b)
+    }
+
+    @Test
+    fun `StepBucket accepts zero step count`() {
+        val bucket = StepBucket(timestamp = 0L, stepCount = 0)
+        assertEquals(0, bucket.stepCount)
     }
 
     // ─── DailySummary ───────────────────────────────────────────────────────

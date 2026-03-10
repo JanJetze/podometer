@@ -53,24 +53,20 @@ class ExportModelsTest {
         assertEquals(summary.totalDistance, decoded.totalDistance, 0.0001f)
     }
 
-    // ─── ExportHourlyAggregate ───────────────────────────────────────────────
+    // ─── ExportStepBucket ────────────────────────────────────────────────────
 
     @Test
-    fun `ExportHourlyAggregate round-trip serialization preserves all fields`() {
-        val aggregate = ExportHourlyAggregate(
-            id = 42,
+    fun `ExportStepBucket round-trip serialization preserves all fields`() {
+        val bucket = ExportStepBucket(
             timestamp = 1_740_304_800_000L,
-            stepCountDelta = 350,
-            detectedActivity = "WALKING",
+            stepCount = 350,
         )
 
-        val encoded = json.encodeToString(aggregate)
-        val decoded = json.decodeFromString<ExportHourlyAggregate>(encoded)
+        val encoded = json.encodeToString(bucket)
+        val decoded = json.decodeFromString<ExportStepBucket>(encoded)
 
-        assertEquals(aggregate.id, decoded.id)
-        assertEquals(aggregate.timestamp, decoded.timestamp)
-        assertEquals(aggregate.stepCountDelta, decoded.stepCountDelta)
-        assertEquals(aggregate.detectedActivity, decoded.detectedActivity)
+        assertEquals(bucket.timestamp, decoded.timestamp)
+        assertEquals(bucket.stepCount, decoded.stepCount)
     }
 
     // ─── ExportData (full container) ─────────────────────────────────────────
@@ -87,8 +83,8 @@ class ExportModelsTest {
                 ExportDailySummary("2026-02-22", 9000, 6.75f),
                 ExportDailySummary("2026-02-23", 5000, 3.75f),
             ),
-            hourlyAggregates = listOf(
-                ExportHourlyAggregate(1, 1_740_218_400_000L, 400, "WALKING"),
+            stepBuckets = listOf(
+                ExportStepBucket(1_740_218_400_000L, 42),
             ),
         )
 
@@ -100,8 +96,8 @@ class ExportModelsTest {
         assertEquals(2, decoded.dailySummaries.size)
         assertEquals("2026-02-22", decoded.dailySummaries[0].date)
         assertEquals(9000, decoded.dailySummaries[0].totalSteps)
-        assertEquals(1, decoded.hourlyAggregates.size)
-        assertEquals(400, decoded.hourlyAggregates[0].stepCountDelta)
+        assertEquals(1, decoded.stepBuckets.size)
+        assertEquals(42, decoded.stepBuckets[0].stepCount)
     }
 
     @Test
@@ -109,14 +105,14 @@ class ExportModelsTest {
         val exportData = ExportData(
             metadata = ExportMetadata("2026-02-23T10:00:00Z", "2.0.0", "Generic"),
             dailySummaries = emptyList(),
-            hourlyAggregates = emptyList(),
+            stepBuckets = emptyList(),
         )
 
         val encoded = json.encodeToString(exportData)
         val decoded = json.decodeFromString<ExportData>(encoded)
 
         assertEquals(0, decoded.dailySummaries.size)
-        assertEquals(0, decoded.hourlyAggregates.size)
+        assertEquals(0, decoded.stepBuckets.size)
     }
 
     @Test
@@ -124,7 +120,7 @@ class ExportModelsTest {
         val exportData = ExportData(
             metadata = ExportMetadata("2026-02-23T10:00:00Z", "2.0.0", "Pixel 7"),
             dailySummaries = emptyList(),
-            hourlyAggregates = emptyList(),
+            stepBuckets = emptyList(),
         )
 
         val encoded = json.encodeToString(exportData)

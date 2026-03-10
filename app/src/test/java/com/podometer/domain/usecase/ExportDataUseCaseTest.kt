@@ -2,9 +2,11 @@
 package com.podometer.domain.usecase
 
 import com.podometer.data.db.DailySummary
-import com.podometer.data.db.HourlyStepAggregate
+import com.podometer.data.db.StepBucket
+import com.podometer.data.db.StepBucketDao
 import com.podometer.data.db.StepDao
 import com.podometer.data.export.ExportData
+import com.podometer.data.repository.StepBucketRepository
 import com.podometer.data.repository.StepRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -28,13 +30,7 @@ class ExportDataUseCaseTest {
 
     private class FakeStepDao(
         private val dailySummaries: List<DailySummary> = emptyList(),
-        private val hourlyAggregates: List<HourlyStepAggregate> = emptyList(),
     ) : StepDao {
-        override fun getTodayHourlyAggregates(todayStart: Long): Flow<List<HourlyStepAggregate>> =
-            flowOf(emptyList())
-
-        override fun getTodayTotalSteps(todayStart: Long): Flow<Int?> = flowOf(null)
-
         override fun getDailySummary(date: String): Flow<DailySummary?> = flowOf(null)
 
         override fun getWeeklyDailySummaries(
@@ -42,40 +38,34 @@ class ExportDataUseCaseTest {
             endDate: String,
         ): Flow<List<DailySummary>> = flowOf(emptyList())
 
-        override suspend fun getStepsForHour(hourTimestamp: Long): Int? = null
-
-        override suspend fun getTodayTotalStepsSnapshot(todayStart: Long): Int? = null
-
-        override suspend fun deleteHourlyAggregateByTimestamp(hourTimestamp: Long) = Unit
-
-        override suspend fun insertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
-
-        override suspend fun upsertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
-
+        override suspend fun getTodayTotalStepsSnapshot(date: String): Int? = null
         override suspend fun upsertDailySummary(summary: DailySummary) = Unit
-
         override suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) = Unit
-
         override suspend fun getAllDailySummaries(): List<DailySummary> = dailySummaries
-
-        override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = hourlyAggregates
-
         override suspend fun insertAllDailySummaries(summaries: List<DailySummary>) { }
+    }
 
-        override suspend fun insertAllHourlyAggregates(aggregates: List<HourlyStepAggregate>) { }
+    private class FakeStepBucketDao(
+        private val allBuckets: List<StepBucket> = emptyList(),
+    ) : StepBucketDao {
+        override suspend fun upsert(bucket: StepBucket) = Unit
+        override fun getBucketsForDay(startOfDay: Long, endOfDay: Long): Flow<List<StepBucket>> = flowOf(emptyList())
+        override fun getBucketsInRange(start: Long, end: Long): Flow<List<StepBucket>> = flowOf(emptyList())
+        override suspend fun getStepsForBucket(bucketTimestamp: Long): Int? = null
+        override suspend fun getAllBuckets(): List<StepBucket> = allBuckets
+        override suspend fun deleteAll() = Unit
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private fun makeUseCase(
         dailySummaries: List<DailySummary> = emptyList(),
-        hourlyAggregates: List<HourlyStepAggregate> = emptyList(),
+        stepBuckets: List<StepBucket> = emptyList(),
         deviceModel: String = "Test Device",
     ): ExportDataUseCase {
-        val stepRepo = StepRepository(
-            FakeStepDao(dailySummaries, hourlyAggregates),
-        )
-        return ExportDataUseCase(stepRepo, deviceModel)
+        val stepRepo = StepRepository(FakeStepDao(dailySummaries))
+        val bucketRepo = StepBucketRepository(FakeStepBucketDao(stepBuckets))
+        return ExportDataUseCase(stepRepo, bucketRepo, deviceModel)
     }
 
     // ─── Tests ───────────────────────────────────────────────────────────────
@@ -111,21 +101,19 @@ class ExportDataUseCaseTest {
     }
 
     @Test
-    fun `buildExportData maps hourly aggregates to export models`() = runTest {
-        val aggregates = listOf(
-            HourlyStepAggregate(id = 1, timestamp = 1_740_218_400_000L, stepCountDelta = 350, detectedActivity = "WALKING"),
-            HourlyStepAggregate(id = 2, timestamp = 1_740_222_000_000L, stepCountDelta = 0, detectedActivity = "STILL"),
+    fun `buildExportData maps step buckets to export models`() = runTest {
+        val buckets = listOf(
+            StepBucket(timestamp = 1_740_218_400_000L, stepCount = 350),
+            StepBucket(timestamp = 1_740_218_700_000L, stepCount = 0),
         )
-        val useCase = makeUseCase(hourlyAggregates = aggregates)
+        val useCase = makeUseCase(stepBuckets = buckets)
 
         val exportData = useCase.buildExportData()
 
-        assertEquals(2, exportData.hourlyAggregates.size)
-        assertEquals(1, exportData.hourlyAggregates[0].id)
-        assertEquals(1_740_218_400_000L, exportData.hourlyAggregates[0].timestamp)
-        assertEquals(350, exportData.hourlyAggregates[0].stepCountDelta)
-        assertEquals("WALKING", exportData.hourlyAggregates[0].detectedActivity)
-        assertEquals("STILL", exportData.hourlyAggregates[1].detectedActivity)
+        assertEquals(2, exportData.stepBuckets.size)
+        assertEquals(1_740_218_400_000L, exportData.stepBuckets[0].timestamp)
+        assertEquals(350, exportData.stepBuckets[0].stepCount)
+        assertEquals(0, exportData.stepBuckets[1].stepCount)
     }
 
     @Test
@@ -135,7 +123,7 @@ class ExportDataUseCaseTest {
         val exportData = useCase.buildExportData()
 
         assertEquals(0, exportData.dailySummaries.size)
-        assertEquals(0, exportData.hourlyAggregates.size)
+        assertEquals(0, exportData.stepBuckets.size)
     }
 
     @Test

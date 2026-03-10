@@ -18,16 +18,20 @@ import androidx.room.RoomDatabase
  *   5 — v2.0.0 migration: dropped activity_transitions, cycling_sessions,
  *       sensor_windows, and manual_session_overrides tables.
  *       Only hourly_step_aggregates and daily_summaries remain.
+ *   6 — v2.1.0 migration: replaced hourly_step_aggregates with step_buckets
+ *       (5-minute clock-aligned buckets). Destructive migration from v5.
  */
 @Database(
     entities = [
-        HourlyStepAggregate::class,
+        StepBucket::class,
         DailySummary::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class PodometerDatabase : RoomDatabase() {
 
     abstract fun stepDao(): StepDao
+
+    abstract fun stepBucketDao(): StepBucketDao
 }

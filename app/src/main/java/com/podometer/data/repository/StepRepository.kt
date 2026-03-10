@@ -2,7 +2,6 @@
 package com.podometer.data.repository
 
 import com.podometer.data.db.DailySummary
-import com.podometer.data.db.HourlyStepAggregate
 import com.podometer.data.db.StepDao
 import com.podometer.util.DateTimeUtils
 import kotlinx.coroutines.flow.Flow
@@ -11,9 +10,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Single source of truth for step-count data.
+ * Single source of truth for daily step-count summary data.
  *
  * Delegates all persistence to [StepDao].
+ * Step-bucket data is managed separately by [StepBucketRepository].
+ *
  * The only transformation applied is mapping a null step count to 0 in
  * [getTodaySteps].
  */
@@ -25,15 +26,12 @@ class StepRepository @Inject constructor(
     // ─── Read ────────────────────────────────────────────────────────────────
 
     /**
-     * Returns today's total step count as a [Flow].
-     * Emits 0 when the DAO returns null (no rows yet for today).
+     * Returns today's total step count from [DailySummary] as a [Flow].
+     * Emits 0 when the DAO returns null (no summary row yet for today).
      */
     fun getTodaySteps(): Flow<Int> =
-        stepDao.getTodayTotalSteps(getTodayStartMillis()).map { it ?: 0 }
-
-    /** Returns all hourly step aggregates for today as a [Flow]. */
-    fun getTodayHourlyAggregates(): Flow<List<HourlyStepAggregate>> =
-        stepDao.getTodayHourlyAggregates(getTodayStartMillis())
+        stepDao.getDailySummary(DateTimeUtils.toLocalDate(getTodayStartMillis()).toString())
+            .map { it?.totalSteps ?: 0 }
 
     /** Returns the [DailySummary] for the given [date] ("yyyy-MM-dd"), or null. */
     fun getDailySummary(date: String): Flow<DailySummary?> =
@@ -49,37 +47,15 @@ class StepRepository @Inject constructor(
     // ─── One-shot reads for service-restart recovery ──────────────────────────
 
     /**
-     * Returns the step count for the hourly aggregate whose timestamp equals
-     * [hourTimestamp], or 0 if no row exists yet for that hour.
-     * Used during service restart to seed [com.podometer.service.StepAccumulator].
-     */
-    suspend fun getStepsForHour(hourTimestamp: Long): Int =
-        stepDao.getStepsForHour(hourTimestamp) ?: 0
-
-    /**
-     * Returns the sum of all hourly aggregate step counts for today, or 0 if
-     * no rows exist yet.
+     * Returns today's total step count from [DailySummary], or 0 if no row exists.
      * Used during service restart to seed [com.podometer.service.StepAccumulator].
      */
     suspend fun getTodayTotalStepsSnapshot(): Int =
-        stepDao.getTodayTotalStepsSnapshot(getTodayStartMillis()) ?: 0
+        stepDao.getTodayTotalStepsSnapshot(
+            DateTimeUtils.toLocalDate(getTodayStartMillis()).toString()
+        ) ?: 0
 
     // ─── Write ───────────────────────────────────────────────────────────────
-
-    /**
-     * Upserts an hourly step aggregate: deletes any existing row for the same
-     * timestamp then inserts the new one, all within a single transaction.
-     * This avoids duplicate rows when the service restarts mid-hour and
-     * re-flushes an hour that was already partially persisted.
-     */
-    suspend fun upsertHourlyAggregate(aggregate: HourlyStepAggregate) {
-        stepDao.upsertHourlyAggregate(aggregate)
-    }
-
-    /** Inserts a new hourly step aggregate row. */
-    suspend fun insertHourlyAggregate(aggregate: HourlyStepAggregate) {
-        stepDao.insertHourlyAggregate(aggregate)
-    }
 
     /** Inserts or replaces the daily summary for the given calendar day. */
     suspend fun upsertDailySummary(summary: DailySummary) {
@@ -100,13 +76,6 @@ class StepRepository @Inject constructor(
      */
     suspend fun getAllDailySummaries(): List<DailySummary> =
         stepDao.getAllDailySummaries()
-
-    /**
-     * Returns all hourly step aggregates ordered by timestamp ascending.
-     * One-shot suspend function intended for data export.
-     */
-    suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> =
-        stepDao.getAllHourlyAggregates()
 
     // ─── Helper ──────────────────────────────────────────────────────────────
 

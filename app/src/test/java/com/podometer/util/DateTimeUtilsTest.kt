@@ -188,14 +188,65 @@ class DateTimeUtilsTest {
     }
 
     @Test
-    fun `truncateToHour matches StepAccumulator companion result for same input`() {
+    fun `truncateToHour is consistent with manual calculation`() {
+        val epochMillis = epochForDayAndHour(dayOffset = 0, hour = 8, minuteOffset = 37)
+        val expected = epochForDayAndHour(dayOffset = 0, hour = 8, minuteOffset = 0)
+
+        val result = DateTimeUtils.truncateToHour(epochMillis)
+
+        assertEquals("truncateToHour should strip minutes", expected, result)
+    }
+
+    // ─── truncateToBucket ─────────────────────────────────────────────────────
+
+    @Test
+    fun `truncateToBucket returns start of 5-minute bucket for time within bucket`() {
+        // 08:37 → 08:35
+        val midBucket = timeInHour(hour = 8, minuteOffset = 37)
+        val expected = timeInHour(hour = 8, minuteOffset = 35)
+
+        val result = DateTimeUtils.truncateToBucket(midBucket)
+
+        assertEquals(expected, result)
+    }
+
+    @Test
+    fun `truncateToBucket returns same value when already at bucket start`() {
+        val bucketStart = timeInHour(hour = 10, minuteOffset = 15)
+
+        val result = DateTimeUtils.truncateToBucket(bucketStart)
+
+        assertEquals(bucketStart, result)
+    }
+
+    @Test
+    fun `truncateToBucket aligns to correct 5-minute boundary`() {
+        // 08:03 → 08:00; 08:07 → 08:05; 08:12 → 08:10
+        val cases = listOf(
+            timeInHour(8, 3) to timeInHour(8, 0),
+            timeInHour(8, 7) to timeInHour(8, 5),
+            timeInHour(8, 12) to timeInHour(8, 10),
+            timeInHour(8, 55) to timeInHour(8, 55),
+            timeInHour(8, 59) to timeInHour(8, 55),
+        )
+        for ((input, expectedBucket) in cases) {
+            assertEquals(
+                "truncateToBucket($input) should equal $expectedBucket",
+                expectedBucket,
+                DateTimeUtils.truncateToBucket(input),
+            )
+        }
+    }
+
+    @Test
+    fun `truncateToBucket matches StepAccumulator companion result for same input`() {
         val epochMillis = epochForDayAndHour(dayOffset = 0, hour = 8, minuteOffset = 37)
 
-        val fromUtils = DateTimeUtils.truncateToHour(epochMillis)
-        val fromAccumulator = com.podometer.service.StepAccumulator.truncateToHour(epochMillis)
+        val fromUtils = DateTimeUtils.truncateToBucket(epochMillis)
+        val fromAccumulator = com.podometer.service.StepAccumulator.truncateToBucket(epochMillis)
 
         assertEquals(
-            "DateTimeUtils.truncateToHour should match StepAccumulator.truncateToHour",
+            "DateTimeUtils.truncateToBucket should match StepAccumulator.truncateToBucket",
             fromAccumulator,
             fromUtils,
         )

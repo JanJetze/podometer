@@ -10,8 +10,9 @@ import android.os.IBinder
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import androidx.core.app.ServiceCompat
-import com.podometer.data.db.HourlyStepAggregate
+import com.podometer.data.db.StepBucket
 import com.podometer.data.repository.PreferencesManager
+import com.podometer.data.repository.StepBucketRepository
 import com.podometer.data.repository.StepRepository
 import com.podometer.data.sensor.StepSensorManager
 import com.podometer.util.DateTimeUtils
@@ -55,6 +56,9 @@ class StepTrackingService : Service() {
 
     @Inject
     lateinit var stepRepository: StepRepository
+
+    @Inject
+    lateinit var stepBucketRepository: StepBucketRepository
 
     @Inject
     lateinit var notificationHelper: NotificationHelper
@@ -101,23 +105,23 @@ class StepTrackingService : Service() {
         ) { preferencesManager.strideLengthKm().first() }
         strideLengthKm = strideKm
         val now = System.currentTimeMillis()
-        val hourStart = StepAccumulator.truncateToHour(now)
-        val currentHourSteps = runBlockingWithDefault(
+        val bucketStart = StepAccumulator.truncateToBucket(now)
+        val currentBucketSteps = runBlockingWithDefault(
             default = 0,
-            tag = "read current-hour steps from DB",
-        ) { stepRepository.getStepsForHour(hourStart) }
+            tag = "read current-bucket steps from DB",
+        ) { stepBucketRepository.getStepsForBucket(bucketStart) }
         val totalToday = runBlockingWithDefault(
             default = 0,
             tag = "read today's total steps from DB",
         ) { stepRepository.getTodayTotalStepsSnapshot() }
         accumulator = StepAccumulator(
-            initialHourTimestamp = now,
+            initialBucketTimestamp = now,
             strideLengthKm = strideKm,
-            initialCurrentHourSteps = currentHourSteps,
+            initialCurrentBucketSteps = currentBucketSteps,
             initialTotalStepsToday = totalToday,
         )
         startForegroundWithNotification()
-        Log.d(TAG, "Service created: restored $currentHourSteps current-hour steps, $totalToday today total")
+        Log.d(TAG, "Service created: restored $currentBucketSteps current-bucket steps, $totalToday today total")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -141,7 +145,7 @@ class StepTrackingService : Service() {
         if (results.isNotEmpty()) {
             runBlocking {
                 for (result in results) {
-                    stepRepository.upsertHourlyAggregate(result.aggregate)
+                    stepBucketRepository.upsert(result.bucket)
                     stepRepository.upsertStepsAndDistance(
                         date = result.dailySummary.date,
                         totalSteps = result.dailySummary.totalSteps,
@@ -200,7 +204,7 @@ class StepTrackingService : Service() {
 
             val flushResults = accumulator.addSteps(delta)
             for (flushResult in flushResults) {
-                stepRepository.upsertHourlyAggregate(flushResult.aggregate)
+                stepBucketRepository.upsert(flushResult.bucket)
                 stepRepository.upsertStepsAndDistance(
                     date = flushResult.dailySummary.date,
                     totalSteps = flushResult.dailySummary.totalSteps,
@@ -208,24 +212,23 @@ class StepTrackingService : Service() {
                 )
                 Log.d(
                     TAG,
-                    "Flushed ${flushResult.aggregate.stepCountDelta} steps for hour " +
-                        "${flushResult.aggregate.timestamp}",
+                    "Flushed ${flushResult.bucket.stepCount} steps for bucket " +
+                        "${flushResult.bucket.timestamp}",
                 )
             }
 
-            // Always write the current partial-hour state so the dashboard sees live updates.
-            val partialAggregate = HourlyStepAggregate(
-                timestamp = StepAccumulator.truncateToHour(nowMs),
-                stepCountDelta = accumulator.currentHourSteps,
-                detectedActivity = accumulator.currentActivity,
+            // Always write the current partial-bucket state so the dashboard sees live updates.
+            val partialBucket = StepBucket(
+                timestamp = StepAccumulator.truncateToBucket(nowMs),
+                stepCount = accumulator.currentBucketSteps,
             )
-            stepRepository.upsertHourlyAggregate(partialAggregate)
+            stepBucketRepository.upsert(partialBucket)
             stepRepository.upsertStepsAndDistance(
                 date = DateTimeUtils.toLocalDate(nowMs).toString(),
                 totalSteps = accumulator.totalStepsToday,
                 totalDistance = accumulator.totalStepsToday * strideLengthKm,
             )
-            Log.d(TAG, "Partial-hour write: ${accumulator.currentHourSteps} steps in current hour, ${accumulator.totalStepsToday} today")
+            Log.d(TAG, "Partial-bucket write: ${accumulator.currentBucketSteps} steps in current bucket, ${accumulator.totalStepsToday} today")
         }
     }
 

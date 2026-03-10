@@ -15,8 +15,8 @@ data class ExportData(
     val metadata: ExportMetadata,
     /** All daily activity summaries, ordered by date ascending. */
     val dailySummaries: List<ExportDailySummary>,
-    /** All hourly step-count aggregates, ordered by timestamp ascending. */
-    val hourlyAggregates: List<ExportHourlyAggregate>,
+    /** All 5-minute step-count buckets, ordered by timestamp ascending. */
+    val stepBuckets: List<ExportStepBucket>,
 )
 
 /**
@@ -26,7 +26,7 @@ data class ExportData(
 data class ExportMetadata(
     /** ISO 8601 timestamp when the export was created, e.g. "2026-02-23T10:00:00Z". */
     val exportDate: String,
-    /** Application version string, e.g. "1.0.0". */
+    /** Application version string, e.g. "2.0.0". */
     val appVersion: String,
     /** Device model name, e.g. "Pixel 7". */
     val deviceModel: String,
@@ -49,16 +49,14 @@ data class ExportDailySummary(
 )
 
 /**
- * Export model mirroring the Room [com.podometer.data.db.HourlyStepAggregate] entity.
+ * Export model mirroring the Room [com.podometer.data.db.StepBucket] entity.
+ *
+ * Represents a single 5-minute clock-aligned step-count bucket.
  */
 @Serializable
-data class ExportHourlyAggregate(
-    /** Database row ID. */
-    val id: Int,
-    /** Epoch-millisecond timestamp for the start of this hourly bucket. */
+data class ExportStepBucket(
+    /** Epoch-millisecond timestamp for the start of this 5-minute bucket. */
     val timestamp: Long,
-    /** Number of steps detected during this hour. */
-    val stepCountDelta: Int,
-    /** Activity detected during this hour: "WALKING", "CYCLING", or "STILL". */
-    val detectedActivity: String,
+    /** Number of steps detected during this 5-minute window. */
+    val stepCount: Int,
 )

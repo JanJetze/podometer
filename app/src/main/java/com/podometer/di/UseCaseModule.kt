@@ -8,7 +8,9 @@ import com.podometer.domain.usecase.GetTodayStepsUseCase
 import com.podometer.domain.usecase.GetTodayStepsUseCaseImpl
 import com.podometer.domain.usecase.GetWeeklyStepsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCaseImpl
+import com.podometer.data.db.StepBucketDao
 import com.podometer.data.db.StepDao
+import com.podometer.data.repository.StepBucketRepository
 import com.podometer.data.repository.StepRepository
 import dagger.Binds
 import dagger.Module
@@ -48,8 +50,10 @@ abstract class UseCaseModule {
         @Singleton
         fun provideExportDataUseCase(
             stepRepository: StepRepository,
+            stepBucketRepository: StepBucketRepository,
         ): ExportDataUseCase = ExportDataUseCase(
             stepRepository = stepRepository,
+            stepBucketRepository = stepBucketRepository,
             deviceModel = Build.MODEL,
         )
 
@@ -57,8 +61,10 @@ abstract class UseCaseModule {
         @Singleton
         fun provideImportDataUseCase(
             stepDao: StepDao,
+            stepBucketDao: StepBucketDao,
         ): ImportDataUseCase = ImportDataUseCase(
             stepDao = stepDao,
+            stepBucketDao = stepBucketDao,
         )
     }
 }

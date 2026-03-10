@@ -2,7 +2,8 @@
 package com.podometer.domain.usecase
 
 import com.podometer.data.db.DailySummary
-import com.podometer.data.db.HourlyStepAggregate
+import com.podometer.data.db.StepBucket
+import com.podometer.data.db.StepBucketDao
 import com.podometer.data.db.StepDao
 import com.podometer.data.export.ExportData
 import kotlinx.serialization.json.Json
@@ -10,22 +11,21 @@ import kotlinx.serialization.json.Json
 /**
  * Use case that parses an exported JSON file and inserts all data into the local database.
  *
- * Existing rows with matching primary keys are replaced (daily summaries) or
- * inserted with new auto-generated IDs (hourly aggregates).
+ * Existing daily-summary rows with matching primary keys are replaced.
+ * Step-bucket rows are upserted (timestamp is the primary key).
  *
- * @param stepDao DAO for daily summaries and hourly aggregates.
+ * @param stepDao DAO for daily summaries.
+ * @param stepBucketDao DAO for 5-minute step buckets.
  */
 class ImportDataUseCase(
     private val stepDao: StepDao,
+    private val stepBucketDao: StepBucketDao,
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
      * Parses [jsonString] as an [ExportData] and inserts all records into the database.
-     *
-     * Auto-generated IDs (id = 0) are used so Room assigns fresh primary keys,
-     * avoiding conflicts with any existing data.
      */
     suspend fun importFromJson(jsonString: String) {
         val data = json.decodeFromString(ExportData.serializer(), jsonString)
@@ -40,15 +40,13 @@ class ImportDataUseCase(
             },
         )
 
-        stepDao.insertAllHourlyAggregates(
-            data.hourlyAggregates.map { a ->
-                HourlyStepAggregate(
-                    id = 0,
-                    timestamp = a.timestamp,
-                    stepCountDelta = a.stepCountDelta,
-                    detectedActivity = a.detectedActivity,
+        for (bucket in data.stepBuckets) {
+            stepBucketDao.upsert(
+                StepBucket(
+                    timestamp = bucket.timestamp,
+                    stepCount = bucket.stepCount,
                 )
-            },
-        )
+            )
+        }
     }
 }

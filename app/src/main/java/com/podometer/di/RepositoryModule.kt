@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.di
 
+import com.podometer.data.db.StepBucketDao
 import com.podometer.data.db.StepDao
+import com.podometer.data.repository.StepBucketRepository
 import com.podometer.data.repository.StepRepository
 import dagger.Module
 import dagger.Provides
@@ -24,4 +26,10 @@ object RepositoryModule {
     fun provideStepRepository(
         stepDao: StepDao,
     ): StepRepository = StepRepository(stepDao)
+
+    @Provides
+    @Singleton
+    fun provideStepBucketRepository(
+        stepBucketDao: StepBucketDao,
+    ): StepBucketRepository = StepBucketRepository(stepBucketDao)
 }

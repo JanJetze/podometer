@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import com.podometer.data.db.DailySummary
-import com.podometer.data.db.HourlyStepAggregate
 import com.podometer.data.db.StepDao
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
@@ -44,30 +43,19 @@ class UseCaseTest {
     // ─── Fake DAOs ───────────────────────────────────────────────────────────
 
     private class FakeStepDao(
-        private val todayStepsFlow: Flow<Int?> = flowOf(null),
+        private val todaySummaryFlow: Flow<DailySummary?> = flowOf(null),
         private val weeklyFlow: Flow<List<DailySummary>> = flowOf(emptyList()),
     ) : StepDao {
-        override fun getTodayHourlyAggregates(todayStart: Long): Flow<List<HourlyStepAggregate>> =
-            flowOf(emptyList())
-
-        override fun getTodayTotalSteps(todayStart: Long): Flow<Int?> = todayStepsFlow
-
-        override fun getDailySummary(date: String): Flow<DailySummary?> = flowOf(null)
+        override fun getDailySummary(date: String): Flow<DailySummary?> = todaySummaryFlow
 
         override fun getWeeklyDailySummaries(startDate: String, endDate: String): Flow<List<DailySummary>> =
             weeklyFlow
 
-        override suspend fun getStepsForHour(hourTimestamp: Long): Int? = null
-        override suspend fun getTodayTotalStepsSnapshot(todayStart: Long): Int? = null
-        override suspend fun deleteHourlyAggregateByTimestamp(hourTimestamp: Long) = Unit
-        override suspend fun insertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
-        override suspend fun upsertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
+        override suspend fun getTodayTotalStepsSnapshot(date: String): Int? = null
         override suspend fun upsertDailySummary(summary: DailySummary) = Unit
         override suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) = Unit
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
-        override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = emptyList()
         override suspend fun insertAllDailySummaries(summaries: List<DailySummary>) { }
-        override suspend fun insertAllHourlyAggregates(aggregates: List<HourlyStepAggregate>) { }
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -75,12 +63,18 @@ class UseCaseTest {
     private fun stepRepo(
         todaySteps: Int? = null,
         weekly: List<DailySummary> = emptyList(),
-    ): StepRepository = StepRepository(
-        FakeStepDao(
-            todayStepsFlow = flowOf(todaySteps),
-            weeklyFlow = flowOf(weekly),
-        ),
-    )
+    ): StepRepository {
+        val summary = if (todaySteps != null) {
+            // Use a fixed date; getTodaySteps reads getDailySummary with today's date
+            DailySummary(date = "any", totalSteps = todaySteps, totalDistance = 0f)
+        } else null
+        return StepRepository(
+            FakeStepDao(
+                todaySummaryFlow = flowOf(summary),
+                weeklyFlow = flowOf(weekly),
+            ),
+        )
+    }
 
     private fun preferencesManager(): PreferencesManager =
         PreferencesManager(FakeDataStore())
@@ -197,20 +191,13 @@ class UseCaseTest {
 
     @Test
     fun `GetTodayStepsUseCase falls back to DEFAULT_DAILY_STEP_GOAL when goal is zero`() = runTest {
-        // Simulate a corrupt/zero goal stored in DataStore (cannot happen via the normal
-        // setDailyStepGoal path which validates goal > 0, but the use case must be
-        // arithmetically safe on its own).
-        //
-        // We bypass setDailyStepGoal's validation by seeding the DataStore directly with 0.
         val goalKey = intPreferencesKey("daily_step_goal")
         val pm = PreferencesManager(FakeDataStore(preferencesOf(goalKey to 0)))
         val useCase = GetTodayStepsUseCaseImpl(stepRepo(todaySteps = 5_000), pm)
 
         val result = useCase().first()
 
-        // goal stored in StepData should be the safe fallback (10_000)
         assertEquals(10_000, result.goal)
-        // progressPercent must be computed with the safe goal, not trigger divide-by-zero
         assertEquals(50.0f, result.progressPercent, 0.001f)
     }
 

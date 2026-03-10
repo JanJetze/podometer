@@ -4,6 +4,7 @@ package com.podometer.di
 import android.content.Context
 import androidx.room.Room
 import com.podometer.data.db.PodometerDatabase
+import com.podometer.data.db.StepBucketDao
 import com.podometer.data.db.StepDao
 import dagger.Module
 import dagger.Provides
@@ -39,4 +40,9 @@ object DatabaseModule {
     @Singleton
     fun provideStepDao(database: PodometerDatabase): StepDao =
         database.stepDao()
+
+    @Provides
+    @Singleton
+    fun provideStepBucketDao(database: PodometerDatabase): StepBucketDao =
+        database.stepBucketDao()
 }
