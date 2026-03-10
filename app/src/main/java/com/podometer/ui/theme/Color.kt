@@ -95,3 +95,31 @@ val ActivityCyclingLight = Color(0xFF90CAF9)
 
 /** Light gray — still/no-activity colour for dark theme. Contrast vs black ≈ 5.3:1. */
 val ActivityStillLight = Color(0xFFBDBDBD)
+
+// ─── Progress ring goal tier colours ─────────────────────────────────────────
+//
+// Three tiers map to progress thresholds:
+//   Minimum  — up to the base daily minimum (softer sage green)
+//   Target   — reaching the main daily goal (confident mid-green)
+//   Stretch  — exceeding the stretch goal (vibrant gold — motivating achievement)
+//
+// Light theme variants are saturated enough to read on the near-white surface.
+// Dark theme variants are lighter/brighter to pop on the deep teal-tinted surface.
+
+/** Minimum-tier ring colour for **light** theme — sage green. */
+val RingMinimumLight = Color(0xFF6BAE75)
+
+/** Target-tier ring colour for **light** theme — confident forest green. */
+val RingTargetLight = Color(0xFF2E7D32)
+
+/** Stretch-tier ring colour for **light** theme — vibrant gold. */
+val RingStretchLight = Color(0xFFE6A817)
+
+/** Minimum-tier ring colour for **dark** theme — soft mint green. */
+val RingMinimumDark = Color(0xFF80C784)
+
+/** Target-tier ring colour for **dark** theme — medium spring green. */
+val RingTargetDark = Color(0xFF43A047)
+
+/** Stretch-tier ring colour for **dark** theme — warm amber. */
+val RingStretchDark = Color(0xFFF6BE48)

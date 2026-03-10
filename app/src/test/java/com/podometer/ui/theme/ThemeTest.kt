@@ -14,6 +14,7 @@ import org.junit.Test
  *  - Activity colour mapping via [activityColorFor]
  *  - Existence and structure of [ActivityColors] data class
  *  - Static colour scheme definitions (light/dark)
+ *  - Goal ring tier colour constants and [GoalRingColors] data class
  */
 class ThemeTest {
 
@@ -192,5 +193,129 @@ class ThemeTest {
     @Test
     fun `DarkActivityColors uses ActivityStillLight for still field`() {
         assertEquals(ActivityStillLight, DarkActivityColors.still)
+    }
+
+    // ─── Goal ring tier colour constants ──────────────────────────────────────
+
+    @Test
+    fun `RingMinimumLight is a green-toned colour`() {
+        // Minimum tier — lighter/softer green; green channel should dominate
+        assertTrue(
+            "RingMinimumLight should have a strong green component",
+            RingMinimumLight.green > RingMinimumLight.red && RingMinimumLight.green > RingMinimumLight.blue,
+        )
+    }
+
+    @Test
+    fun `RingTargetLight is a medium green colour`() {
+        assertTrue(
+            "RingTargetLight should have a strong green component",
+            RingTargetLight.green > RingTargetLight.red && RingTargetLight.green > RingTargetLight.blue,
+        )
+    }
+
+    @Test
+    fun `RingStretchLight is an amber or gold-toned colour`() {
+        // Stretch tier — vibrant gold/amber; red channel should be prominent
+        assertTrue(
+            "RingStretchLight should have a strong red/orange component",
+            RingStretchLight.red > RingStretchLight.blue,
+        )
+    }
+
+    @Test
+    fun `RingMinimumDark is a green-toned colour`() {
+        assertTrue(
+            "RingMinimumDark should have a strong green component",
+            RingMinimumDark.green > RingMinimumDark.red && RingMinimumDark.green > RingMinimumDark.blue,
+        )
+    }
+
+    @Test
+    fun `RingTargetDark is a medium green colour`() {
+        assertTrue(
+            "RingTargetDark should have a strong green component",
+            RingTargetDark.green > RingTargetDark.red && RingTargetDark.green > RingTargetDark.blue,
+        )
+    }
+
+    @Test
+    fun `RingStretchDark is an amber or gold-toned colour`() {
+        assertTrue(
+            "RingStretchDark should have a strong red/orange component",
+            RingStretchDark.red > RingStretchDark.blue,
+        )
+    }
+
+    // ─── GoalRingColors data class ────────────────────────────────────────────
+
+    @Test
+    fun `GoalRingColors holds minimum target and stretch fields`() {
+        val colors = GoalRingColors(
+            minimum = Color(0xFF66BB6A),
+            target = Color(0xFF2E7D32),
+            stretch = Color(0xFFF6BE48),
+        )
+        assertEquals(Color(0xFF66BB6A), colors.minimum)
+        assertEquals(Color(0xFF2E7D32), colors.target)
+        assertEquals(Color(0xFFF6BE48), colors.stretch)
+    }
+
+    @Test
+    fun `GoalRingColors supports copy for creating variants`() {
+        val base = GoalRingColors(
+            minimum = Color(0xFF66BB6A),
+            target = Color(0xFF2E7D32),
+            stretch = Color(0xFFF6BE48),
+        )
+        val variant = base.copy(stretch = Color(0xFFFFA726))
+        assertEquals(Color(0xFF66BB6A), variant.minimum)
+        assertEquals(Color(0xFF2E7D32), variant.target)
+        assertEquals(Color(0xFFFFA726), variant.stretch)
+    }
+
+    @Test
+    fun `DefaultGoalRingColors uses ring tier constants`() {
+        assertEquals(RingMinimumLight, DefaultGoalRingColors.minimum)
+        assertEquals(RingTargetLight, DefaultGoalRingColors.target)
+        assertEquals(RingStretchLight, DefaultGoalRingColors.stretch)
+    }
+
+    @Test
+    fun `DarkGoalRingColors uses dark ring tier constants`() {
+        assertEquals(RingMinimumDark, DarkGoalRingColors.minimum)
+        assertEquals(RingTargetDark, DarkGoalRingColors.target)
+        assertEquals(RingStretchDark, DarkGoalRingColors.stretch)
+    }
+
+    // ─── Typography scale differentiation ─────────────────────────────────────
+
+    @Test
+    fun `labelSmall is smaller than labelMedium`() {
+        val labelSmall = PodometerTypography.labelSmall
+        val labelMedium = PodometerTypography.labelMedium
+        assertTrue(
+            "labelSmall (${labelSmall.fontSize}) should be smaller than labelMedium (${labelMedium.fontSize})",
+            labelSmall.fontSize < labelMedium.fontSize,
+        )
+    }
+
+    @Test
+    fun `displayLarge is larger than displayMedium`() {
+        val displayLarge = PodometerTypography.displayLarge
+        val displayMedium = PodometerTypography.displayMedium
+        assertTrue(
+            "displayLarge (${displayLarge.fontSize}) should be larger than displayMedium (${displayMedium.fontSize})",
+            displayLarge.fontSize > displayMedium.fontSize,
+        )
+    }
+
+    @Test
+    fun `displaySmall is at least 32sp for hero step count`() {
+        val displaySmall = PodometerTypography.displaySmall
+        assertTrue(
+            "displaySmall (${displaySmall.fontSize}) must be at least 32sp for hero text",
+            displaySmall.fontSize.value >= 32f,
+        )
     }
 }
