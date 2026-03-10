@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import com.podometer.data.repository.PreferencesManager
-import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.model.StepData
 import com.podometer.domain.usecase.GetTodayStepsUseCase
@@ -105,12 +104,6 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `DashboardUiState default has STILL activity`() {
-        val state = DashboardUiState()
-        assertEquals(ActivityState.STILL, state.currentActivity)
-    }
-
-    @Test
     fun `DashboardUiState default has empty weeklySteps`() {
         val state = DashboardUiState()
         assertTrue(state.weeklySteps.isEmpty())
@@ -176,7 +169,7 @@ class DashboardViewModelTest {
     @Test
     fun `ViewModel emits weeklySteps from GetWeeklyStepsUseCase`() = runTest {
         val weekly = listOf(
-            DaySummary(date = "2026-02-17", totalSteps = 8_000, totalDistanceKm = 6f, walkingMinutes = 70, cyclingMinutes = 0),
+            DaySummary(date = "2026-02-17", totalSteps = 8_000, totalDistanceKm = 6f),
         )
         val viewModel = buildViewModel(weeklySteps = weekly)
 
@@ -185,17 +178,6 @@ class DashboardViewModelTest {
         assertEquals(1, state.weeklySteps.size)
         assertEquals("2026-02-17", state.weeklySteps[0].date)
         assertEquals(8_000, state.weeklySteps[0].totalSteps)
-    }
-
-    // ─── currentActivity derivation ──────────────────────────────────────────
-
-    @Test
-    fun `ViewModel currentActivity is always STILL`() = runTest {
-        val viewModel = buildViewModel()
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(ActivityState.STILL, state.currentActivity)
     }
 
     // ─── isLoading state ─────────────────────────────────────────────────────

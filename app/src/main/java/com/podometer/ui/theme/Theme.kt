@@ -13,7 +13,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import com.podometer.domain.model.ActivityState
 
 // ─── Activity colour container ────────────────────────────────────────────────
 
@@ -23,10 +22,10 @@ import com.podometer.domain.model.ActivityState
  * Includes background colours for each activity state and a [contentColor]
  * (icon/text colour) to render on top of those backgrounds.
  *
- * @property walking      Background colour for walking activity segments and badges.
- * @property cycling      Background colour for cycling activity segments and badges.
- * @property still        Background colour for still/no-activity segments and badges.
- * @property contentColor Foreground colour (icon + text) rendered on all badge backgrounds.
+ * @property walking      Background colour for walking activity segments.
+ * @property cycling      Background colour for cycling activity segments.
+ * @property still        Background colour for still/no-activity segments.
+ * @property contentColor Foreground colour (icon + text) rendered on all backgrounds.
  */
 @Immutable
 data class ActivityColors(
@@ -34,14 +33,7 @@ data class ActivityColors(
     val cycling: Color,
     val still: Color,
     val contentColor: Color = Color.White,
-) {
-    /** Returns the background color for the given [ActivityState]. */
-    fun colorFor(activity: ActivityState): Color = when (activity) {
-        ActivityState.WALKING -> walking
-        ActivityState.CYCLING -> cycling
-        ActivityState.STILL -> still
-    }
-}
+)
 
 /**
  * Default [ActivityColors] for the **light** theme.

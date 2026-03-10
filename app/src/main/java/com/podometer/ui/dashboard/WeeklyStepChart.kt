@@ -68,8 +68,6 @@ private val GoalLineColor = Color(0xFF546E7A)
  * @property isToday         True when this bar represents the current calendar day.
  * @property isPlaceholder   True when no [DaySummary] data exists for this day.
  * @property distanceKm      Total distance in kilometres for this day; 0f for placeholders.
- * @property walkingMinutes  Total walking minutes for this day; 0 for placeholders.
- * @property cyclingMinutes  Total cycling minutes for this day; 0 for placeholders.
  */
 data class ChartBar(
     val date: String,
@@ -80,8 +78,6 @@ data class ChartBar(
     val isToday: Boolean,
     val isPlaceholder: Boolean,
     val distanceKm: Float = 0f,
-    val walkingMinutes: Int = 0,
-    val cyclingMinutes: Int = 0,
 )
 
 // ─── Day-label mapping ────────────────────────────────────────────────────────
@@ -183,8 +179,6 @@ fun buildChartBars(
                 isToday = isToday,
                 isPlaceholder = false,
                 distanceKm = summary.totalDistanceKm,
-                walkingMinutes = summary.walkingMinutes,
-                cyclingMinutes = summary.cyclingMinutes,
             )
         }
     }
@@ -525,22 +519,6 @@ private fun BarDetailCard(bar: ChartBar) {
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(top = 2.dp),
                 )
-                val activityParts = buildList {
-                    if (bar.walkingMinutes > 0) {
-                        add(stringResource(R.string.chart_tooltip_walking, bar.walkingMinutes))
-                    }
-                    if (bar.cyclingMinutes > 0) {
-                        add(stringResource(R.string.chart_tooltip_cycling, bar.cyclingMinutes))
-                    }
-                }
-                if (activityParts.isNotEmpty()) {
-                    Text(
-                        text = activityParts.joinToString(" \u00B7 "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
             }
         }
     }
@@ -555,13 +533,13 @@ private fun PreviewWeeklyStepChartFull() {
     PodometerTheme {
         WeeklyStepChart(
             daySummaries = listOf(
-                DaySummary("2026-02-16", 7_200, 5.4f, 60, 0),
-                DaySummary("2026-02-17", 11_500, 8.6f, 80, 10),
-                DaySummary("2026-02-18", 9_800, 7.3f, 75, 0),
-                DaySummary("2026-02-19", 13_000, 9.7f, 90, 15),
-                DaySummary("2026-02-20", 8_400, 6.3f, 65, 0),
-                DaySummary("2026-02-21", 10_200, 7.6f, 70, 0),
-                DaySummary("2026-02-22", 6_500, 4.9f, 50, 0),
+                DaySummary("2026-02-16", 7_200, 5.4f),
+                DaySummary("2026-02-17", 11_500, 8.6f),
+                DaySummary("2026-02-18", 9_800, 7.3f),
+                DaySummary("2026-02-19", 13_000, 9.7f),
+                DaySummary("2026-02-20", 8_400, 6.3f),
+                DaySummary("2026-02-21", 10_200, 7.6f),
+                DaySummary("2026-02-22", 6_500, 4.9f),
             ),
             goal = 10_000,
             todayDate = "2026-02-22",
@@ -577,9 +555,9 @@ private fun PreviewWeeklyStepChartPartial() {
     PodometerTheme {
         WeeklyStepChart(
             daySummaries = listOf(
-                DaySummary("2026-02-21", 7_000, 5.2f, 55, 0),
-                DaySummary("2026-02-22", 9_500, 7.1f, 72, 0),
-                DaySummary("2026-02-23", 4_200, 3.1f, 35, 0),
+                DaySummary("2026-02-21", 7_000, 5.2f),
+                DaySummary("2026-02-22", 9_500, 7.1f),
+                DaySummary("2026-02-23", 4_200, 3.1f),
             ),
             goal = 10_000,
             todayDate = "2026-02-23",
@@ -595,13 +573,13 @@ private fun PreviewWeeklyStepChartAllAboveGoal() {
     PodometerTheme {
         WeeklyStepChart(
             daySummaries = listOf(
-                DaySummary("2026-02-16", 11_000, 8.2f, 85, 0),
-                DaySummary("2026-02-17", 12_500, 9.4f, 95, 0),
-                DaySummary("2026-02-18", 10_500, 7.9f, 80, 0),
-                DaySummary("2026-02-19", 14_000, 10.5f, 105, 0),
-                DaySummary("2026-02-20", 11_800, 8.8f, 88, 0),
-                DaySummary("2026-02-21", 13_200, 9.9f, 99, 0),
-                DaySummary("2026-02-22", 10_100, 7.6f, 76, 0),
+                DaySummary("2026-02-16", 11_000, 8.2f),
+                DaySummary("2026-02-17", 12_500, 9.4f),
+                DaySummary("2026-02-18", 10_500, 7.9f),
+                DaySummary("2026-02-19", 14_000, 10.5f),
+                DaySummary("2026-02-20", 11_800, 8.8f),
+                DaySummary("2026-02-21", 13_200, 9.9f),
+                DaySummary("2026-02-22", 10_100, 7.6f),
             ),
             goal = 10_000,
             todayDate = "2026-02-22",
@@ -617,13 +595,13 @@ private fun PreviewWeeklyStepChartAllBelowGoal() {
     PodometerTheme {
         WeeklyStepChart(
             daySummaries = listOf(
-                DaySummary("2026-02-16", 3_000, 2.2f, 25, 0),
-                DaySummary("2026-02-17", 4_500, 3.4f, 35, 0),
-                DaySummary("2026-02-18", 2_000, 1.5f, 16, 0),
-                DaySummary("2026-02-19", 6_000, 4.5f, 48, 0),
-                DaySummary("2026-02-20", 5_000, 3.8f, 40, 0),
-                DaySummary("2026-02-21", 7_000, 5.2f, 56, 0),
-                DaySummary("2026-02-22", 1_500, 1.1f, 12, 0),
+                DaySummary("2026-02-16", 3_000, 2.2f),
+                DaySummary("2026-02-17", 4_500, 3.4f),
+                DaySummary("2026-02-18", 2_000, 1.5f),
+                DaySummary("2026-02-19", 6_000, 4.5f),
+                DaySummary("2026-02-20", 5_000, 3.8f),
+                DaySummary("2026-02-21", 7_000, 5.2f),
+                DaySummary("2026-02-22", 1_500, 1.1f),
             ),
             goal = 10_000,
             todayDate = "2026-02-22",
@@ -661,8 +639,6 @@ private fun PreviewBarDetailCard() {
                 isToday = false,
                 isPlaceholder = false,
                 distanceKm = 9.7f,
-                walkingMinutes = 90,
-                cyclingMinutes = 15,
             ),
         )
     }
@@ -687,10 +663,10 @@ private fun PreviewBarDetailCardNoData() {
     }
 }
 
-/** Preview: bar detail card with walking only (no cycling). */
-@Preview(showBackground = true, name = "BarDetailCard — Walking only")
+/** Preview: bar detail card with distance data. */
+@Preview(showBackground = true, name = "BarDetailCard — With distance")
 @Composable
-private fun PreviewBarDetailCardWalkingOnly() {
+private fun PreviewBarDetailCardWithDistance() {
     PodometerTheme {
         BarDetailCard(
             bar = ChartBar(
@@ -702,8 +678,6 @@ private fun PreviewBarDetailCardWalkingOnly() {
                 isToday = false,
                 isPlaceholder = false,
                 distanceKm = 6.3f,
-                walkingMinutes = 65,
-                cyclingMinutes = 0,
             ),
         )
     }

@@ -46,10 +46,6 @@ data class ExportDailySummary(
     val totalSteps: Int,
     /** Total distance in kilometres. */
     val totalDistance: Float,
-    /** Total minutes spent walking. */
-    val walkingMinutes: Int,
-    /** Total minutes spent cycling. */
-    val cyclingMinutes: Int,
 )
 
 /**

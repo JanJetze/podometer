@@ -87,31 +87,11 @@ class StepRepository @Inject constructor(
     }
 
     /**
-     * Updates only the [DailySummary.totalSteps] and [DailySummary.totalDistance]
-     * for [date], preserving any existing [DailySummary.walkingMinutes] and
-     * [DailySummary.cyclingMinutes].
-     *
-     * Use this for step/distance-only updates so that activity minutes accumulated
-     * by completed hour buckets are never overwritten with zeros.
+     * Updates the [DailySummary.totalSteps] and [DailySummary.totalDistance]
+     * for [date].
      */
     suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) {
         stepDao.upsertStepsAndDistance(date, totalSteps, totalDistance)
-    }
-
-    /**
-     * Increments [DailySummary.walkingMinutes] by [minutes] for the given [date].
-     * Call this once per completed hour bucket whose detected activity is WALKING.
-     */
-    suspend fun addWalkingMinutes(date: String, minutes: Int) {
-        stepDao.addWalkingMinutes(date, minutes)
-    }
-
-    /**
-     * Increments [DailySummary.cyclingMinutes] by [minutes] for the given [date].
-     * Call this once per completed hour bucket whose detected activity is CYCLING.
-     */
-    suspend fun addCyclingMinutes(date: String, minutes: Int) {
-        stepDao.addCyclingMinutes(date, minutes)
     }
 
     /**

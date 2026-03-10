@@ -56,10 +56,6 @@ class ExportDataUseCaseTest {
 
         override suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) = Unit
 
-        override suspend fun addWalkingMinutes(date: String, minutes: Int) = Unit
-
-        override suspend fun addCyclingMinutes(date: String, minutes: Int) = Unit
-
         override suspend fun getAllDailySummaries(): List<DailySummary> = dailySummaries
 
         override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = hourlyAggregates
@@ -100,8 +96,8 @@ class ExportDataUseCaseTest {
     @Test
     fun `buildExportData maps daily summaries to export models`() = runTest {
         val summaries = listOf(
-            DailySummary("2026-02-22", 9000, 6.75f, 80, 10),
-            DailySummary("2026-02-23", 5000, 3.75f, 45, 0),
+            DailySummary("2026-02-22", 9000, 6.75f),
+            DailySummary("2026-02-23", 5000, 3.75f),
         )
         val useCase = makeUseCase(dailySummaries = summaries)
 
@@ -111,8 +107,6 @@ class ExportDataUseCaseTest {
         assertEquals("2026-02-22", exportData.dailySummaries[0].date)
         assertEquals(9000, exportData.dailySummaries[0].totalSteps)
         assertEquals(6.75f, exportData.dailySummaries[0].totalDistance, 0.0001f)
-        assertEquals(80, exportData.dailySummaries[0].walkingMinutes)
-        assertEquals(10, exportData.dailySummaries[0].cyclingMinutes)
         assertEquals("2026-02-23", exportData.dailySummaries[1].date)
     }
 
@@ -146,7 +140,7 @@ class ExportDataUseCaseTest {
 
     @Test
     fun `serializeToJson produces valid JSON round-trip`() = runTest {
-        val summaries = listOf(DailySummary("2026-02-23", 8000, 6.0f, 70, 0))
+        val summaries = listOf(DailySummary("2026-02-23", 8000, 6.0f))
         val useCase = makeUseCase(dailySummaries = summaries)
 
         val exportData = useCase.buildExportData()

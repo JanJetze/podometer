@@ -10,7 +10,6 @@ import com.podometer.data.db.HourlyStepAggregate
 import com.podometer.data.db.StepDao
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
-import com.podometer.domain.model.ActivityState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -65,8 +64,6 @@ class UseCaseTest {
         override suspend fun upsertHourlyAggregate(aggregate: HourlyStepAggregate) = Unit
         override suspend fun upsertDailySummary(summary: DailySummary) = Unit
         override suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float) = Unit
-        override suspend fun addWalkingMinutes(date: String, minutes: Int) = Unit
-        override suspend fun addCyclingMinutes(date: String, minutes: Int) = Unit
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
         override suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> = emptyList()
         override suspend fun insertAllDailySummaries(summaries: List<DailySummary>) { }
@@ -87,36 +84,6 @@ class UseCaseTest {
 
     private fun preferencesManager(): PreferencesManager =
         PreferencesManager(FakeDataStore())
-
-    // ─── ActivityState.fromString ────────────────────────────────────────────
-
-    @Test
-    fun `ActivityState fromString converts WALKING`() {
-        assertEquals(ActivityState.WALKING, ActivityState.fromString("WALKING"))
-    }
-
-    @Test
-    fun `ActivityState fromString converts CYCLING`() {
-        assertEquals(ActivityState.CYCLING, ActivityState.fromString("CYCLING"))
-    }
-
-    @Test
-    fun `ActivityState fromString converts STILL`() {
-        assertEquals(ActivityState.STILL, ActivityState.fromString("STILL"))
-    }
-
-    @Test
-    fun `ActivityState fromString is case-insensitive`() {
-        assertEquals(ActivityState.WALKING, ActivityState.fromString("walking"))
-        assertEquals(ActivityState.CYCLING, ActivityState.fromString("Cycling"))
-        assertEquals(ActivityState.STILL, ActivityState.fromString("still"))
-    }
-
-    @Test
-    fun `ActivityState fromString defaults to STILL for unknown value`() {
-        assertEquals(ActivityState.STILL, ActivityState.fromString("UNKNOWN"))
-        assertEquals(ActivityState.STILL, ActivityState.fromString(""))
-    }
 
     // ─── GetTodayStepsUseCase ────────────────────────────────────────────────
 
@@ -256,8 +223,6 @@ class UseCaseTest {
                 date = "2026-02-12",
                 totalSteps = 8_500,
                 totalDistance = 6.375f,
-                walkingMinutes = 70,
-                cyclingMinutes = 20,
             ),
         )
         val useCase = GetWeeklyStepsUseCaseImpl(stepRepo(weekly = dbSummaries))
@@ -269,8 +234,6 @@ class UseCaseTest {
         assertEquals("2026-02-12", day.date)
         assertEquals(8_500, day.totalSteps)
         assertEquals(6.375f, day.totalDistanceKm, 0.0001f)
-        assertEquals(70, day.walkingMinutes)
-        assertEquals(20, day.cyclingMinutes)
     }
 
     @Test
@@ -285,9 +248,9 @@ class UseCaseTest {
     @Test
     fun `GetWeeklyStepsUseCase maps multiple summaries preserving order`() = runTest {
         val dbSummaries = listOf(
-            DailySummary("2026-02-10", 7_000, 5.25f, 60, 0),
-            DailySummary("2026-02-11", 9_000, 6.75f, 80, 15),
-            DailySummary("2026-02-12", 5_000, 3.75f, 45, 0),
+            DailySummary("2026-02-10", 7_000, 5.25f),
+            DailySummary("2026-02-11", 9_000, 6.75f),
+            DailySummary("2026-02-12", 5_000, 3.75f),
         )
         val useCase = GetWeeklyStepsUseCaseImpl(stepRepo(weekly = dbSummaries))
 

@@ -23,7 +23,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -34,17 +33,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
-import com.podometer.ui.dashboard.ActivityLog
 import com.podometer.util.DateTimeUtils
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Activities screen displaying recomputed activity sessions for a selected date.
+ * Activities screen displaying step graph data for a selected date.
  *
  * Features a date navigation row with previous/next arrows, a date picker dialog,
- * an activity timeline bar, and the consolidated activity log.
+ * and a step graph showing cumulative and per-bucket step counts.
  *
  * @param modifier  Optional [Modifier] applied to the root [Scaffold].
  * @param viewModel Hilt [ActivitiesViewModel]; override in previews/tests.
@@ -57,7 +54,6 @@ fun ActivitiesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showDatePicker by remember { mutableStateOf(false) }
-    var highlightedSessionIndex by remember { mutableIntStateOf(-1) }
 
     Scaffold(
         topBar = {
@@ -96,16 +92,14 @@ fun ActivitiesScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step Graph (shown even when sessions are empty, as long as windows exist)
+                // Step Graph (shown when windows exist)
                 val dayStartMillis = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
                 val dayEndMillis = dayStartMillis + 86_400_000L
-                val nowMillis = System.currentTimeMillis()
 
                 if (uiState.windows.isNotEmpty()) {
-                    val graphData = remember(uiState.windows, uiState.sessions, uiState.bucketSizeMs) {
+                    val graphData = remember(uiState.windows, uiState.bucketSizeMs) {
                         buildStepGraphData(
                             windows = uiState.windows,
-                            sessions = uiState.sessions,
                             bucketSizeMs = uiState.bucketSizeMs,
                             dayStartMillis = dayStartMillis,
                             dayEndMillis = dayEndMillis,
@@ -114,13 +108,8 @@ fun ActivitiesScreen(
 
                     StepGraph(
                         graphData = graphData,
-                        sessions = uiState.sessions,
                         dayStartMillis = dayStartMillis,
                         dayEndMillis = dayEndMillis,
-                        highlightedSessionIndex = highlightedSessionIndex,
-                        onSessionHighlight = { index ->
-                            highlightedSessionIndex = if (highlightedSessionIndex == index) -1 else index
-                        },
                         modifier = Modifier.fillMaxWidth(),
                     )
 
@@ -134,26 +123,13 @@ fun ActivitiesScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                if (uiState.sessions.isEmpty() && uiState.windows.isEmpty()) {
+                if (uiState.windows.isEmpty()) {
                     Text(
                         text = stringResource(R.string.activities_no_data),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 16.dp),
                     )
-                }
-
-                if (uiState.sessions.isNotEmpty()) {
-                    ActivityLog(
-                        sessions = uiState.sessions,
-                        onSessionClick = { session ->
-                            val idx = uiState.sessions.indexOf(session)
-                            highlightedSessionIndex = if (highlightedSessionIndex == idx) -1 else idx
-                        },
-                        nowMillis = if (uiState.isToday) nowMillis else dayEndMillis,
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }

@@ -59,8 +59,6 @@ class ExportDataUseCase(
                     date = summary.date,
                     totalSteps = summary.totalSteps,
                     totalDistance = summary.totalDistance,
-                    walkingMinutes = summary.walkingMinutes,
-                    cyclingMinutes = summary.cyclingMinutes,
                 )
             },
             hourlyAggregates = hourlyAggregates.map { aggregate ->

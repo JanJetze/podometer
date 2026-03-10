@@ -43,8 +43,6 @@ class ExportModelsTest {
             date = "2026-02-23",
             totalSteps = 8500,
             totalDistance = 6.375f,
-            walkingMinutes = 70,
-            cyclingMinutes = 20,
         )
 
         val encoded = json.encodeToString(summary)
@@ -53,8 +51,6 @@ class ExportModelsTest {
         assertEquals(summary.date, decoded.date)
         assertEquals(summary.totalSteps, decoded.totalSteps)
         assertEquals(summary.totalDistance, decoded.totalDistance, 0.0001f)
-        assertEquals(summary.walkingMinutes, decoded.walkingMinutes)
-        assertEquals(summary.cyclingMinutes, decoded.cyclingMinutes)
     }
 
     // ─── ExportHourlyAggregate ───────────────────────────────────────────────
@@ -88,8 +84,8 @@ class ExportModelsTest {
                 deviceModel = "Pixel 7",
             ),
             dailySummaries = listOf(
-                ExportDailySummary("2026-02-22", 9000, 6.75f, 80, 10),
-                ExportDailySummary("2026-02-23", 5000, 3.75f, 45, 0),
+                ExportDailySummary("2026-02-22", 9000, 6.75f),
+                ExportDailySummary("2026-02-23", 5000, 3.75f),
             ),
             hourlyAggregates = listOf(
                 ExportHourlyAggregate(1, 1_740_218_400_000L, 400, "WALKING"),

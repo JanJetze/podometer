@@ -5,11 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.sensor.SensorType
-import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.usecase.GetTodayStepsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCase
-import com.podometer.ui.activities.TestDataGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +15,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
@@ -32,7 +29,6 @@ import javax.inject.Inject
  * @property dailyGoal        User's configured daily step goal.
  * @property progressPercent  Steps as a percentage of [dailyGoal] (may exceed 100 when the goal is surpassed).
  * @property distanceKm       Approximate distance walked today in kilometres.
- * @property currentActivity  Current inferred activity state.
  * @property weeklySteps      Per-day summaries for the current calendar week.
  * @property isLoading        True while the initial data is loading; false once all
  *                            flows have emitted at least one value.
@@ -44,7 +40,6 @@ data class DashboardUiState(
     val dailyGoal: Int = 10_000,
     val progressPercent: Float = 0f,
     val distanceKm: Float = 0f,
-    val currentActivity: ActivityState = ActivityState.STILL,
     val weeklySteps: List<DaySummary> = emptyList(),
     val isLoading: Boolean = true,
     val sensorType: SensorType = SensorType.STEP_COUNTER,
@@ -75,42 +70,21 @@ class DashboardViewModel @Inject constructor(
     /** Combined UI state emitted to the Dashboard Compose screen. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<DashboardUiState> = preferencesManager.useTestData()
-        .flatMapLatest { useTestData ->
-            if (useTestData) {
-                val stepData = TestDataGenerator.generateTodaySteps()
-                val weekly = TestDataGenerator.generateWeeklySummaries()
-                combine(
-                    flowOf(Unit),
-                    _permissionsDenied,
-                ) { _, permissionsDenied ->
-                    DashboardUiState(
-                        todaySteps = stepData.steps,
-                        dailyGoal = stepData.goal,
-                        progressPercent = stepData.progressPercent,
-                        distanceKm = stepData.distanceKm,
-                        currentActivity = ActivityState.STILL,
-                        weeklySteps = weekly,
-                        isLoading = false,
-                        permissionsDenied = permissionsDenied,
-                    )
-                }
-            } else {
-                combine(
-                    getTodaySteps(),
-                    getWeeklySteps(),
-                    _permissionsDenied,
-                ) { stepData, weekly, permissionsDenied ->
-                    DashboardUiState(
-                        todaySteps = stepData.steps,
-                        dailyGoal = stepData.goal,
-                        progressPercent = stepData.progressPercent,
-                        distanceKm = stepData.distanceKm,
-                        currentActivity = ActivityState.STILL,
-                        weeklySteps = weekly,
-                        isLoading = false,
-                        permissionsDenied = permissionsDenied,
-                    )
-                }
+        .flatMapLatest { _ ->
+            combine(
+                getTodaySteps(),
+                getWeeklySteps(),
+                _permissionsDenied,
+            ) { stepData, weekly, permissionsDenied ->
+                DashboardUiState(
+                    todaySteps = stepData.steps,
+                    dailyGoal = stepData.goal,
+                    progressPercent = stepData.progressPercent,
+                    distanceKm = stepData.distanceKm,
+                    weeklySteps = weekly,
+                    isLoading = false,
+                    permissionsDenied = permissionsDenied,
+                )
             }
         }.stateIn(
         scope = viewModelScope,

@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +28,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -43,7 +39,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
 import com.podometer.data.sensor.SensorType
-import com.podometer.domain.model.ActivityState
 import com.podometer.service.startTrackingServiceIfPermitted
 import com.podometer.util.checkEssentialPermissions
 
@@ -57,10 +52,9 @@ import com.podometer.util.checkEssentialPermissions
  *   shown full-screen, hiding the normal dashboard content.
  * - Otherwise, the screen renders a scrollable [Column] with:
  *   - Optional [SensorNotice] when the sensor is [SensorType.ACCELEROMETER] or [SensorType.NONE].
- *   - [ActivityBadge] showing the current activity state.
- *   - [FirstLaunchEmptyState] when `todaySteps == 0 && transitions.isEmpty()`, OR
+ *   - [FirstLaunchEmptyState] when `todaySteps == 0`, OR
  *     [TodayCard] showing steps, progress ring, and distance when there is activity.
- *   - Activity Timeline, Transition Log, Weekly Steps, Cycling Sessions sections.
+ *   - Weekly Steps section.
  *
  * Pull-to-refresh is not needed — all data flows are reactive.
  *
@@ -151,19 +145,6 @@ fun DashboardScreen(
                     SensorNotice(
                         sensorType = uiState.sensorType,
                         modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-
-                // Activity badge — centred below the app bar, hidden when STILL
-                AnimatedVisibility(
-                    visible = uiState.currentActivity != ActivityState.STILL,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.align(CenterHorizontally),
-                ) {
-                    ActivityBadge(
-                        activity = uiState.currentActivity,
-                        modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }
 

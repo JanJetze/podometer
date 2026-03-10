@@ -40,8 +40,6 @@ class GetWeeklyStepsUseCaseImpl @Inject constructor(
                     date = db.date,
                     totalSteps = db.totalSteps,
                     totalDistanceKm = db.totalDistance,
-                    walkingMinutes = db.walkingMinutes,
-                    cyclingMinutes = db.cyclingMinutes,
                 )
             }
         }

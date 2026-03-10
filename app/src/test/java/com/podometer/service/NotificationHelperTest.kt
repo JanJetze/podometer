@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.service
 
-import com.podometer.domain.model.ActivityState
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.util.Locale
@@ -72,26 +71,6 @@ class NotificationHelperTest {
         assertEquals("12.7 km", result)
     }
 
-    // ─── activityDisplayText ─────────────────────────────────────────────────
-
-    @Test
-    fun `activityDisplayText returns Walking for WALKING`() {
-        val result = NotificationHelper.activityDisplayText(ActivityState.WALKING)
-        assertEquals("Walking", result)
-    }
-
-    @Test
-    fun `activityDisplayText returns Cycling for CYCLING`() {
-        val result = NotificationHelper.activityDisplayText(ActivityState.CYCLING)
-        assertEquals("Cycling", result)
-    }
-
-    @Test
-    fun `activityDisplayText returns Still for STILL`() {
-        val result = NotificationHelper.activityDisplayText(ActivityState.STILL)
-        assertEquals("Still", result)
-    }
-
     // ─── buildContentText ─────────────────────────────────────────────────────
 
     @Test
@@ -99,7 +78,6 @@ class NotificationHelperTest {
         val result = NotificationHelper.buildContentText(
             steps = 7432,
             distanceKm = 5.2f,
-            activity = ActivityState.WALKING,
             style = NotificationStyle.MINIMAL,
             locale = Locale.US,
         )
@@ -111,7 +89,6 @@ class NotificationHelperTest {
         val result = NotificationHelper.buildContentText(
             steps = 1,
             distanceKm = 0.001f,
-            activity = ActivityState.WALKING,
             style = NotificationStyle.MINIMAL,
             locale = Locale.US,
         )
@@ -119,39 +96,25 @@ class NotificationHelperTest {
     }
 
     @Test
-    fun `buildContentText DETAILED returns steps dot distance dot activity`() {
+    fun `buildContentText DETAILED returns steps dot distance`() {
         val result = NotificationHelper.buildContentText(
             steps = 7432,
             distanceKm = 5.2f,
-            activity = ActivityState.WALKING,
             style = NotificationStyle.DETAILED,
             locale = Locale.US,
         )
-        assertEquals("7,432 steps · 5.2 km · Walking", result)
+        assertEquals("7,432 steps · 5.2 km", result)
     }
 
     @Test
-    fun `buildContentText DETAILED with CYCLING activity`() {
+    fun `buildContentText DETAILED with zero steps`() {
         val result = NotificationHelper.buildContentText(
             steps = 0,
             distanceKm = 0.0f,
-            activity = ActivityState.CYCLING,
             style = NotificationStyle.DETAILED,
             locale = Locale.US,
         )
-        assertEquals("0 steps · 0.0 km · Cycling", result)
-    }
-
-    @Test
-    fun `buildContentText DETAILED with STILL activity`() {
-        val result = NotificationHelper.buildContentText(
-            steps = 1200,
-            distanceKm = 0.9f,
-            activity = ActivityState.STILL,
-            style = NotificationStyle.DETAILED,
-            locale = Locale.US,
-        )
-        assertEquals("1,200 steps · 0.9 km · Still", result)
+        assertEquals("0 steps · 0.0 km", result)
     }
 
     // ─── NotificationStyle enum ───────────────────────────────────────────────

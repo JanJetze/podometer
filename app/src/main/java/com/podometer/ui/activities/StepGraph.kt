@@ -28,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -43,15 +42,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.pow
-import com.podometer.domain.model.ActivitySession
-import com.podometer.domain.model.ActivityState
-import com.podometer.ui.dashboard.activityLabel
-import com.podometer.ui.dashboard.formatActivityDuration
-import com.podometer.ui.dashboard.formatActivityRange
 import com.podometer.ui.dashboard.formatActivityTime
 import com.podometer.ui.dashboard.formatStepCount
-import com.podometer.ui.theme.ActivityColors
-import com.podometer.ui.theme.LocalActivityColors
 import com.podometer.ui.theme.PodometerTheme
 
 // ─── Data model ───────────────────────────────────────────────────────────────
@@ -62,41 +54,11 @@ import com.podometer.ui.theme.PodometerTheme
  * @property bucketStartMillis Epoch milliseconds of the bucket start.
  * @property cumulativeSteps   Running total of steps up to and including this bucket.
  * @property bucketSteps       Number of steps in this bucket alone.
- * @property dominantActivity  The most common activity state during this bucket.
  */
 data class StepGraphPoint(
     val bucketStartMillis: Long,
     val cumulativeSteps: Int,
     val bucketSteps: Int,
-    val dominantActivity: ActivityState,
-)
-
-/**
- * Describes a colored region behind the graph corresponding to an activity session.
- *
- * @property startFraction Fraction [0, 1] of the day where the region starts.
- * @property endFraction   Fraction [0, 1] of the day where the region ends.
- * @property activity      The activity type for coloring.
- */
-data class ActivityRegion(
-    val startFraction: Float,
-    val endFraction: Float,
-    val activity: ActivityState,
-)
-
-/**
- * A vertical marker at an activity session boundary on the graph.
- *
- * @property fraction    Position as a day fraction [0, 1].
- * @property activity    The activity that starts (for start markers) or ends (for end markers).
- * @property isStart     True for session start, false for session end.
- * @property sessionIndex Index into the sessions list for highlight linking.
- */
-data class ActivityMarker(
-    val fraction: Float,
-    val activity: ActivityState,
-    val isStart: Boolean,
-    val sessionIndex: Int,
 )
 
 /**
@@ -105,28 +67,22 @@ data class ActivityMarker(
  * @property points          Time-ordered list of graph data points.
  * @property maxCumulative   Maximum cumulative step count (for left Y-axis scaling).
  * @property maxBucket       Maximum per-bucket step count (for right Y-axis scaling).
- * @property activityRegions Colored background regions for activity sessions.
- * @property markers         Vertical marker lines at activity session boundaries.
  */
 data class StepGraphData(
     val points: List<StepGraphPoint>,
     val maxCumulative: Int,
     val maxBucket: Int,
-    val activityRegions: List<ActivityRegion>,
-    val markers: List<ActivityMarker> = emptyList(),
 )
 
 // ─── Pure helper functions (unit-testable) ────────────────────────────────────
 
 /**
- * Builds [StepGraphData] from raw sensor windows and activity sessions.
+ * Builds [StepGraphData] from raw sensor windows.
  *
  * Groups windows into time buckets of [bucketSizeMs] duration, computes cumulative
- * and per-bucket step counts, determines the dominant activity per bucket, and
- * builds activity regions from sessions.
+ * and per-bucket step counts.
  *
  * @param windows      Chronologically ordered sensor windows for a single day.
- * @param sessions     Activity sessions for the same day.
  * @param bucketSizeMs Size of each time bucket in milliseconds.
  * @param dayStartMillis Start of the day in epoch millis.
  * @param dayEndMillis   End of the day in epoch millis.
@@ -134,20 +90,15 @@ data class StepGraphData(
  */
 fun buildStepGraphData(
     windows: List<StepWindowPoint>,
-    sessions: List<ActivitySession>,
     bucketSizeMs: Long,
     dayStartMillis: Long,
     dayEndMillis: Long,
 ): StepGraphData {
     if (windows.isEmpty()) {
-        val regions = buildActivityRegions(sessions, dayStartMillis, dayEndMillis)
-        val markers = buildActivityMarkers(sessions, dayStartMillis, dayEndMillis)
         return StepGraphData(
             points = emptyList(),
             maxCumulative = 0,
             maxBucket = 0,
-            activityRegions = regions,
-            markers = markers,
         )
     }
 
@@ -167,154 +118,21 @@ fun buildStepGraphData(
         val bucketWindows = buckets[bucketStart]!!
         val bucketSteps = bucketWindows.sumOf { it.stepCount }
         cumulativeSteps += bucketSteps
-        val dominantActivity = determineDominantActivity(
-            bucketStart, bucketStart + bucketSizeMs, sessions,
-        )
         StepGraphPoint(
             bucketStartMillis = bucketStart,
             cumulativeSteps = cumulativeSteps,
             bucketSteps = bucketSteps,
-            dominantActivity = dominantActivity,
         )
     }
 
     val maxCumulative = points.maxOfOrNull { it.cumulativeSteps } ?: 0
     val maxBucket = points.maxOfOrNull { it.bucketSteps } ?: 0
-    val regions = buildActivityRegions(sessions, dayStartMillis, dayEndMillis)
-
-    val markers = buildActivityMarkers(sessions, dayStartMillis, dayEndMillis)
 
     return StepGraphData(
         points = points,
         maxCumulative = maxCumulative,
         maxBucket = maxBucket,
-        activityRegions = regions,
-        markers = markers,
     )
-}
-
-/**
- * Determines the dominant activity for a time range by finding which session
- * covers the most time within that range.
- *
- * @param rangeStartMs Start of the range in epoch millis.
- * @param rangeEndMs   End of the range in epoch millis.
- * @param sessions     Activity sessions to check against.
- * @return The activity state with the most overlap, or [ActivityState.STILL] if none.
- */
-internal fun determineDominantActivity(
-    rangeStartMs: Long,
-    rangeEndMs: Long,
-    sessions: List<ActivitySession>,
-): ActivityState {
-    var maxOverlap = 0L
-    var dominant = ActivityState.STILL
-    for (session in sessions) {
-        val sessionEnd = session.endTime ?: Long.MAX_VALUE
-        val overlapStart = maxOf(rangeStartMs, session.startTime)
-        val overlapEnd = minOf(rangeEndMs, sessionEnd)
-        val overlap = overlapEnd - overlapStart
-        if (overlap > maxOverlap) {
-            maxOverlap = overlap
-            dominant = session.activity
-        }
-    }
-    return dominant
-}
-
-/**
- * Builds colored activity regions from sessions for the graph background.
- *
- * STILL sessions are excluded — only WALKING and CYCLING produce visible regions.
- *
- * @param sessions       Activity sessions for the day.
- * @param dayStartMillis Start of the day in epoch millis.
- * @param dayEndMillis   End of the day in epoch millis.
- * @return List of [ActivityRegion]s for non-STILL sessions.
- */
-internal fun buildActivityRegions(
-    sessions: List<ActivitySession>,
-    dayStartMillis: Long,
-    dayEndMillis: Long,
-): List<ActivityRegion> {
-    val dayDuration = (dayEndMillis - dayStartMillis).toFloat()
-    if (dayDuration <= 0f) return emptyList()
-
-    return sessions
-        .filter { it.activity != ActivityState.STILL }
-        .map { session ->
-            val sessionEnd = session.endTime ?: dayEndMillis
-            ActivityRegion(
-                startFraction = ((session.startTime - dayStartMillis).toFloat() / dayDuration).coerceIn(0f, 1f),
-                endFraction = ((sessionEnd - dayStartMillis).toFloat() / dayDuration).coerceIn(0f, 1f),
-                activity = session.activity,
-            )
-        }
-        .filter { it.endFraction > it.startFraction }
-}
-
-/**
- * Builds vertical marker lines at every activity session boundary.
- *
- * Each non-STILL session produces a start marker and (if closed) an end marker.
- * Markers are used to draw thin vertical lines and to detect tap-near-marker
- * interactions.
- *
- * @param sessions       Activity sessions for the day.
- * @param dayStartMillis Start of the day in epoch millis.
- * @param dayEndMillis   End of the day in epoch millis.
- * @return List of [ActivityMarker]s sorted by fraction.
- */
-internal fun buildActivityMarkers(
-    sessions: List<ActivitySession>,
-    dayStartMillis: Long,
-    dayEndMillis: Long,
-): List<ActivityMarker> {
-    val dayDuration = (dayEndMillis - dayStartMillis).toFloat()
-    if (dayDuration <= 0f) return emptyList()
-
-    val markers = mutableListOf<ActivityMarker>()
-    sessions.forEachIndexed { index, session ->
-        if (session.activity == ActivityState.STILL) return@forEachIndexed
-
-        markers.add(
-            ActivityMarker(
-                fraction = ((session.startTime - dayStartMillis) / dayDuration).coerceIn(0f, 1f),
-                activity = session.activity,
-                isStart = true,
-                sessionIndex = index,
-            ),
-        )
-        if (session.endTime != null) {
-            markers.add(
-                ActivityMarker(
-                    fraction = ((session.endTime - dayStartMillis) / dayDuration).coerceIn(0f, 1f),
-                    activity = session.activity,
-                    isStart = false,
-                    sessionIndex = index,
-                ),
-            )
-        }
-    }
-    return markers.sortedBy { it.fraction }
-}
-
-/**
- * Finds the nearest [ActivityMarker] within [thresholdFraction] of [tapFraction].
- *
- * @param markers           List of markers to search.
- * @param tapFraction       Day fraction where the user tapped.
- * @param thresholdFraction Maximum distance for a marker to be considered "near".
- * @return The nearest marker, or null if none is close enough.
- */
-internal fun findNearestMarker(
-    markers: List<ActivityMarker>,
-    tapFraction: Float,
-    thresholdFraction: Float,
-): ActivityMarker? {
-    return markers
-        .filter { kotlin.math.abs(it.fraction - tapFraction) <= thresholdFraction }
-        .minByOrNull { kotlin.math.abs(it.fraction - tapFraction) }
 }
 
 // ─── Composable ───────────────────────────────────────────────────────────────
@@ -331,20 +149,8 @@ private val X_AXIS_HEIGHT = 24.dp
 /** Height of the chart canvas area. */
 private val CHART_HEIGHT = 200.dp
 
-/** Semi-transparent alpha for activity region backgrounds. */
-private const val REGION_ALPHA = 0.15f
-
 /** Alpha for the crosshair line. */
 private const val CROSSHAIR_ALPHA = 0.6f
-
-/** Alpha for highlighted activity region. */
-private const val HIGHLIGHT_ALPHA = 0.35f
-
-/** Alpha for session boundary marker lines. */
-private const val MARKER_ALPHA = 0.5f
-
-/** Fraction of the visible range within which a tap snaps to a marker. */
-private const val MARKER_TAP_THRESHOLD = 0.02f
 
 /** Number of Y-axis grid divisions. */
 private const val Y_GRID_DIVISIONS = 4
@@ -405,38 +211,26 @@ private val TIME_LABELS_FINE = listOf(
  * Features:
  * - Left Y-axis: cumulative step count with labeled grid lines
  * - Right Y-axis: per-bucket step count with labeled grid lines
- * - Activity session colored background regions
  * - Tap to show crosshair with tooltip
  * - Horizontal pan and pinch-to-zoom on the time axis
  * - Double-tap to reset zoom
  *
  * @param graphData               Pre-computed [StepGraphData] to render.
- * @param sessions               Activity sessions for marker tooltip detail.
  * @param dayStartMillis          Start of the day in epoch millis for time calculations.
  * @param dayEndMillis            End of the day in epoch millis.
- * @param highlightedSessionIndex Index of the session to highlight, or -1 for none.
- * @param onSessionHighlight      Callback when a session is highlighted via marker tap.
  * @param modifier                Optional [Modifier] applied to the root [Column].
  */
 @Composable
 fun StepGraph(
     graphData: StepGraphData,
-    sessions: List<ActivitySession>,
     dayStartMillis: Long,
     dayEndMillis: Long,
-    highlightedSessionIndex: Int = -1,
-    onSessionHighlight: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val activityColors = LocalActivityColors.current
     val cumulativeLineColor = MaterialTheme.colorScheme.primary
     val bucketLineColor = MaterialTheme.colorScheme.tertiary
     val gridLineColor = MaterialTheme.colorScheme.outlineVariant
     val crosshairColor = MaterialTheme.colorScheme.onSurface
-    val markerColor = MaterialTheme.colorScheme.onSurface
-
-    // Marker/session state
-    var nearMarker by remember { mutableStateOf<ActivityMarker?>(null) }
 
     // Zoom/pan state
     var scale by remember { mutableFloatStateOf(1f) }
@@ -497,25 +291,12 @@ fun StepGraph(
                                     val chartWidth = size.width.toFloat()
                                     val tapFraction = offset.x / chartWidth
                                     val dayFraction = offsetFraction + tapFraction / scale
-                                    val clampedFraction = dayFraction.coerceIn(0f, 1f)
-                                    val visRange = 1f / scale
-                                    val threshold = MARKER_TAP_THRESHOLD * visRange
-                                    val marker = findNearestMarker(
-                                        graphData.markers, clampedFraction, threshold,
-                                    )
-                                    nearMarker = marker
-                                    crosshairFraction = if (marker != null) {
-                                        onSessionHighlight(marker.sessionIndex)
-                                        marker.fraction
-                                    } else {
-                                        clampedFraction
-                                    }
+                                    crosshairFraction = dayFraction.coerceIn(0f, 1f)
                                 },
                                 onDoubleTap = {
                                     scale = 1f
                                     offsetFraction = 0f
                                     crosshairFraction = null
-                                    nearMarker = null
                                 },
                             )
                         },
@@ -529,50 +310,6 @@ fun StepGraph(
 
                     fun fractionToX(f: Float): Float =
                         ((f - visibleStart) / visibleRange) * chartWidth
-
-                    // Activity regions
-                    for (region in graphData.activityRegions) {
-                        val x1 = fractionToX(region.startFraction).coerceIn(0f, chartWidth)
-                        val x2 = fractionToX(region.endFraction).coerceIn(0f, chartWidth)
-                        if (x2 > x1) {
-                            drawRect(
-                                color = activityColors.colorFor(region.activity),
-                                topLeft = Offset(x1, 0f),
-                                size = Size(x2 - x1, chartHeight),
-                                alpha = REGION_ALPHA,
-                            )
-                        }
-                    }
-
-                    // Highlighted session
-                    if (highlightedSessionIndex in graphData.activityRegions.indices) {
-                        val region = graphData.activityRegions[highlightedSessionIndex]
-                        val x1 = fractionToX(region.startFraction).coerceIn(0f, chartWidth)
-                        val x2 = fractionToX(region.endFraction).coerceIn(0f, chartWidth)
-                        if (x2 > x1) {
-                            drawRect(
-                                color = activityColors.colorFor(region.activity),
-                                topLeft = Offset(x1, 0f),
-                                size = Size(x2 - x1, chartHeight),
-                                alpha = HIGHLIGHT_ALPHA,
-                            )
-                        }
-                    }
-
-                    // Session boundary markers
-                    for (marker in graphData.markers) {
-                        val mx = fractionToX(marker.fraction)
-                        if (mx in 0f..chartWidth) {
-                            drawLine(
-                                color = markerColor,
-                                start = Offset(mx, 0f),
-                                end = Offset(mx, chartHeight),
-                                strokeWidth = 1.5f,
-                                alpha = MARKER_ALPHA,
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f)),
-                            )
-                        }
-                    }
 
                     // Grid lines with Y-axis labels
                     val gridDash = PathEffect.dashPathEffect(floatArrayOf(8f, 4f))
@@ -627,18 +364,13 @@ fun StepGraph(
 
                 // Tooltip overlay
                 val cf = crosshairFraction
-                if (cf != null) {
-                    val markerSession = nearMarker?.let { m -> sessions.getOrNull(m.sessionIndex) }
-                    if (markerSession != null) {
-                        MarkerTooltip(session = markerSession, modifier = Modifier.align(Alignment.TopCenter))
-                    } else if (graphData.points.isNotEmpty()) {
-                        val targetMillis = dayStartMillis + (cf * dayDuration).toLong()
-                        val nearestPoint = graphData.points.minByOrNull {
-                            kotlin.math.abs(it.bucketStartMillis - targetMillis)
-                        }
-                        if (nearestPoint != null) {
-                            CrosshairTooltip(point = nearestPoint, modifier = Modifier.align(Alignment.TopCenter))
-                        }
+                if (cf != null && graphData.points.isNotEmpty()) {
+                    val targetMillis = dayStartMillis + (cf * dayDuration).toLong()
+                    val nearestPoint = graphData.points.minByOrNull {
+                        kotlin.math.abs(it.bucketStartMillis - targetMillis)
+                    }
+                    if (nearestPoint != null) {
+                        CrosshairTooltip(point = nearestPoint, modifier = Modifier.align(Alignment.TopCenter))
                     }
                 }
             }
@@ -752,49 +484,6 @@ private fun CrosshairTooltip(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.tertiary,
             )
-        }
-    }
-}
-
-/**
- * Tooltip card shown when tapping near an activity session boundary marker.
- *
- * Shows the activity type, time range, duration, and step count.
- */
-@Composable
-private fun MarkerTooltip(
-    session: ActivitySession,
-    modifier: Modifier = Modifier,
-) {
-    val durationMs = if (session.endTime != null) session.endTime - session.startTime else null
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        tonalElevation = 2.dp,
-        modifier = modifier.padding(top = 4.dp),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Text(
-                text = activityLabel(session.activity),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                text = formatActivityRange(session.startTime, session.endTime),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = formatActivityDuration(durationMs),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (session.stepCount > 0) {
-                Text(
-                    text = "${formatStepCount(session.stepCount)} steps",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
         }
     }
 }
@@ -941,7 +630,7 @@ fun BucketSizeSelector(
 
 // ─── Preview functions ─────────────────────────────────────────────────────────
 
-/** Preview: step graph with sample data showing walking and cycling sessions. */
+/** Preview: step graph with sample data. */
 @Preview(showBackground = true, name = "StepGraph — Sample data")
 @Composable
 private fun PreviewStepGraphSampleData() {
@@ -966,38 +655,11 @@ private fun PreviewStepGraphSampleData() {
         )
     }
 
-    val sessions = listOf(
-        ActivitySession(
-            activity = ActivityState.WALKING,
-            startTime = 9 * hour,
-            endTime = 10 * hour,
-            startTransitionId = 1,
-            isManualOverride = false,
-            stepCount = 360,
-        ),
-        ActivitySession(
-            activity = ActivityState.CYCLING,
-            startTime = 10 * hour,
-            endTime = 11 * hour,
-            startTransitionId = 2,
-            isManualOverride = false,
-        ),
-        ActivitySession(
-            activity = ActivityState.WALKING,
-            startTime = 14 * hour,
-            endTime = 15 * hour,
-            startTransitionId = 3,
-            isManualOverride = false,
-            stepCount = 480,
-        ),
-    )
-
-    val data = buildStepGraphData(windows, sessions, bucketMs, dayStart, dayEnd)
+    val data = buildStepGraphData(windows, bucketMs, dayStart, dayEnd)
 
     PodometerTheme(dynamicColor = false) {
         StepGraph(
             graphData = data,
-            sessions = sessions,
             dayStartMillis = dayStart,
             dayEndMillis = dayEnd,
             modifier = Modifier.padding(16.dp),
@@ -1013,13 +675,11 @@ private fun PreviewStepGraphEmpty() {
         points = emptyList(),
         maxCumulative = 0,
         maxBucket = 0,
-        activityRegions = emptyList(),
     )
 
     PodometerTheme(dynamicColor = false) {
         StepGraph(
             graphData = data,
-            sessions = emptyList(),
             dayStartMillis = 0L,
             dayEndMillis = 86_400_000L,
             modifier = Modifier.padding(16.dp),

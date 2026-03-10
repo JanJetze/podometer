@@ -72,26 +72,22 @@ class EntityTest {
             date = "2026-02-17",
             totalSteps = 8_500,
             totalDistance = 6.2f,
-            walkingMinutes = 70,
-            cyclingMinutes = 20,
         )
         assertEquals("2026-02-17", summary.date)
         assertEquals(8_500, summary.totalSteps)
         assertEquals(6.2f, summary.totalDistance, 0.0001f)
-        assertEquals(70, summary.walkingMinutes)
-        assertEquals(20, summary.cyclingMinutes)
     }
 
     @Test
     fun `DailySummary data class equality works`() {
-        val a = DailySummary("2026-01-01", 1000, 0.8f, 15, 0)
-        val b = DailySummary("2026-01-01", 1000, 0.8f, 15, 0)
+        val a = DailySummary("2026-01-01", 1000, 0.8f)
+        val b = DailySummary("2026-01-01", 1000, 0.8f)
         assertEquals(a, b)
     }
 
     @Test
     fun `DailySummary copy updates only specified field`() {
-        val original = DailySummary("2026-02-17", 5000, 3.5f, 45, 10)
+        val original = DailySummary("2026-02-17", 5000, 3.5f)
         val updated = original.copy(totalSteps = 9999)
         assertEquals(9999, updated.totalSteps)
         assertEquals(original.date, updated.date)
@@ -100,8 +96,8 @@ class EntityTest {
 
     @Test
     fun `DailySummary not equal when dates differ`() {
-        val a = DailySummary("2026-02-17", 1000, 0.8f, 15, 0)
-        val b = DailySummary("2026-02-18", 1000, 0.8f, 15, 0)
+        val a = DailySummary("2026-02-17", 1000, 0.8f)
+        val b = DailySummary("2026-02-18", 1000, 0.8f)
         assertNotEquals(a, b)
     }
 }

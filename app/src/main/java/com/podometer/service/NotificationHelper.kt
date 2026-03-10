@@ -8,7 +8,6 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.podometer.MainActivity
 import com.podometer.R
-import com.podometer.domain.model.ActivityState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.text.NumberFormat
 import java.util.Locale
@@ -20,7 +19,7 @@ import javax.inject.Singleton
  *
  * Notification content depends on [NotificationStyle]:
  * - [NotificationStyle.MINIMAL]: "7,432 steps"
- * - [NotificationStyle.DETAILED]: "7,432 steps · 5.2 km · Walking"
+ * - [NotificationStyle.DETAILED]: "7,432 steps · 5.2 km"
  *
  * The formatting logic lives in pure [companion object] functions so it can be
  * unit-tested without an Android Context.
@@ -45,16 +44,14 @@ class NotificationHelper @Inject constructor(
      *
      * @param steps      Total steps to show.
      * @param distanceKm Distance in km (used only in [NotificationStyle.DETAILED]).
-     * @param activity   Current activity state (used only in [NotificationStyle.DETAILED]).
      * @param style      Controls how much information is shown.
      */
     fun buildNotification(
         steps: Int,
         distanceKm: Float,
-        activity: ActivityState,
         style: NotificationStyle,
     ): Notification {
-        val contentText = buildContentText(steps, distanceKm, activity, style)
+        val contentText = buildContentText(steps, distanceKm, style)
         return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText(contentText)
@@ -95,14 +92,6 @@ class NotificationHelper @Inject constructor(
             String.format(Locale.US, "%.1f km", distanceKm)
 
         /**
-         * Returns a human-readable label for [activity] with title-case capitalisation.
-         *
-         * Examples: WALKING → "Walking", CYCLING → "Cycling", STILL → "Still".
-         */
-        fun activityDisplayText(activity: ActivityState): String =
-            activity.name.lowercase().replaceFirstChar { it.uppercaseChar() }
-
-        /**
          * Builds the notification content text for the given parameters and style.
          *
          * This is a pure function with no side effects and no Android dependencies,
@@ -110,14 +99,12 @@ class NotificationHelper @Inject constructor(
          *
          * @param steps      Total step count.
          * @param distanceKm Distance in km.
-         * @param activity   Current activity.
          * @param style      [NotificationStyle.MINIMAL] or [NotificationStyle.DETAILED].
          * @param locale     Locale for number formatting (defaults to system default).
          */
         fun buildContentText(
             steps: Int,
             distanceKm: Float,
-            activity: ActivityState,
             style: NotificationStyle,
             locale: Locale = Locale.getDefault(),
         ): String {
@@ -125,7 +112,7 @@ class NotificationHelper @Inject constructor(
             return when (style) {
                 NotificationStyle.MINIMAL -> stepsText
                 NotificationStyle.DETAILED ->
-                    "$stepsText · ${formatDistance(distanceKm)} · ${activityDisplayText(activity)}"
+                    "$stepsText · ${formatDistance(distanceKm)}"
             }
         }
     }

@@ -37,10 +37,6 @@ class StepRepositoryTest {
         var upsertedStepsAndDistanceDate: String? = null
         var upsertedStepsAndDistanceTotalSteps: Int? = null
         var upsertedStepsAndDistanceTotalDistance: Float? = null
-        var addedWalkingMinutesDate: String? = null
-        var addedWalkingMinutes: Int? = null
-        var addedCyclingMinutesDate: String? = null
-        var addedCyclingMinutes: Int? = null
 
         override fun getTodayHourlyAggregates(todayStart: Long): Flow<List<HourlyStepAggregate>> =
             hourlyAggregatesFlow
@@ -74,16 +70,6 @@ class StepRepositoryTest {
             upsertedStepsAndDistanceDate = date
             upsertedStepsAndDistanceTotalSteps = totalSteps
             upsertedStepsAndDistanceTotalDistance = totalDistance
-        }
-
-        override suspend fun addWalkingMinutes(date: String, minutes: Int) {
-            addedWalkingMinutesDate = date
-            addedWalkingMinutes = minutes
-        }
-
-        override suspend fun addCyclingMinutes(date: String, minutes: Int) {
-            addedCyclingMinutesDate = date
-            addedCyclingMinutes = minutes
         }
 
         override suspend fun getAllDailySummaries(): List<DailySummary> = emptyList()
@@ -166,7 +152,7 @@ class StepRepositoryTest {
 
     @Test
     fun `getDailySummary delegates to StepDao`() = runTest {
-        val summary = DailySummary("2026-02-17", 8500, 6.2f, 70, 20)
+        val summary = DailySummary("2026-02-17", 8500, 6.2f)
         val dao = FakeStepDao(dailySummaryFlow = flowOf(summary))
         val repo = StepRepository(dao)
 
@@ -180,8 +166,8 @@ class StepRepositoryTest {
     @Test
     fun `getWeeklyDailySummaries delegates to StepDao`() = runTest {
         val summaries = listOf(
-            DailySummary("2026-02-10", 7000, 5.0f, 60, 0),
-            DailySummary("2026-02-11", 9000, 6.5f, 80, 15),
+            DailySummary("2026-02-10", 7000, 5.0f),
+            DailySummary("2026-02-11", 9000, 6.5f),
         )
         val dao = FakeStepDao(weeklyFlow = flowOf(summaries))
         val repo = StepRepository(dao)
@@ -261,7 +247,7 @@ class StepRepositoryTest {
     fun `upsertDailySummary delegates to StepDao`() = runTest {
         val dao = FakeStepDao()
         val repo = StepRepository(dao)
-        val summary = DailySummary("2026-02-17", 5000, 3.5f, 45, 10)
+        val summary = DailySummary("2026-02-17", 5000, 3.5f)
 
         repo.upsertDailySummary(summary)
 
@@ -301,32 +287,6 @@ class StepRepositoryTest {
         assertEquals("2026-02-27", dao.upsertedStepsAndDistanceDate)
         assertEquals(3000, dao.upsertedStepsAndDistanceTotalSteps)
         assertEquals(2.25f, dao.upsertedStepsAndDistanceTotalDistance!!, 0.0001f)
-    }
-
-    // ─── addWalkingMinutes ───────────────────────────────────────────────────
-
-    @Test
-    fun `addWalkingMinutes delegates to StepDao`() = runTest {
-        val dao = FakeStepDao()
-        val repo = StepRepository(dao)
-
-        repo.addWalkingMinutes(date = "2026-02-27", minutes = 60)
-
-        assertEquals("2026-02-27", dao.addedWalkingMinutesDate)
-        assertEquals(60, dao.addedWalkingMinutes)
-    }
-
-    // ─── addCyclingMinutes ───────────────────────────────────────────────────
-
-    @Test
-    fun `addCyclingMinutes delegates to StepDao`() = runTest {
-        val dao = FakeStepDao()
-        val repo = StepRepository(dao)
-
-        repo.addCyclingMinutes(date = "2026-02-27", minutes = 60)
-
-        assertEquals("2026-02-27", dao.addedCyclingMinutesDate)
-        assertEquals(60, dao.addedCyclingMinutes)
     }
 
     // ─── Class existence ────────────────────────────────────────────────────

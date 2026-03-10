@@ -89,53 +89,21 @@ interface StepDao {
     suspend fun upsertDailySummary(summary: DailySummary)
 
     /**
-     * Inserts or updates only the [DailySummary.totalSteps] and
-     * [DailySummary.totalDistance] columns for the given [date], preserving any
-     * existing [DailySummary.walkingMinutes] and [DailySummary.cyclingMinutes].
+     * Inserts or updates the [DailySummary.totalSteps] and
+     * [DailySummary.totalDistance] columns for the given [date].
      *
      * On conflict (row already exists for [date]), only the steps and distance
-     * columns are overwritten; the activity-minute columns are left unchanged.
-     * On insert (no row yet), activity-minute columns default to 0.
-     *
-     * Use this method for step/distance updates and partial-hour writes so that
-     * activity minutes accumulated by completed buckets are never reset.
+     * columns are overwritten.
+     * On insert (no row yet), both columns are set to the provided values.
      */
     @Query("""
-        INSERT INTO daily_summaries (date, totalSteps, totalDistance, walkingMinutes, cyclingMinutes)
-        VALUES (:date, :totalSteps, :totalDistance, 0, 0)
+        INSERT INTO daily_summaries (date, totalSteps, totalDistance)
+        VALUES (:date, :totalSteps, :totalDistance)
         ON CONFLICT(date) DO UPDATE SET
             totalSteps = :totalSteps,
             totalDistance = :totalDistance
     """)
     suspend fun upsertStepsAndDistance(date: String, totalSteps: Int, totalDistance: Float)
-
-    /**
-     * Increments [DailySummary.walkingMinutes] by [minutes] for the row whose
-     * [DailySummary.date] equals [date].
-     *
-     * No-op if no row exists for [date] (i.e. the row must be created first via
-     * [upsertStepsAndDistance]).
-     */
-    @Query("""
-        UPDATE daily_summaries
-        SET walkingMinutes = walkingMinutes + :minutes
-        WHERE date = :date
-    """)
-    suspend fun addWalkingMinutes(date: String, minutes: Int)
-
-    /**
-     * Increments [DailySummary.cyclingMinutes] by [minutes] for the row whose
-     * [DailySummary.date] equals [date].
-     *
-     * No-op if no row exists for [date] (i.e. the row must be created first via
-     * [upsertStepsAndDistance]).
-     */
-    @Query("""
-        UPDATE daily_summaries
-        SET cyclingMinutes = cyclingMinutes + :minutes
-        WHERE date = :date
-    """)
-    suspend fun addCyclingMinutes(date: String, minutes: Int)
 
     /** Inserts multiple [DailySummary] rows, replacing on conflict. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)

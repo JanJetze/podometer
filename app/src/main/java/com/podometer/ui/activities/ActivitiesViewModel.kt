@@ -4,7 +4,6 @@ package com.podometer.ui.activities
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.podometer.data.repository.PreferencesManager
-import com.podometer.domain.model.ActivitySession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,8 +20,7 @@ import javax.inject.Inject
 /**
  * UI state for the Activities screen.
  *
- * @property selectedDate     The date whose activity sessions are displayed.
- * @property sessions         Activity sessions for [selectedDate].
+ * @property selectedDate     The date whose step windows are displayed.
  * @property windows          Step windows for the step graph.
  * @property bucketSizeMs     Time bucket size for step graph aggregation.
  * @property isToday          True when [selectedDate] is the current day.
@@ -31,7 +29,6 @@ import javax.inject.Inject
  */
 data class ActivitiesUiState(
     val selectedDate: LocalDate = LocalDate.now(),
-    val sessions: List<ActivitySession> = emptyList(),
     val windows: List<StepWindowPoint> = emptyList(),
     val bucketSizeMs: Long = 300_000L,
     val isToday: Boolean = true,
@@ -42,8 +39,7 @@ data class ActivitiesUiState(
 /**
  * ViewModel for the Activities screen.
  *
- * Manages date navigation and provides activity sessions and step windows
- * for the selected date.
+ * Manages date navigation and provides step windows for the selected date.
  */
 @HiltViewModel
 class ActivitiesViewModel @Inject constructor(
@@ -65,26 +61,13 @@ class ActivitiesViewModel @Inject constructor(
     val uiState: StateFlow<ActivitiesUiState> = combine(
         _selectedDate,
         preferencesManager.useTestData(),
-    ) { date, useTest -> date to useTest }.flatMapLatest { (date, useTestData) ->
-        val sessionFlow = if (useTestData) {
-            flowOf(TestDataGenerator.generateSessions(date))
-        } else {
-            flowOf(emptyList())
-        }
-        val windowFlow = if (useTestData) {
-            flowOf(TestDataGenerator.generateWindows(date))
-        } else {
-            flowOf(emptyList())
-        }
-
+    ) { date, useTest -> date to useTest }.flatMapLatest { (date, _) ->
         combine(
-            sessionFlow,
-            windowFlow,
+            flowOf(emptyList<StepWindowPoint>()),
             _bucketSizeMs,
-        ) { sessions, windows, bucketSizeMs ->
+        ) { windows, bucketSizeMs ->
             ActivitiesUiState(
                 selectedDate = date,
-                sessions = sessions,
                 windows = windows,
                 bucketSizeMs = bucketSizeMs,
                 isToday = date == LocalDate.now(),

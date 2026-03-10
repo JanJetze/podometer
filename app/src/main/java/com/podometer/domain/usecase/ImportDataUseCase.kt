@@ -36,8 +36,6 @@ class ImportDataUseCase(
                     date = s.date,
                     totalSteps = s.totalSteps,
                     totalDistance = s.totalDistance,
-                    walkingMinutes = s.walkingMinutes,
-                    cyclingMinutes = s.cyclingMinutes,
                 )
             },
         )

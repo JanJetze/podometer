@@ -17,10 +17,6 @@ data class DailySummary(
     val date: String,
     /** Total steps accumulated over the day. */
     val totalSteps: Int,
-    /** Total distance walked/cycled in kilometres. */
+    /** Total distance walked in kilometres. */
     val totalDistance: Float,
-    /** Total minutes spent walking. */
-    val walkingMinutes: Int,
-    /** Total minutes spent cycling. */
-    val cyclingMinutes: Int,
 )

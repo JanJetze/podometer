@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.activities
 
-import com.podometer.domain.model.ActivitySession
-import com.podometer.domain.model.ActivityState
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,37 +20,14 @@ class StepGraphTest {
         stepCount = steps,
     )
 
-    private fun session(
-        activity: ActivityState,
-        startTime: Long,
-        endTime: Long?,
-    ) = ActivitySession(
-        activity = activity,
-        startTime = startTime,
-        endTime = endTime,
-        startTransitionId = 1,
-        isManualOverride = false,
-    )
-
     // ─── Empty input ────────────────────────────────────────────────────────
 
     @Test
     fun `empty windows produce empty points`() {
-        val data = buildStepGraphData(emptyList(), emptyList(), bucketMs, dayStart, dayEnd)
+        val data = buildStepGraphData(emptyList(), bucketMs, dayStart, dayEnd)
         assertTrue(data.points.isEmpty())
         assertEquals(0, data.maxCumulative)
         assertEquals(0, data.maxBucket)
-    }
-
-    @Test
-    fun `empty windows with sessions still produces activity regions`() {
-        val sessions = listOf(
-            session(ActivityState.WALKING, 3_600_000L, 7_200_000L),
-        )
-        val data = buildStepGraphData(emptyList(), sessions, bucketMs, dayStart, dayEnd)
-        assertTrue(data.points.isEmpty())
-        assertEquals(1, data.activityRegions.size)
-        assertEquals(ActivityState.WALKING, data.activityRegions[0].activity)
     }
 
     // ─── Single bucket ──────────────────────────────────────────────────────
@@ -65,7 +39,7 @@ class StepGraphTest {
             window(31_000L, 3),
             window(61_000L, 2),
         )
-        val data = buildStepGraphData(windows, emptyList(), bucketMs, dayStart, dayEnd)
+        val data = buildStepGraphData(windows, bucketMs, dayStart, dayEnd)
         assertEquals(1, data.points.size)
         assertEquals(10, data.points[0].bucketSteps)
         assertEquals(10, data.points[0].cumulativeSteps)
@@ -98,7 +72,7 @@ class StepGraphTest {
             window(570_000L, 0),
             window(600_000L, 7),      // bucket 2
         )
-        val data = buildStepGraphData(windows, emptyList(), bucketMs, dayStart, dayEnd)
+        val data = buildStepGraphData(windows, bucketMs, dayStart, dayEnd)
         assertEquals(3, data.points.size)
         assertEquals(5, data.points[0].cumulativeSteps)
         assertEquals(8, data.points[1].cumulativeSteps)
@@ -110,7 +84,7 @@ class StepGraphTest {
         val windows = (0L until 3_600_000L step 30_000L).mapIndexed { i, ts ->
             window(ts, (i % 5) + 1)
         }
-        val data = buildStepGraphData(windows, emptyList(), bucketMs, dayStart, dayEnd)
+        val data = buildStepGraphData(windows, bucketMs, dayStart, dayEnd)
         for (i in 1 until data.points.size) {
             assertTrue(
                 "Point $i cumulative (${data.points[i].cumulativeSteps}) should be >= point ${i - 1} (${data.points[i - 1].cumulativeSteps})",
@@ -128,7 +102,7 @@ class StepGraphTest {
             window(300_000L, 20),
             window(600_000L, 5),
         )
-        val data = buildStepGraphData(windows, emptyList(), bucketMs, dayStart, dayEnd)
+        val data = buildStepGraphData(windows, bucketMs, dayStart, dayEnd)
         assertEquals(35, data.maxCumulative)
     }
 
@@ -157,7 +131,7 @@ class StepGraphTest {
             window(570_000L, 0),
             window(600_000L, 5),
         )
-        val data = buildStepGraphData(windows, emptyList(), bucketMs, dayStart, dayEnd)
+        val data = buildStepGraphData(windows, bucketMs, dayStart, dayEnd)
         assertEquals(20, data.maxBucket)
     }
 
@@ -171,160 +145,14 @@ class StepGraphTest {
             window(600_000L, 7),
         )
         // 5-min buckets: 3 buckets
-        val data5m = buildStepGraphData(windows, emptyList(), 300_000L, dayStart, dayEnd)
+        val data5m = buildStepGraphData(windows, 300_000L, dayStart, dayEnd)
         assertEquals(3, data5m.points.size)
 
         // 15-min buckets: 1 bucket (all within first 15 min)
-        val data15m = buildStepGraphData(windows, emptyList(), 900_000L, dayStart, dayEnd)
+        val data15m = buildStepGraphData(windows, 900_000L, dayStart, dayEnd)
         assertEquals(1, data15m.points.size)
         assertEquals(15, data15m.points[0].bucketSteps)
     }
-
-    // ─── Activity regions ───────────────────────────────────────────────────
-
-    @Test
-    fun `activity regions map correctly from sessions`() {
-        val sessions = listOf(
-            session(ActivityState.WALKING, 21_600_000L, 32_400_000L), // 6am-9am
-            session(ActivityState.CYCLING, 32_400_000L, 43_200_000L), // 9am-12pm
-        )
-        val data = buildStepGraphData(emptyList(), sessions, bucketMs, dayStart, dayEnd)
-        assertEquals(2, data.activityRegions.size)
-        assertEquals(ActivityState.WALKING, data.activityRegions[0].activity)
-        assertEquals(ActivityState.CYCLING, data.activityRegions[1].activity)
-
-        // 6am = 6/24 = 0.25
-        assertEquals(0.25f, data.activityRegions[0].startFraction, 0.001f)
-        // 9am = 9/24 = 0.375
-        assertEquals(0.375f, data.activityRegions[0].endFraction, 0.001f)
-    }
-
-    @Test
-    fun `STILL sessions are excluded from regions`() {
-        val sessions = listOf(
-            session(ActivityState.STILL, 0L, 21_600_000L),
-            session(ActivityState.WALKING, 21_600_000L, 32_400_000L),
-        )
-        val data = buildStepGraphData(emptyList(), sessions, bucketMs, dayStart, dayEnd)
-        assertEquals(1, data.activityRegions.size)
-        assertEquals(ActivityState.WALKING, data.activityRegions[0].activity)
-    }
-
-    // ─── Dominant activity per bucket ───────────────────────────────────────
-
-    @Test
-    fun `dominant activity resolves to session with most overlap`() {
-        val sessions = listOf(
-            session(ActivityState.WALKING, 0L, 200_000L),    // 200s overlap with [0, 300s] bucket
-            session(ActivityState.CYCLING, 200_000L, 500_000L), // 100s overlap with [0, 300s] bucket
-        )
-        val dominant = determineDominantActivity(0L, 300_000L, sessions)
-        assertEquals(ActivityState.WALKING, dominant)
-    }
-
-    @Test
-    fun `dominant activity is STILL when no sessions cover the range`() {
-        val dominant = determineDominantActivity(0L, 300_000L, emptyList())
-        assertEquals(ActivityState.STILL, dominant)
-    }
-
-    // ─── Activity markers ─────────────────────────────────────────────────
-
-    @Test
-    fun `markers are generated at session boundaries`() {
-        val sessions = listOf(
-            session(ActivityState.WALKING, 21_600_000L, 32_400_000L), // 6am-9am
-            session(ActivityState.CYCLING, 32_400_000L, 43_200_000L), // 9am-12pm
-        )
-        val markers = buildActivityMarkers(sessions, dayStart, dayEnd)
-        // 2 sessions x 2 boundaries = 4 markers
-        assertEquals(4, markers.size)
-        // First marker: walking start at 6am = 0.25
-        assertEquals(0.25f, markers[0].fraction, 0.001f)
-        assertTrue(markers[0].isStart)
-        assertEquals(ActivityState.WALKING, markers[0].activity)
-        assertEquals(0, markers[0].sessionIndex)
-        // Second marker: walking end / cycling start at 9am = 0.375
-        assertEquals(0.375f, markers[1].fraction, 0.001f)
-        assertFalse(markers[1].isStart) // walking end
-        assertEquals(0.375f, markers[2].fraction, 0.001f)
-        assertTrue(markers[2].isStart) // cycling start
-    }
-
-    @Test
-    fun `markers exclude STILL sessions`() {
-        val sessions = listOf(
-            session(ActivityState.STILL, 0L, 21_600_000L),
-            session(ActivityState.WALKING, 21_600_000L, 32_400_000L),
-        )
-        val markers = buildActivityMarkers(sessions, dayStart, dayEnd)
-        assertEquals(2, markers.size) // only walking start + end
-        assertEquals(ActivityState.WALKING, markers[0].activity)
-    }
-
-    @Test
-    fun `ongoing session has start marker but no end marker`() {
-        val sessions = listOf(
-            session(ActivityState.WALKING, 21_600_000L, null), // ongoing
-        )
-        val markers = buildActivityMarkers(sessions, dayStart, dayEnd)
-        assertEquals(1, markers.size)
-        assertTrue(markers[0].isStart)
-    }
-
-    @Test
-    fun `markers are sorted by fraction`() {
-        val sessions = listOf(
-            session(ActivityState.CYCLING, 43_200_000L, 54_000_000L), // 12pm-3pm
-            session(ActivityState.WALKING, 21_600_000L, 32_400_000L), // 6am-9am
-        )
-        val markers = buildActivityMarkers(sessions, dayStart, dayEnd)
-        for (i in 1 until markers.size) {
-            assertTrue(markers[i].fraction >= markers[i - 1].fraction)
-        }
-    }
-
-    @Test
-    fun `markers are included in StepGraphData`() {
-        val sessions = listOf(
-            session(ActivityState.WALKING, 21_600_000L, 32_400_000L),
-        )
-        val data = buildStepGraphData(emptyList(), sessions, bucketMs, dayStart, dayEnd)
-        assertEquals(2, data.markers.size)
-    }
-
-    // ─── findNearestMarker ──────────────────────────────────────────────────
-
-    @Test
-    fun `findNearestMarker returns marker within threshold`() {
-        val markers = listOf(
-            ActivityMarker(0.25f, ActivityState.WALKING, true, 0),
-            ActivityMarker(0.375f, ActivityState.WALKING, false, 0),
-        )
-        val found = findNearestMarker(markers, 0.26f, 0.02f)
-        assertEquals(markers[0], found)
-    }
-
-    @Test
-    fun `findNearestMarker returns null when no marker within threshold`() {
-        val markers = listOf(
-            ActivityMarker(0.25f, ActivityState.WALKING, true, 0),
-        )
-        val found = findNearestMarker(markers, 0.5f, 0.02f)
-        assertEquals(null, found)
-    }
-
-    @Test
-    fun `findNearestMarker returns closest when multiple within threshold`() {
-        val markers = listOf(
-            ActivityMarker(0.25f, ActivityState.WALKING, true, 0),
-            ActivityMarker(0.27f, ActivityState.CYCLING, true, 1),
-        )
-        val found = findNearestMarker(markers, 0.26f, 0.02f)
-        assertEquals(markers[0], found) // 0.25 is closer to 0.26 than 0.27
-    }
-
-    // ─── Dominant activity ──────────────────────────────────────────────────
 
     // ─── niceAxisMax ─────────────────────────────────────────────────────
 
@@ -398,23 +226,5 @@ class StepGraphTest {
         assertEquals("10k", formatAxisLabel(10000))
         assertEquals("15k", formatAxisLabel(15000))
         assertEquals("20k", formatAxisLabel(20000))
-    }
-
-    // ─── Dominant activity ──────────────────────────────────────────────
-
-    @Test
-    fun `dominant activity assigned to graph points from sessions`() {
-        val sessions = listOf(
-            session(ActivityState.WALKING, 0L, 300_000L),
-            session(ActivityState.CYCLING, 300_000L, 600_000L),
-        )
-        val windows = listOf(
-            window(100_000L, 5),   // in walking session
-            window(400_000L, 3),   // in cycling session
-        )
-        val data = buildStepGraphData(windows, sessions, bucketMs, dayStart, dayEnd)
-        assertEquals(2, data.points.size)
-        assertEquals(ActivityState.WALKING, data.points[0].dominantActivity)
-        assertEquals(ActivityState.CYCLING, data.points[1].dominantActivity)
     }
 }

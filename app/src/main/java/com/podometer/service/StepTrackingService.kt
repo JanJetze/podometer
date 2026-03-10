@@ -14,7 +14,6 @@ import com.podometer.data.db.HourlyStepAggregate
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepRepository
 import com.podometer.data.sensor.StepSensorManager
-import com.podometer.domain.model.ActivityState
 import com.podometer.util.DateTimeUtils
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -181,7 +180,6 @@ class StepTrackingService : Service() {
         val notification = notificationHelper.buildNotification(
             steps = accumulator.totalStepsToday,
             distanceKm = 0f,
-            activity = ActivityState.STILL,
             style = style,
         )
         ServiceCompat.startForeground(
@@ -208,18 +206,10 @@ class StepTrackingService : Service() {
                     totalSteps = flushResult.dailySummary.totalSteps,
                     totalDistance = flushResult.dailySummary.totalDistance,
                 )
-                if (flushResult.walkingMinutes > 0) {
-                    stepRepository.addWalkingMinutes(flushResult.dailySummary.date, flushResult.walkingMinutes)
-                }
-                if (flushResult.cyclingMinutes > 0) {
-                    stepRepository.addCyclingMinutes(flushResult.dailySummary.date, flushResult.cyclingMinutes)
-                }
                 Log.d(
                     TAG,
                     "Flushed ${flushResult.aggregate.stepCountDelta} steps for hour " +
-                        "${flushResult.aggregate.timestamp}, " +
-                        "walkingMinutes=${flushResult.walkingMinutes}, " +
-                        "cyclingMinutes=${flushResult.cyclingMinutes}",
+                        "${flushResult.aggregate.timestamp}",
                 )
             }
 
@@ -251,7 +241,6 @@ class StepTrackingService : Service() {
         val notification = notificationHelper.buildNotification(
             steps = accumulator.totalStepsToday,
             distanceKm = distanceKm,
-            activity = ActivityState.STILL,
             style = style,
         )
         ServiceCompat.startForeground(

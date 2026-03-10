@@ -8,14 +8,10 @@ package com.podometer.domain.model
  *
  * @property date            Calendar date in "yyyy-MM-dd" format.
  * @property totalSteps      Total steps accumulated over the day.
- * @property totalDistanceKm Total distance walked or cycled in kilometres.
- * @property walkingMinutes  Total minutes spent walking.
- * @property cyclingMinutes  Total minutes spent cycling.
+ * @property totalDistanceKm Total distance walked in kilometres.
  */
 data class DaySummary(
     val date: String,
     val totalSteps: Int,
     val totalDistanceKm: Float,
-    val walkingMinutes: Int,
-    val cyclingMinutes: Int,
 )

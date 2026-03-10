@@ -2,7 +2,9 @@
 package com.podometer.ui.dashboard
 
 import java.text.NumberFormat
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -45,4 +47,20 @@ fun isNewDay(lastKnownDate: String, currentDate: String): Boolean {
     val last = LocalDate.parse(lastKnownDate, DATE_FORMATTER_ISO)
     val current = LocalDate.parse(currentDate, DATE_FORMATTER_ISO)
     return current.isAfter(last)
+}
+
+private val TIME_FORMATTER = DateTimeFormatter.ofPattern("h:mm a")
+
+/**
+ * Formats an epoch-millisecond timestamp as a human-readable time string,
+ * e.g. "9:30 AM".
+ *
+ * @param epochMillis Epoch milliseconds to format.
+ * @return Formatted time string in the system default timezone.
+ */
+fun formatActivityTime(epochMillis: Long): String {
+    val localTime = Instant.ofEpochMilli(epochMillis)
+        .atZone(ZoneId.systemDefault())
+        .toLocalTime()
+    return localTime.format(TIME_FORMATTER)
 }

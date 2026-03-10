@@ -25,8 +25,6 @@ class WeeklyStepChartTest {
         date = date,
         totalSteps = steps,
         totalDistanceKm = 0f,
-        walkingMinutes = 0,
-        cyclingMinutes = 0,
     )
 
     // ─── buildChartBars — empty input ─────────────────────────────────────────
@@ -291,14 +289,12 @@ class WeeklyStepChartTest {
     // ─── buildChartBars — detail fields from DaySummary ───────────────────────
 
     @Test
-    fun `buildChartBars populates distanceKm walkingMinutes cyclingMinutes from summary`() {
+    fun `buildChartBars populates distanceKm from summary`() {
         val summaries = listOf(
             DaySummary(
                 date = "2026-02-23",
                 totalSteps = 8_000,
                 totalDistanceKm = 6.1f,
-                walkingMinutes = 55,
-                cyclingMinutes = 12,
             ),
         )
         val bars = buildChartBars(
@@ -308,8 +304,6 @@ class WeeklyStepChartTest {
         )
         val dataBar = bars.first { !it.isPlaceholder }
         assertEquals(6.1f, dataBar.distanceKm, 0.01f)
-        assertEquals(55, dataBar.walkingMinutes)
-        assertEquals(12, dataBar.cyclingMinutes)
     }
 
     @Test
@@ -321,8 +315,6 @@ class WeeklyStepChartTest {
         )
         bars.forEach { bar ->
             assertEquals(0f, bar.distanceKm, 0.001f)
-            assertEquals(0, bar.walkingMinutes)
-            assertEquals(0, bar.cyclingMinutes)
         }
     }
 
