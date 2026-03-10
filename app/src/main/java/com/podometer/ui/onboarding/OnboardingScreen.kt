@@ -43,7 +43,6 @@ import com.podometer.ui.theme.PodometerTheme
 
 /** Ordered list of runtime permissions requested during onboarding. */
 internal val ONBOARDING_PERMISSIONS = arrayOf(
-    Manifest.permission.BODY_SENSORS,
     Manifest.permission.ACTIVITY_RECOGNITION,
     Manifest.permission.POST_NOTIFICATIONS,
 )

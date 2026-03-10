@@ -22,7 +22,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.podometer.service.startTrackingServiceIfPermitted
 import com.podometer.ui.Screen
-import com.podometer.ui.activities.ActivitiesScreen
 import com.podometer.ui.dashboard.DashboardScreen
 import com.podometer.ui.donate.DonateScreen
 import com.podometer.ui.navigation.BottomNavBar
@@ -71,8 +70,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
-                val showBottomBar = currentRoute == Screen.Dashboard.route ||
-                    currentRoute == Screen.Activities.route
+                val showBottomBar = currentRoute == Screen.Dashboard.route
 
                 Scaffold(
                     bottomBar = {
@@ -160,10 +158,6 @@ class MainActivity : ComponentActivity() {
                             },
                             onSetUseTestData = viewModel::setUseTestData,
                         )
-                    }
-
-                    composable(Screen.Activities.route) {
-                        ActivitiesScreen()
                     }
 
                     composable(Screen.Donate.route) {

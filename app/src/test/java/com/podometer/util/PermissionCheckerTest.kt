@@ -16,9 +16,8 @@ class PermissionCheckerTest {
     // ─── areEssentialPermissionsGranted ──────────────────────────────────────
 
     @Test
-    fun `areEssentialPermissionsGranted returns true when both essential permissions granted`() {
+    fun `areEssentialPermissionsGranted returns true when ACTIVITY_RECOGNITION granted`() {
         val results = mapOf(
-            Manifest.permission.BODY_SENSORS to true,
             Manifest.permission.ACTIVITY_RECOGNITION to true,
             Manifest.permission.POST_NOTIFICATIONS to false,
         )
@@ -28,31 +27,10 @@ class PermissionCheckerTest {
     @Test
     fun `areEssentialPermissionsGranted returns false when ACTIVITY_RECOGNITION denied`() {
         val results = mapOf(
-            Manifest.permission.BODY_SENSORS to true,
             Manifest.permission.ACTIVITY_RECOGNITION to false,
             Manifest.permission.POST_NOTIFICATIONS to true,
         )
         assertFalse(areEssentialPermissionsGranted(results))
-    }
-
-    @Test
-    fun `areEssentialPermissionsGranted returns false when both essential permissions denied`() {
-        val results = mapOf(
-            Manifest.permission.BODY_SENSORS to false,
-            Manifest.permission.ACTIVITY_RECOGNITION to false,
-            Manifest.permission.POST_NOTIFICATIONS to true,
-        )
-        assertFalse(areEssentialPermissionsGranted(results))
-    }
-
-    @Test
-    fun `areEssentialPermissionsGranted returns true when BODY_SENSORS denied but ACTIVITY_RECOGNITION granted`() {
-        val results = mapOf(
-            Manifest.permission.BODY_SENSORS to false,
-            Manifest.permission.ACTIVITY_RECOGNITION to true,
-            Manifest.permission.POST_NOTIFICATIONS to false,
-        )
-        assertTrue(areEssentialPermissionsGranted(results))
     }
 
     @Test
@@ -63,7 +41,7 @@ class PermissionCheckerTest {
     @Test
     fun `areEssentialPermissionsGranted returns false when ACTIVITY_RECOGNITION not in map`() {
         val results = mapOf(
-            Manifest.permission.BODY_SENSORS to true,
+            Manifest.permission.POST_NOTIFICATIONS to true,
         )
         assertFalse(areEssentialPermissionsGranted(results))
     }
@@ -71,9 +49,8 @@ class PermissionCheckerTest {
     // ─── areAllPermissionsGranted ─────────────────────────────────────────────
 
     @Test
-    fun `areAllPermissionsGranted returns true when all three permissions granted`() {
+    fun `areAllPermissionsGranted returns true when all permissions granted`() {
         val results = mapOf(
-            Manifest.permission.BODY_SENSORS to true,
             Manifest.permission.ACTIVITY_RECOGNITION to true,
             Manifest.permission.POST_NOTIFICATIONS to true,
         )
@@ -83,7 +60,6 @@ class PermissionCheckerTest {
     @Test
     fun `areAllPermissionsGranted returns false when POST_NOTIFICATIONS denied`() {
         val results = mapOf(
-            Manifest.permission.BODY_SENSORS to true,
             Manifest.permission.ACTIVITY_RECOGNITION to true,
             Manifest.permission.POST_NOTIFICATIONS to false,
         )
@@ -91,19 +67,8 @@ class PermissionCheckerTest {
     }
 
     @Test
-    fun `areAllPermissionsGranted returns false when BODY_SENSORS denied`() {
-        val results = mapOf(
-            Manifest.permission.BODY_SENSORS to false,
-            Manifest.permission.ACTIVITY_RECOGNITION to true,
-            Manifest.permission.POST_NOTIFICATIONS to true,
-        )
-        assertFalse(areAllPermissionsGranted(results))
-    }
-
-    @Test
     fun `areAllPermissionsGranted returns false when ACTIVITY_RECOGNITION denied`() {
         val results = mapOf(
-            Manifest.permission.BODY_SENSORS to true,
             Manifest.permission.ACTIVITY_RECOGNITION to false,
             Manifest.permission.POST_NOTIFICATIONS to true,
         )
@@ -113,7 +78,6 @@ class PermissionCheckerTest {
     @Test
     fun `areAllPermissionsGranted returns false when all permissions denied`() {
         val results = mapOf(
-            Manifest.permission.BODY_SENSORS to false,
             Manifest.permission.ACTIVITY_RECOGNITION to false,
             Manifest.permission.POST_NOTIFICATIONS to false,
         )
@@ -145,6 +109,6 @@ class PermissionCheckerTest {
 
     @Test
     fun `isActivityRecognitionDenied returns false when ACTIVITY_RECOGNITION absent from map`() {
-        assertFalse(isActivityRecognitionDenied(mapOf(Manifest.permission.BODY_SENSORS to true)))
+        assertFalse(isActivityRecognitionDenied(mapOf(Manifest.permission.POST_NOTIFICATIONS to true)))
     }
 }

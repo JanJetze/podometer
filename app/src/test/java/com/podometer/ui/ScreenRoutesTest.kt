@@ -35,15 +35,10 @@ class ScreenRoutesTest {
     }
 
     @Test
-    fun `Activities route is not blank`() {
-        assert(Screen.Activities.route.isNotBlank()) {
-            "Activities route must not be blank"
+    fun `Donate route is not blank`() {
+        assert(Screen.Donate.route.isNotBlank()) {
+            "Donate route must not be blank"
         }
-    }
-
-    @Test
-    fun `Activities route equals expected string`() {
-        assertEquals("activities", Screen.Activities.route)
     }
 
     @Test
@@ -52,7 +47,6 @@ class ScreenRoutesTest {
             Screen.Dashboard.route,
             Screen.Settings.route,
             Screen.Onboarding.route,
-            Screen.Activities.route,
             Screen.Donate.route,
         )
         assertEquals(

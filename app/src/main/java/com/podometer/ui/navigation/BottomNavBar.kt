@@ -2,7 +2,6 @@
 package com.podometer.ui.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -15,7 +14,9 @@ import com.podometer.R
 import com.podometer.ui.Screen
 
 /**
- * Bottom navigation bar with Dashboard and Activities tabs.
+ * Bottom navigation bar with the Dashboard tab.
+ *
+ * The Activities tab has been removed in v2. A Trends tab will be added in a future epic.
  *
  * @param currentRoute The currently active navigation route.
  * @param onNavigate   Callback invoked with the target [Screen] when a tab is tapped.
@@ -33,12 +34,6 @@ fun BottomNavBar(
             label = { Text(stringResource(R.string.screen_dashboard)) },
             selected = currentRoute == Screen.Dashboard.route,
             onClick = { onNavigate(Screen.Dashboard) },
-        )
-        NavigationBarItem(
-            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-            label = { Text(stringResource(R.string.screen_activities)) },
-            selected = currentRoute == Screen.Activities.route,
-            onClick = { onNavigate(Screen.Activities) },
         )
     }
 }
