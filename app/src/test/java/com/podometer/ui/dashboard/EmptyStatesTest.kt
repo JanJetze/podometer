@@ -64,32 +64,15 @@ class EmptyStatesTest {
     // ─── isFirstLaunch condition ──────────────────────────────────────────────
 
     @Test
-    fun `isFirstLaunch condition is true when steps zero and transitions empty`() {
-        val state = DashboardUiState(todaySteps = 0, transitions = emptyList())
-        assertTrue(state.todaySteps == 0 && state.transitions.isEmpty())
+    fun `isFirstLaunch condition is true when steps are zero`() {
+        val state = DashboardUiState(todaySteps = 0)
+        assertTrue(state.todaySteps == 0)
     }
 
     @Test
     fun `isFirstLaunch condition is false when steps are non-zero`() {
-        val state = DashboardUiState(todaySteps = 100, transitions = emptyList())
-        assertFalse(state.todaySteps == 0 && state.transitions.isEmpty())
-    }
-
-    @Test
-    fun `isFirstLaunch condition is false when transitions are non-empty`() {
-        val state = DashboardUiState(
-            todaySteps = 0,
-            transitions = listOf(
-                com.podometer.domain.model.TransitionEvent(
-                    id = 1,
-                    timestamp = 1_000L,
-                    fromActivity = com.podometer.domain.model.ActivityState.STILL,
-                    toActivity = com.podometer.domain.model.ActivityState.WALKING,
-                    isManualOverride = false,
-                ),
-            ),
-        )
-        assertFalse(state.todaySteps == 0 && state.transitions.isEmpty())
+        val state = DashboardUiState(todaySteps = 100)
+        assertFalse(state.todaySteps == 0)
     }
 
     // ─── Class existence checks ───────────────────────────────────────────────

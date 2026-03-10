@@ -11,22 +11,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,8 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
-import com.podometer.domain.model.ActivitySession
-import com.podometer.domain.model.ActivityState
 import com.podometer.ui.dashboard.ActivityLog
 import com.podometer.util.DateTimeUtils
 import java.time.Instant
@@ -66,7 +58,6 @@ fun ActivitiesScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showDatePicker by remember { mutableStateOf(false) }
     var highlightedSessionIndex by remember { mutableIntStateOf(-1) }
-    var editingSession by remember { mutableStateOf<ActivitySession?>(null) }
 
     Scaffold(
         topBar = {
@@ -156,37 +147,13 @@ fun ActivitiesScreen(
                     ActivityLog(
                         sessions = uiState.sessions,
                         onSessionClick = { session ->
-                            editingSession = session
                             val idx = uiState.sessions.indexOf(session)
-                            highlightedSessionIndex = idx
+                            highlightedSessionIndex = if (highlightedSessionIndex == idx) -1 else idx
                         },
                         nowMillis = if (uiState.isToday) nowMillis else dayEndMillis,
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
-                }
-
-                if (uiState.windows.isNotEmpty()) {
-                    FilledTonalButton(
-                        onClick = {
-                            val dayStart = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
-                            val noon = dayStart + 12 * 3_600_000L
-                            editingSession = ActivitySession(
-                                activity = ActivityState.WALKING,
-                                startTime = noon,
-                                endTime = noon + ActivitySession.DEFAULT_DURATION_MS,
-                                startTransitionId = 0,
-                                isManualOverride = false,
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                        Text(text = stringResource(R.string.add_activity))
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
@@ -220,55 +187,6 @@ fun ActivitiesScreen(
             },
         ) {
             DatePicker(state = datePickerState)
-        }
-    }
-
-    // Session edit bottom sheet
-    if (editingSession != null) {
-        val session = editingSession!!
-        val dayStartMillis = DateTimeUtils.startOfDayMillis(uiState.selectedDate)
-        val dayEndMillis = dayStartMillis + 86_400_000L
-        val closeEditSheet = {
-            editingSession = null
-            highlightedSessionIndex = -1
-        }
-
-        ModalBottomSheet(
-            onDismissRequest = closeEditSheet,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        ) {
-            SessionEditSheet(
-                session = session,
-                windows = uiState.windows,
-                dayStartMillis = dayStartMillis,
-                dayEndMillis = dayEndMillis,
-                onSave = { startMs, endMs, activity ->
-                    val overrideId = if (session.isManualOverride) {
-                        -session.startTransitionId.toLong()
-                    } else {
-                        0L
-                    }
-                    viewModel.saveSessionOverride(startMs, endMs, activity, overrideId)
-                    closeEditSheet()
-                },
-                onCancel = closeEditSheet,
-                onDelete = if (!session.isNew) {
-                    {
-                        if (session.isManualOverride) {
-                            viewModel.deleteSessionOverride(-session.startTransitionId.toLong())
-                        } else {
-                            viewModel.saveSessionOverride(
-                                session.startTime,
-                                session.effectiveEndTime(),
-                                ActivityState.STILL,
-                            )
-                        }
-                        closeEditSheet()
-                    }
-                } else {
-                    null
-                },
-            )
         }
     }
 }

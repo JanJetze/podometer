@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.pow
-import com.podometer.data.db.SensorWindow
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 import com.podometer.ui.dashboard.activityLabel
@@ -134,7 +133,7 @@ data class StepGraphData(
  * @return [StepGraphData] ready for rendering.
  */
 fun buildStepGraphData(
-    windows: List<SensorWindow>,
+    windows: List<StepWindowPoint>,
     sessions: List<ActivitySession>,
     bucketSizeMs: Long,
     dayStartMillis: Long,
@@ -152,9 +151,12 @@ fun buildStepGraphData(
         )
     }
 
+    // Spread gap-spanning windows so steps are distributed across time.
+    val spread = windows.spreadWindows()
+
     // Group windows into buckets
-    val buckets = mutableMapOf<Long, MutableList<SensorWindow>>()
-    for (window in windows) {
+    val buckets = mutableMapOf<Long, MutableList<StepWindowPoint>>()
+    for (window in spread) {
         val bucketStart = ((window.timestamp - dayStartMillis) / bucketSizeMs) * bucketSizeMs + dayStartMillis
         buckets.getOrPut(bucketStart) { mutableListOf() }.add(window)
     }
@@ -957,11 +959,9 @@ private fun PreviewStepGraphSampleData() {
             ts in (14 * hour)..(15 * hour) -> 4
             else -> 0
         }
-        SensorWindow(
+        StepWindowPoint(
             id = i.toLong(),
             timestamp = ts,
-            magnitudeVariance = 0.0,
-            stepFrequencyHz = 0.0,
             stepCount = steps,
         )
     }

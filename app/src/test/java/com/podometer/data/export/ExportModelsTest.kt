@@ -4,7 +4,6 @@ package com.podometer.data.export
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -24,7 +23,7 @@ class ExportModelsTest {
     fun `ExportMetadata round-trip serialization preserves all fields`() {
         val metadata = ExportMetadata(
             exportDate = "2026-02-23T10:00:00Z",
-            appVersion = "1.0.0",
+            appVersion = "2.0.0",
             deviceModel = "Pixel 7",
         )
 
@@ -78,82 +77,6 @@ class ExportModelsTest {
         assertEquals(aggregate.detectedActivity, decoded.detectedActivity)
     }
 
-    // ─── ExportActivityTransition ────────────────────────────────────────────
-
-    @Test
-    fun `ExportActivityTransition round-trip serialization preserves all fields`() {
-        val transition = ExportActivityTransition(
-            id = 7,
-            timestamp = 1_740_304_800_000L,
-            fromActivity = "STILL",
-            toActivity = "WALKING",
-            isManualOverride = false,
-        )
-
-        val encoded = json.encodeToString(transition)
-        val decoded = json.decodeFromString<ExportActivityTransition>(encoded)
-
-        assertEquals(transition.id, decoded.id)
-        assertEquals(transition.timestamp, decoded.timestamp)
-        assertEquals(transition.fromActivity, decoded.fromActivity)
-        assertEquals(transition.toActivity, decoded.toActivity)
-        assertEquals(transition.isManualOverride, decoded.isManualOverride)
-    }
-
-    @Test
-    fun `ExportActivityTransition serializes isManualOverride true`() {
-        val transition = ExportActivityTransition(
-            id = 3,
-            timestamp = 9_000L,
-            fromActivity = "WALKING",
-            toActivity = "CYCLING",
-            isManualOverride = true,
-        )
-
-        val encoded = json.encodeToString(transition)
-        val decoded = json.decodeFromString<ExportActivityTransition>(encoded)
-
-        assertEquals(true, decoded.isManualOverride)
-    }
-
-    // ─── ExportCyclingSession ────────────────────────────────────────────────
-
-    @Test
-    fun `ExportCyclingSession round-trip serialization preserves all fields when endTime is non-null`() {
-        val session = ExportCyclingSession(
-            id = 1,
-            startTime = 1_740_300_000_000L,
-            endTime = 1_740_301_000_000L,
-            durationMinutes = 16,
-            isManualOverride = false,
-        )
-
-        val encoded = json.encodeToString(session)
-        val decoded = json.decodeFromString<ExportCyclingSession>(encoded)
-
-        assertEquals(session.id, decoded.id)
-        assertEquals(session.startTime, decoded.startTime)
-        assertEquals(session.endTime, decoded.endTime)
-        assertEquals(session.durationMinutes, decoded.durationMinutes)
-        assertEquals(session.isManualOverride, decoded.isManualOverride)
-    }
-
-    @Test
-    fun `ExportCyclingSession round-trip serialization preserves null endTime for ongoing session`() {
-        val session = ExportCyclingSession(
-            id = 2,
-            startTime = 1_740_304_800_000L,
-            endTime = null,
-            durationMinutes = 0,
-            isManualOverride = false,
-        )
-
-        val encoded = json.encodeToString(session)
-        val decoded = json.decodeFromString<ExportCyclingSession>(encoded)
-
-        assertNull(decoded.endTime)
-    }
-
     // ─── ExportData (full container) ─────────────────────────────────────────
 
     @Test
@@ -161,7 +84,7 @@ class ExportModelsTest {
         val exportData = ExportData(
             metadata = ExportMetadata(
                 exportDate = "2026-02-23T10:00:00Z",
-                appVersion = "1.0.0",
+                appVersion = "2.0.0",
                 deviceModel = "Pixel 7",
             ),
             dailySummaries = listOf(
@@ -170,12 +93,6 @@ class ExportModelsTest {
             ),
             hourlyAggregates = listOf(
                 ExportHourlyAggregate(1, 1_740_218_400_000L, 400, "WALKING"),
-            ),
-            activityTransitions = listOf(
-                ExportActivityTransition(1, 1_740_218_400_000L, "STILL", "WALKING", false),
-            ),
-            cyclingSessions = listOf(
-                ExportCyclingSession(1, 1_740_218_400_000L, 1_740_219_000_000L, 10, false),
             ),
         )
 
@@ -189,20 +106,14 @@ class ExportModelsTest {
         assertEquals(9000, decoded.dailySummaries[0].totalSteps)
         assertEquals(1, decoded.hourlyAggregates.size)
         assertEquals(400, decoded.hourlyAggregates[0].stepCountDelta)
-        assertEquals(1, decoded.activityTransitions.size)
-        assertEquals("WALKING", decoded.activityTransitions[0].toActivity)
-        assertEquals(1, decoded.cyclingSessions.size)
-        assertEquals(10, decoded.cyclingSessions[0].durationMinutes)
     }
 
     @Test
     fun `ExportData round-trip with empty lists`() {
         val exportData = ExportData(
-            metadata = ExportMetadata("2026-02-23T10:00:00Z", "1.0.0", "Generic"),
+            metadata = ExportMetadata("2026-02-23T10:00:00Z", "2.0.0", "Generic"),
             dailySummaries = emptyList(),
             hourlyAggregates = emptyList(),
-            activityTransitions = emptyList(),
-            cyclingSessions = emptyList(),
         )
 
         val encoded = json.encodeToString(exportData)
@@ -210,18 +121,14 @@ class ExportModelsTest {
 
         assertEquals(0, decoded.dailySummaries.size)
         assertEquals(0, decoded.hourlyAggregates.size)
-        assertEquals(0, decoded.activityTransitions.size)
-        assertEquals(0, decoded.cyclingSessions.size)
     }
 
     @Test
     fun `ExportData JSON contains metadata export date field`() {
         val exportData = ExportData(
-            metadata = ExportMetadata("2026-02-23T10:00:00Z", "1.0.0", "Pixel 7"),
+            metadata = ExportMetadata("2026-02-23T10:00:00Z", "2.0.0", "Pixel 7"),
             dailySummaries = emptyList(),
             hourlyAggregates = emptyList(),
-            activityTransitions = emptyList(),
-            cyclingSessions = emptyList(),
         )
 
         val encoded = json.encodeToString(exportData)
@@ -229,7 +136,7 @@ class ExportModelsTest {
         assert(encoded.contains("2026-02-23T10:00:00Z")) {
             "JSON should contain the export date but was: $encoded"
         }
-        assert(encoded.contains("1.0.0")) {
+        assert(encoded.contains("2.0.0")) {
             "JSON should contain the app version but was: $encoded"
         }
     }

@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.di
 
-import com.podometer.data.db.ActivityTransitionDao
-import com.podometer.data.db.CyclingSessionDao
-import com.podometer.data.db.SensorWindowDao
 import com.podometer.data.db.StepDao
-import com.podometer.data.repository.CyclingRepository
-import com.podometer.data.repository.SensorWindowRepository
 import com.podometer.data.repository.StepRepository
 import dagger.Module
 import dagger.Provides
@@ -28,18 +23,5 @@ object RepositoryModule {
     @Singleton
     fun provideStepRepository(
         stepDao: StepDao,
-        activityTransitionDao: ActivityTransitionDao,
-    ): StepRepository = StepRepository(stepDao, activityTransitionDao)
-
-    @Provides
-    @Singleton
-    fun provideCyclingRepository(
-        cyclingSessionDao: CyclingSessionDao,
-    ): CyclingRepository = CyclingRepository(cyclingSessionDao)
-
-    @Provides
-    @Singleton
-    fun provideSensorWindowRepository(
-        sensorWindowDao: SensorWindowDao,
-    ): SensorWindowRepository = SensorWindowRepository(sensorWindowDao)
+    ): StepRepository = StepRepository(stepDao)
 }

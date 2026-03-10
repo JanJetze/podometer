@@ -1,17 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.domain.usecase
 
-import com.podometer.data.db.ActivityTransition
-import com.podometer.data.db.ActivityTransitionDao
-import com.podometer.data.db.CyclingSession
-import com.podometer.data.db.CyclingSessionDao
 import com.podometer.data.db.DailySummary
 import com.podometer.data.db.HourlyStepAggregate
-import com.podometer.data.db.SensorWindow
-import com.podometer.data.db.SensorWindowDao
 import com.podometer.data.db.StepDao
 import com.podometer.data.export.ExportData
-import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.StepRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -76,68 +69,17 @@ class ExportDataUseCaseTest {
         override suspend fun insertAllHourlyAggregates(aggregates: List<HourlyStepAggregate>) { }
     }
 
-    private class FakeActivityTransitionDao(
-        private val transitions: List<ActivityTransition> = emptyList(),
-    ) : ActivityTransitionDao {
-        override fun getTodayTransitions(todayStart: Long): Flow<List<ActivityTransition>> =
-            flowOf(emptyList())
-
-        override suspend fun insertTransition(transition: ActivityTransition) = Unit
-
-        override suspend fun updateTransition(transition: ActivityTransition) = Unit
-
-        override suspend fun getAllTransitions(): List<ActivityTransition> = transitions
-
-        override suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? = null
-
-        override suspend fun insertAllTransitions(transitions: List<ActivityTransition>) { }
-    }
-
-    private class FakeCyclingSessionDao(
-        private val sessions: List<CyclingSession> = emptyList(),
-    ) : CyclingSessionDao {
-        override fun getTodaySessions(todayStart: Long): Flow<List<CyclingSession>> =
-            flowOf(emptyList())
-
-        override suspend fun insertSession(session: CyclingSession): Long = 0L
-
-        override suspend fun updateSession(session: CyclingSession) = Unit
-
-        override suspend fun deleteSession(session: CyclingSession) = Unit
-
-        override suspend fun getAllSessions(): List<CyclingSession> = sessions
-
-        override suspend fun getOngoingSession(): CyclingSession? = null
-
-        override suspend fun getSessionCoveringTimestamp(timestamp: Long): CyclingSession? = null
-
-        override suspend fun insertAllSessions(sessions: List<CyclingSession>) { }
-    }
-
-    private class FakeSensorWindowDao : SensorWindowDao {
-        override suspend fun insert(window: SensorWindow) = Unit
-        override suspend fun insertAll(windows: List<SensorWindow>) = Unit
-        override fun getWindowsBetween(startMs: Long, endMs: Long): Flow<List<SensorWindow>> =
-            flowOf(emptyList())
-        override suspend fun getAllWindows(): List<SensorWindow> = emptyList()
-        override suspend fun deleteOlderThan(cutoffMs: Long) = Unit
-    }
-
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private fun makeUseCase(
         dailySummaries: List<DailySummary> = emptyList(),
         hourlyAggregates: List<HourlyStepAggregate> = emptyList(),
-        transitions: List<ActivityTransition> = emptyList(),
-        sessions: List<CyclingSession> = emptyList(),
         deviceModel: String = "Test Device",
     ): ExportDataUseCase {
         val stepRepo = StepRepository(
             FakeStepDao(dailySummaries, hourlyAggregates),
-            FakeActivityTransitionDao(transitions),
         )
-        val cyclingRepo = CyclingRepository(FakeCyclingSessionDao(sessions))
-        return ExportDataUseCase(stepRepo, cyclingRepo, FakeSensorWindowDao(), deviceModel)
+        return ExportDataUseCase(stepRepo, deviceModel)
     }
 
     // ─── Tests ───────────────────────────────────────────────────────────────
@@ -149,7 +91,7 @@ class ExportDataUseCaseTest {
         val exportData = useCase.buildExportData()
 
         assertNotNull(exportData.metadata)
-        assertEquals("1.0.0", exportData.metadata.appVersion)
+        assertEquals("2.0.0", exportData.metadata.appVersion)
         assertEquals("Pixel 7", exportData.metadata.deviceModel)
         assertNotNull(exportData.metadata.exportDate)
         assertTrue(exportData.metadata.exportDate.isNotEmpty())
@@ -193,45 +135,6 @@ class ExportDataUseCaseTest {
     }
 
     @Test
-    fun `buildExportData maps activity transitions to export models`() = runTest {
-        val transitions = listOf(
-            ActivityTransition(id = 1, timestamp = 1_740_218_400_000L, fromActivity = "STILL", toActivity = "WALKING", isManualOverride = false),
-            ActivityTransition(id = 2, timestamp = 1_740_222_000_000L, fromActivity = "WALKING", toActivity = "CYCLING", isManualOverride = true),
-        )
-        val useCase = makeUseCase(transitions = transitions)
-
-        val exportData = useCase.buildExportData()
-
-        assertEquals(2, exportData.activityTransitions.size)
-        assertEquals(1, exportData.activityTransitions[0].id)
-        assertEquals(1_740_218_400_000L, exportData.activityTransitions[0].timestamp)
-        assertEquals("STILL", exportData.activityTransitions[0].fromActivity)
-        assertEquals("WALKING", exportData.activityTransitions[0].toActivity)
-        assertEquals(false, exportData.activityTransitions[0].isManualOverride)
-        assertEquals(true, exportData.activityTransitions[1].isManualOverride)
-    }
-
-    @Test
-    fun `buildExportData maps cycling sessions to export models`() = runTest {
-        val sessions = listOf(
-            CyclingSession(id = 1, startTime = 1_740_218_400_000L, endTime = 1_740_219_000_000L, durationMinutes = 10, isManualOverride = false),
-            CyclingSession(id = 2, startTime = 1_740_222_000_000L, endTime = null, durationMinutes = 0, isManualOverride = true),
-        )
-        val useCase = makeUseCase(sessions = sessions)
-
-        val exportData = useCase.buildExportData()
-
-        assertEquals(2, exportData.cyclingSessions.size)
-        assertEquals(1, exportData.cyclingSessions[0].id)
-        assertEquals(1_740_218_400_000L, exportData.cyclingSessions[0].startTime)
-        assertEquals(1_740_219_000_000L, exportData.cyclingSessions[0].endTime)
-        assertEquals(10, exportData.cyclingSessions[0].durationMinutes)
-        assertEquals(false, exportData.cyclingSessions[0].isManualOverride)
-        assertEquals(null, exportData.cyclingSessions[1].endTime)
-        assertEquals(true, exportData.cyclingSessions[1].isManualOverride)
-    }
-
-    @Test
     fun `buildExportData returns empty lists when repositories have no data`() = runTest {
         val useCase = makeUseCase()
 
@@ -239,8 +142,6 @@ class ExportDataUseCaseTest {
 
         assertEquals(0, exportData.dailySummaries.size)
         assertEquals(0, exportData.hourlyAggregates.size)
-        assertEquals(0, exportData.activityTransitions.size)
-        assertEquals(0, exportData.cyclingSessions.size)
     }
 
     @Test

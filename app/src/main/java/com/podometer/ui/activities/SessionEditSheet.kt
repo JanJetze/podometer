@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.podometer.data.db.SensorWindow
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 import com.podometer.ui.dashboard.activityLabel
@@ -69,7 +68,7 @@ private const val SELECTED_REGION_ALPHA = 0.2f
 @Composable
 fun SessionEditSheet(
     session: ActivitySession,
-    windows: List<SensorWindow>,
+    windows: List<StepWindowPoint>,
     dayStartMillis: Long,
     dayEndMillis: Long,
     onSave: (startMs: Long, endMs: Long, activity: ActivityState) -> Unit,
@@ -303,11 +302,9 @@ private fun PreviewSessionEditSheet() {
     )
 
     val windows = (0 until 120).map { i ->
-        SensorWindow(
+        StepWindowPoint(
             id = i.toLong(),
             timestamp = 9 * hour - 5 * 60_000L + i * 30_000L,
-            magnitudeVariance = 0.0,
-            stepFrequencyHz = 0.0,
             stepCount = if (i in 10..110) (i % 5) + 1 else 0,
         )
     }

@@ -3,11 +3,7 @@ package com.podometer.di
 
 import android.content.Context
 import androidx.room.Room
-import com.podometer.data.db.ActivityTransitionDao
-import com.podometer.data.db.CyclingSessionDao
-import com.podometer.data.db.ManualSessionOverrideDao
 import com.podometer.data.db.PodometerDatabase
-import com.podometer.data.db.SensorWindowDao
 import com.podometer.data.db.StepDao
 import dagger.Module
 import dagger.Provides
@@ -36,35 +32,11 @@ object DatabaseModule {
             PodometerDatabase::class.java,
             "podometer.db",
         )
-            .addMigrations(
-                PodometerDatabase.MIGRATION_1_2,
-                PodometerDatabase.MIGRATION_2_3,
-                PodometerDatabase.MIGRATION_3_4,
-            )
+            .fallbackToDestructiveMigration()
             .build()
 
     @Provides
     @Singleton
     fun provideStepDao(database: PodometerDatabase): StepDao =
         database.stepDao()
-
-    @Provides
-    @Singleton
-    fun provideActivityTransitionDao(database: PodometerDatabase): ActivityTransitionDao =
-        database.activityTransitionDao()
-
-    @Provides
-    @Singleton
-    fun provideCyclingSessionDao(database: PodometerDatabase): CyclingSessionDao =
-        database.cyclingSessionDao()
-
-    @Provides
-    @Singleton
-    fun provideSensorWindowDao(database: PodometerDatabase): SensorWindowDao =
-        database.sensorWindowDao()
-
-    @Provides
-    @Singleton
-    fun provideManualSessionOverrideDao(database: PodometerDatabase): ManualSessionOverrideDao =
-        database.manualSessionOverrideDao()
 }

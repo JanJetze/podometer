@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.activities
 
-import com.podometer.data.db.CyclingSession
-import com.podometer.data.db.SensorWindow
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.model.StepData
-import com.podometer.domain.model.TransitionEvent
 import com.podometer.util.DateTimeUtils
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -119,18 +116,18 @@ object TestDataGenerator {
     }
 
     /**
-     * Generates fake [SensorWindow]s for the given [date].
+     * Generates fake [StepWindowPoint]s for the given [date].
      *
      * Step counts vary based on the date-specific activity schedule.
      *
      * @param date The date to generate windows for.
-     * @return Chronologically ordered list of sensor windows.
+     * @return Chronologically ordered list of step window points.
      */
-    fun generateWindows(date: LocalDate): List<SensorWindow> {
+    fun generateWindows(date: LocalDate): List<StepWindowPoint> {
         val rng = seededRandom(date)
         val schedule = generateSchedule(date, seededRandom(date))
         val dayStart = DateTimeUtils.startOfDayMillis(date)
-        val windows = mutableListOf<SensorWindow>()
+        val windows = mutableListOf<StepWindowPoint>()
         var id = 1L
 
         val startMs = dayStart + 7 * 3_600_000L
@@ -156,15 +153,10 @@ object TestDataGenerator {
                 else -> if (rng.nextInt(10) < 2) rng.nextInt(1, 6) else 0
             }
 
-            val variance = if (steps > 0) 2.0 + steps * 0.5 else 0.1
-            val frequency = if (steps > 0) 1.5 + steps * 0.1 else 0.0
-
             windows.add(
-                SensorWindow(
+                StepWindowPoint(
                     id = id++,
                     timestamp = ts,
-                    magnitudeVariance = variance,
-                    stepFrequencyHz = frequency,
                     stepCount = steps,
                 ),
             )
@@ -226,32 +218,6 @@ object TestDataGenerator {
     }
 
     /**
-     * Generates fake [TransitionEvent]s for the dashboard transition log.
-     *
-     * Derived from the same date-specific schedule as [generateSessions].
-     *
-     * @param date The date to generate transitions for.
-     * @return Chronologically ordered list of transition events.
-     */
-    fun generateTransitions(date: LocalDate): List<TransitionEvent> {
-        val schedule = generateSchedule(date, seededRandom(date))
-        val dayStart = DateTimeUtils.startOfDayMillis(date)
-        fun h(hour: Double): Long = dayStart + (hour * 3_600_000).toLong()
-
-        val transitions = mutableListOf<TransitionEvent>()
-        var id = 1
-        for (block in schedule) {
-            transitions.add(
-                TransitionEvent(id++, h(block.startHour), ActivityState.STILL, block.activity, false),
-            )
-            transitions.add(
-                TransitionEvent(id++, h(block.startHour + block.durationHours), block.activity, ActivityState.STILL, false),
-            )
-        }
-        return transitions
-    }
-
-    /**
      * Generates fake [DaySummary] entries for the weekly step chart.
      *
      * Each day of the week gets a different step count derived from its date seed.
@@ -276,30 +242,5 @@ object TestDataGenerator {
                 cyclingMinutes = if (hasCycling) 30 + rng.nextInt(60) else 0,
             )
         }
-    }
-
-    /**
-     * Generates fake [CyclingSession]s for the dashboard cycling section.
-     *
-     * Only produces sessions for dates whose schedule includes cycling blocks.
-     *
-     * @param date The date to generate sessions for.
-     * @return Cycling sessions derived from the date-specific schedule.
-     */
-    fun generateCyclingSessions(date: LocalDate): List<CyclingSession> {
-        val schedule = generateSchedule(date, seededRandom(date))
-        val dayStart = DateTimeUtils.startOfDayMillis(date)
-        fun h(hour: Double): Long = dayStart + (hour * 3_600_000).toLong()
-
-        return schedule
-            .filter { it.activity == ActivityState.CYCLING }
-            .mapIndexed { index, block ->
-                CyclingSession(
-                    id = index + 1,
-                    startTime = h(block.startHour),
-                    endTime = h(block.startHour + block.durationHours),
-                    durationMinutes = (block.durationHours * 60).toInt(),
-                )
-            }
     }
 }

@@ -12,9 +12,8 @@ import java.time.ZoneId
  * rest of the codebase.  This object is pure Kotlin with no Android-framework
  * references and is therefore directly unit-testable on the JVM.
  *
- * Centralising these computations ensures that [com.podometer.data.repository.StepRepository],
- * [com.podometer.data.repository.CyclingRepository], and
- * [com.podometer.service.StepAccumulator] all use exactly the same day-boundary
+ * Centralising these computations ensures that [com.podometer.data.repository.StepRepository]
+ * and [com.podometer.service.StepAccumulator] use exactly the same day-boundary
  * logic, eliminating potential divergence during DST transitions.
  */
 object DateTimeUtils {

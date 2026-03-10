@@ -17,12 +17,6 @@ data class ExportData(
     val dailySummaries: List<ExportDailySummary>,
     /** All hourly step-count aggregates, ordered by timestamp ascending. */
     val hourlyAggregates: List<ExportHourlyAggregate>,
-    /** All activity transition events, ordered by timestamp ascending. */
-    val activityTransitions: List<ExportActivityTransition>,
-    /** All cycling sessions, ordered by start time ascending. */
-    val cyclingSessions: List<ExportCyclingSession>,
-    /** All raw sensor classifier windows, ordered by timestamp ascending. */
-    val sensorWindows: List<ExportSensorWindow> = emptyList(),
 )
 
 /**
@@ -71,55 +65,4 @@ data class ExportHourlyAggregate(
     val stepCountDelta: Int,
     /** Activity detected during this hour: "WALKING", "CYCLING", or "STILL". */
     val detectedActivity: String,
-)
-
-/**
- * Export model mirroring the Room [com.podometer.data.db.ActivityTransition] entity.
- */
-@Serializable
-data class ExportActivityTransition(
-    /** Database row ID. */
-    val id: Int,
-    /** Epoch-millisecond timestamp when the transition occurred. */
-    val timestamp: Long,
-    /** Activity before this transition. */
-    val fromActivity: String,
-    /** Activity after this transition. */
-    val toActivity: String,
-    /** True when the user manually corrected the detected transition. */
-    val isManualOverride: Boolean,
-)
-
-/**
- * Export model mirroring the Room [com.podometer.data.db.CyclingSession] entity.
- */
-@Serializable
-data class ExportCyclingSession(
-    /** Database row ID. */
-    val id: Int,
-    /** Epoch-millisecond timestamp when the session started. */
-    val startTime: Long,
-    /** Epoch-millisecond timestamp when the session ended; null if ongoing. */
-    val endTime: Long?,
-    /** Duration of the session in minutes. */
-    val durationMinutes: Int,
-    /** True when the user manually created or overrode this session. */
-    val isManualOverride: Boolean,
-)
-
-/**
- * Export model mirroring the Room [com.podometer.data.db.SensorWindow] entity.
- */
-@Serializable
-data class ExportSensorWindow(
-    /** Database row ID. */
-    val id: Long,
-    /** Epoch-millisecond timestamp for the start of this window. */
-    val timestamp: Long,
-    /** Accelerometer magnitude variance (m/s²)² for this window. */
-    val magnitudeVariance: Double,
-    /** Step cadence in Hz. */
-    val stepFrequencyHz: Double,
-    /** Number of steps detected during this window. */
-    val stepCount: Int,
 )

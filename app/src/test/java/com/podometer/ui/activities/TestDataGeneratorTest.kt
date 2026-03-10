@@ -142,28 +142,6 @@ class TestDataGeneratorTest {
         }
     }
 
-    // ─── Transitions ────────────────────────────────────────────────────
-
-    @Test
-    fun `generateTransitions is deterministic`() {
-        val a = TestDataGenerator.generateTransitions(date1)
-        val b = TestDataGenerator.generateTransitions(date1)
-        assertEquals(a.size, b.size)
-        a.zip(b).forEach { (ta, tb) ->
-            assertEquals(ta.timestamp, tb.timestamp)
-            assertEquals(ta.fromActivity, tb.fromActivity)
-            assertEquals(ta.toActivity, tb.toActivity)
-        }
-    }
-
-    @Test
-    fun `generateTransitions has pairs per session`() {
-        val sessions = TestDataGenerator.generateSessions(date1)
-        val transitions = TestDataGenerator.generateTransitions(date1)
-        // Each session produces a start and end transition
-        assertEquals(sessions.size * 2, transitions.size)
-    }
-
     // ─── Weekly summaries ───────────────────────────────────────────────
 
     @Test
@@ -179,35 +157,6 @@ class TestDataGeneratorTest {
         val summaries = TestDataGenerator.generateWeeklySummaries()
         summaries.forEach { s ->
             assertTrue("Step count should be > 0, got ${s.totalSteps}", s.totalSteps > 0)
-        }
-    }
-
-    // ─── Cycling sessions ───────────────────────────────────────────────
-
-    @Test
-    fun `generateCyclingSessions only contains cycling`() {
-        // Test across several dates to find one with cycling
-        val dates = (0L..6L).map { LocalDate.of(2026, 3, 1).plusDays(it) }
-        val allCycling = dates.flatMap { TestDataGenerator.generateCyclingSessions(it) }
-        allCycling.forEach { cs ->
-            assertTrue("Cycling session endTime should be > startTime", cs.endTime!! > cs.startTime)
-            assertTrue("Duration should be positive", cs.durationMinutes > 0)
-        }
-    }
-
-    @Test
-    fun `generateCyclingSessions matches cycling blocks in sessions`() {
-        // Test a date that has cycling (dayType 0 = commute day)
-        val dates = (0L..6L).map { LocalDate.of(2026, 3, 1).plusDays(it) }
-        for (date in dates) {
-            val sessions = TestDataGenerator.generateSessions(date)
-            val cyclingBlocks = sessions.filter { it.activity == ActivityState.CYCLING }
-            val cyclingSessions = TestDataGenerator.generateCyclingSessions(date)
-            assertEquals(
-                "Cycling session count should match cycling blocks for $date",
-                cyclingBlocks.size,
-                cyclingSessions.size,
-            )
         }
     }
 

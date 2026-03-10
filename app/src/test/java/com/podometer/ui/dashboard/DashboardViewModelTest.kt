@@ -4,18 +4,12 @@ package com.podometer.ui.dashboard
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
-import com.podometer.data.db.ActivityTransition
-import com.podometer.data.db.CyclingSession
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.domain.model.ActivityState
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.model.StepData
-import com.podometer.domain.model.TransitionEvent
-import com.podometer.domain.usecase.GetTodayCyclingSessionsUseCase
 import com.podometer.domain.usecase.GetTodayStepsUseCase
-import com.podometer.domain.usecase.GetTodayTransitionsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCase
-import com.podometer.domain.usecase.OverrideActivityUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -38,7 +32,7 @@ import org.junit.rules.TemporaryFolder
 /**
  * Unit tests for [DashboardViewModel].
  *
- * Fakes all 4 use cases so the ViewModel logic (combine, initial state) can be
+ * Fakes the use cases so the ViewModel logic (combine, initial state) can be
  * verified in isolation without Android or Hilt dependencies.
  *
  * Uses [UnconfinedTestDispatcher] installed as [Dispatchers.Main] so that
@@ -85,40 +79,14 @@ class DashboardViewModelTest {
         override fun invoke(): Flow<List<DaySummary>> = flow
     }
 
-    private class FakeGetTodayTransitionsUseCase(
-        private val flow: Flow<List<TransitionEvent>> = flowOf(emptyList()),
-    ) : GetTodayTransitionsUseCase {
-        override fun invoke(): Flow<List<TransitionEvent>> = flow
-    }
-
-    private class FakeGetTodayCyclingSessionsUseCase(
-        private val flow: Flow<List<CyclingSession>> = flowOf(emptyList()),
-    ) : GetTodayCyclingSessionsUseCase {
-        override fun invoke(): Flow<List<CyclingSession>> = flow
-    }
-
-    private class FakeOverrideActivityUseCase : OverrideActivityUseCase {
-        val overridesCalled = mutableListOf<Pair<ActivityTransition, ActivityState>>()
-
-        override suspend fun invoke(transition: ActivityTransition, newActivity: ActivityState) {
-            overridesCalled.add(transition to newActivity)
-        }
-    }
-
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private fun buildViewModel(
         stepData: StepData = StepData(steps = 0, goal = 10_000, progressPercent = 0f, distanceKm = 0f),
         weeklySteps: List<DaySummary> = emptyList(),
-        transitions: List<TransitionEvent> = emptyList(),
-        cyclingSessions: List<CyclingSession> = emptyList(),
-        overrideActivityUseCase: OverrideActivityUseCase = FakeOverrideActivityUseCase(),
     ): DashboardViewModel = DashboardViewModel(
         getTodaySteps = FakeGetTodayStepsUseCase(flowOf(stepData)),
         getWeeklySteps = FakeGetWeeklyStepsUseCase(flowOf(weeklySteps)),
-        getTodayTransitions = FakeGetTodayTransitionsUseCase(flowOf(transitions)),
-        getTodayCyclingSessions = FakeGetTodayCyclingSessionsUseCase(flowOf(cyclingSessions)),
-        overrideActivityUseCase = overrideActivityUseCase,
         preferencesManager = buildPreferencesManager(),
     )
 
@@ -143,11 +111,9 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `DashboardUiState default has empty lists`() {
+    fun `DashboardUiState default has empty weeklySteps`() {
         val state = DashboardUiState()
-        assertTrue(state.transitions.isEmpty())
         assertTrue(state.weeklySteps.isEmpty())
-        assertTrue(state.cyclingSessions.isEmpty())
     }
 
     @Test
@@ -221,66 +187,15 @@ class DashboardViewModelTest {
         assertEquals(8_000, state.weeklySteps[0].totalSteps)
     }
 
-    @Test
-    fun `ViewModel emits transitions from GetTodayTransitionsUseCase`() = runTest {
-        val transitions = listOf(
-            TransitionEvent(id = 1, timestamp = 1_000L, fromActivity = ActivityState.STILL, toActivity = ActivityState.WALKING, isManualOverride = false),
-        )
-        val viewModel = buildViewModel(transitions = transitions)
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(1, state.transitions.size)
-        assertEquals(1, state.transitions[0].id)
-    }
-
-    @Test
-    fun `ViewModel emits cyclingSessions from GetTodayCyclingSessionsUseCase`() = runTest {
-        val sessions = listOf(
-            CyclingSession(id = 1, startTime = 1_000L, endTime = 2_000L, durationMinutes = 16),
-        )
-        val viewModel = buildViewModel(cyclingSessions = sessions)
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(1, state.cyclingSessions.size)
-        assertEquals(1, state.cyclingSessions[0].id)
-    }
-
     // ─── currentActivity derivation ──────────────────────────────────────────
 
     @Test
-    fun `ViewModel derives currentActivity as STILL when no transitions`() = runTest {
-        val viewModel = buildViewModel(transitions = emptyList())
+    fun `ViewModel currentActivity is always STILL`() = runTest {
+        val viewModel = buildViewModel()
 
         val state = viewModel.uiState.first { !it.isLoading }
 
         assertEquals(ActivityState.STILL, state.currentActivity)
-    }
-
-    @Test
-    fun `ViewModel derives currentActivity from last transition toActivity`() = runTest {
-        val transitions = listOf(
-            TransitionEvent(id = 1, timestamp = 1_000L, fromActivity = ActivityState.STILL, toActivity = ActivityState.WALKING, isManualOverride = false),
-            TransitionEvent(id = 2, timestamp = 2_000L, fromActivity = ActivityState.WALKING, toActivity = ActivityState.CYCLING, isManualOverride = false),
-        )
-        val viewModel = buildViewModel(transitions = transitions)
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(ActivityState.CYCLING, state.currentActivity)
-    }
-
-    @Test
-    fun `ViewModel derives currentActivity as WALKING when last transition is to WALKING`() = runTest {
-        val transitions = listOf(
-            TransitionEvent(id = 1, timestamp = 1_000L, fromActivity = ActivityState.STILL, toActivity = ActivityState.WALKING, isManualOverride = false),
-        )
-        val viewModel = buildViewModel(transitions = transitions)
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(ActivityState.WALKING, state.currentActivity)
     }
 
     // ─── isLoading state ─────────────────────────────────────────────────────
@@ -304,9 +219,6 @@ class DashboardViewModelTest {
         val viewModel = DashboardViewModel(
             getTodaySteps = FakeGetTodayStepsUseCase(stepsFlow),
             getWeeklySteps = FakeGetWeeklyStepsUseCase(),
-            getTodayTransitions = FakeGetTodayTransitionsUseCase(),
-            getTodayCyclingSessions = FakeGetTodayCyclingSessionsUseCase(),
-            overrideActivityUseCase = FakeOverrideActivityUseCase(),
             preferencesManager = buildPreferencesManager(),
         )
 

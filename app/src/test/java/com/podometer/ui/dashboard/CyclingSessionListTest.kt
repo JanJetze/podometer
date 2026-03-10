@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
-import com.podometer.data.db.CyclingSession
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,9 +9,9 @@ import java.util.TimeZone
 /**
  * Unit tests for [CyclingSessionList] pure-logic helpers.
  *
- * These tests exercise [formatSessionTime], [formatSessionRange], [formatSessionDuration],
- * and [totalDurationMinutes], which are pure-Kotlin functions that can be run on the JVM
- * without Compose or an Android device.
+ * These tests exercise [formatSessionTime], [formatSessionRange], and
+ * [formatSessionDuration], which are pure-Kotlin functions that can be run on
+ * the JVM without Compose or an Android device.
  */
 class CyclingSessionListTest {
 
@@ -99,44 +98,6 @@ class CyclingSessionListTest {
     @Test
     fun `formatSessionDuration returns 120 min for two hours`() {
         assertEquals("120 min", formatSessionDuration(120))
-    }
-
-    // ─── totalDurationMinutes ─────────────────────────────────────────────────
-
-    @Test
-    fun `totalDurationMinutes returns 0 for empty list`() {
-        val result = totalDurationMinutes(emptyList())
-        assertEquals(0, result)
-    }
-
-    @Test
-    fun `totalDurationMinutes returns duration of single session`() {
-        val sessions = listOf(
-            CyclingSession(id = 1, startTime = 0L, endTime = null, durationMinutes = 27),
-        )
-        val result = totalDurationMinutes(sessions)
-        assertEquals(27, result)
-    }
-
-    @Test
-    fun `totalDurationMinutes sums all session durations`() {
-        val sessions = listOf(
-            CyclingSession(id = 1, startTime = 0L, endTime = null, durationMinutes = 27),
-            CyclingSession(id = 2, startTime = 0L, endTime = null, durationMinutes = 15),
-            CyclingSession(id = 3, startTime = 0L, endTime = null, durationMinutes = 45),
-        )
-        val result = totalDurationMinutes(sessions)
-        assertEquals(87, result)
-    }
-
-    @Test
-    fun `totalDurationMinutes with override session still sums durations`() {
-        val sessions = listOf(
-            CyclingSession(id = 1, startTime = 0L, endTime = null, durationMinutes = 30, isManualOverride = true),
-            CyclingSession(id = 2, startTime = 0L, endTime = null, durationMinutes = 20, isManualOverride = false),
-        )
-        val result = totalDurationMinutes(sessions)
-        assertEquals(50, result)
     }
 
     // ─── CyclingSessionListKt class existence ────────────────────────────────

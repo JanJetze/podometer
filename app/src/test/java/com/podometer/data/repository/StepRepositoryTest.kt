@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.data.repository
 
-import com.podometer.data.db.ActivityTransition
-import com.podometer.data.db.ActivityTransitionDao
 import com.podometer.data.db.DailySummary
 import com.podometer.data.db.HourlyStepAggregate
 import com.podometer.data.db.StepDao
@@ -97,36 +95,12 @@ class StepRepositoryTest {
         override suspend fun insertAllHourlyAggregates(aggregates: List<HourlyStepAggregate>) { }
     }
 
-    private class FakeActivityTransitionDao(
-        private val transitionsFlow: Flow<List<ActivityTransition>> = flowOf(emptyList()),
-    ) : ActivityTransitionDao {
-        var insertedTransition: ActivityTransition? = null
-        var updatedTransition: ActivityTransition? = null
-
-        override fun getTodayTransitions(todayStart: Long): Flow<List<ActivityTransition>> =
-            transitionsFlow
-
-        override suspend fun insertTransition(transition: ActivityTransition) {
-            insertedTransition = transition
-        }
-
-        override suspend fun updateTransition(transition: ActivityTransition) {
-            updatedTransition = transition
-        }
-
-        override suspend fun getAllTransitions(): List<ActivityTransition> = emptyList()
-
-        override suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? = null
-
-        override suspend fun insertAllTransitions(transitions: List<ActivityTransition>) { }
-    }
-
     // ─── getTodaySteps: null → 0 mapping ────────────────────────────────────
 
     @Test
     fun `getTodaySteps maps null to 0`() = runTest {
         val dao = FakeStepDao(todayStepsFlow = flowOf(null))
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getTodaySteps().first()
 
@@ -136,7 +110,7 @@ class StepRepositoryTest {
     @Test
     fun `getTodaySteps passes through non-null value`() = runTest {
         val dao = FakeStepDao(todayStepsFlow = flowOf(500))
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getTodaySteps().first()
 
@@ -146,7 +120,7 @@ class StepRepositoryTest {
     @Test
     fun `getTodaySteps maps 0 DAO result to 0`() = runTest {
         val dao = FakeStepDao(todayStepsFlow = flowOf(0))
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getTodaySteps().first()
 
@@ -161,7 +135,7 @@ class StepRepositoryTest {
             HourlyStepAggregate(id = 1, timestamp = 1000L, stepCountDelta = 42, detectedActivity = "WALKING"),
         )
         val dao = FakeStepDao(hourlyAggregatesFlow = flowOf(aggregates))
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getTodayHourlyAggregates().first()
 
@@ -171,7 +145,7 @@ class StepRepositoryTest {
     @Test
     fun `getTodayHourlyAggregates returns empty list when no rows`() = runTest {
         val dao = FakeStepDao(hourlyAggregatesFlow = flowOf(emptyList()))
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getTodayHourlyAggregates().first()
 
@@ -183,7 +157,7 @@ class StepRepositoryTest {
     @Test
     fun `getDailySummary returns null when no row exists`() = runTest {
         val dao = FakeStepDao(dailySummaryFlow = flowOf(null))
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getDailySummary("2026-02-17").first()
 
@@ -194,7 +168,7 @@ class StepRepositoryTest {
     fun `getDailySummary delegates to StepDao`() = runTest {
         val summary = DailySummary("2026-02-17", 8500, 6.2f, 70, 20)
         val dao = FakeStepDao(dailySummaryFlow = flowOf(summary))
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getDailySummary("2026-02-17").first()
 
@@ -210,36 +184,11 @@ class StepRepositoryTest {
             DailySummary("2026-02-11", 9000, 6.5f, 80, 15),
         )
         val dao = FakeStepDao(weeklyFlow = flowOf(summaries))
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getWeeklyDailySummaries("2026-02-10", "2026-02-16").first()
 
         assertEquals(summaries, result)
-    }
-
-    // ─── getTodayTransitions ─────────────────────────────────────────────────
-
-    @Test
-    fun `getTodayTransitions delegates to ActivityTransitionDao`() = runTest {
-        val transitions = listOf(
-            ActivityTransition(id = 1, timestamp = 5000L, fromActivity = "STILL", toActivity = "WALKING"),
-        )
-        val transitionDao = FakeActivityTransitionDao(transitionsFlow = flowOf(transitions))
-        val repo = StepRepository(FakeStepDao(), transitionDao)
-
-        val result = repo.getTodayTransitions().first()
-
-        assertEquals(transitions, result)
-    }
-
-    @Test
-    fun `getTodayTransitions returns empty list when no rows`() = runTest {
-        val transitionDao = FakeActivityTransitionDao(transitionsFlow = flowOf(emptyList()))
-        val repo = StepRepository(FakeStepDao(), transitionDao)
-
-        val result = repo.getTodayTransitions().first()
-
-        assertTrue(result.isEmpty())
     }
 
     // ─── Recovery read methods ────────────────────────────────────────────────
@@ -247,7 +196,7 @@ class StepRepositoryTest {
     @Test
     fun `getStepsForHour maps null DAO result to 0`() = runTest {
         val dao = FakeStepDao(stepsForHour = null)
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getStepsForHour(1000L)
 
@@ -257,7 +206,7 @@ class StepRepositoryTest {
     @Test
     fun `getStepsForHour passes through non-null DAO result`() = runTest {
         val dao = FakeStepDao(stepsForHour = 250)
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getStepsForHour(1000L)
 
@@ -267,7 +216,7 @@ class StepRepositoryTest {
     @Test
     fun `getTodayTotalStepsSnapshot maps null DAO result to 0`() = runTest {
         val dao = FakeStepDao(totalStepsSnapshot = null)
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getTodayTotalStepsSnapshot()
 
@@ -277,7 +226,7 @@ class StepRepositoryTest {
     @Test
     fun `getTodayTotalStepsSnapshot passes through non-null DAO result`() = runTest {
         val dao = FakeStepDao(totalStepsSnapshot = 1500)
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         val result = repo.getTodayTotalStepsSnapshot()
 
@@ -289,7 +238,7 @@ class StepRepositoryTest {
     @Test
     fun `upsertHourlyAggregate delegates to StepDao`() = runTest {
         val dao = FakeStepDao()
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
         val aggregate = HourlyStepAggregate(timestamp = 2000L, stepCountDelta = 200, detectedActivity = "WALKING")
 
         repo.upsertHourlyAggregate(aggregate)
@@ -300,7 +249,7 @@ class StepRepositoryTest {
     @Test
     fun `insertHourlyAggregate delegates to StepDao`() = runTest {
         val dao = FakeStepDao()
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
         val aggregate = HourlyStepAggregate(timestamp = 1000L, stepCountDelta = 100, detectedActivity = "WALKING")
 
         repo.insertHourlyAggregate(aggregate)
@@ -311,7 +260,7 @@ class StepRepositoryTest {
     @Test
     fun `upsertDailySummary delegates to StepDao`() = runTest {
         val dao = FakeStepDao()
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
         val summary = DailySummary("2026-02-17", 5000, 3.5f, 45, 10)
 
         repo.upsertDailySummary(summary)
@@ -319,33 +268,11 @@ class StepRepositoryTest {
         assertEquals(summary, dao.upsertedSummary)
     }
 
-    @Test
-    fun `insertTransition delegates to ActivityTransitionDao`() = runTest {
-        val transitionDao = FakeActivityTransitionDao()
-        val repo = StepRepository(FakeStepDao(), transitionDao)
-        val transition = ActivityTransition(timestamp = 2000L, fromActivity = "STILL", toActivity = "WALKING")
-
-        repo.insertTransition(transition)
-
-        assertEquals(transition, transitionDao.insertedTransition)
-    }
-
-    @Test
-    fun `updateTransition delegates to ActivityTransitionDao`() = runTest {
-        val transitionDao = FakeActivityTransitionDao()
-        val repo = StepRepository(FakeStepDao(), transitionDao)
-        val transition = ActivityTransition(id = 1, timestamp = 3000L, fromActivity = "WALKING", toActivity = "CYCLING")
-
-        repo.updateTransition(transition)
-
-        assertEquals(transition, transitionDao.updatedTransition)
-    }
-
     // ─── getTodayStartMillis ─────────────────────────────────────────────────
 
     @Test
     fun `getTodayStartMillis returns positive epoch millis`() {
-        val repo = StepRepository(FakeStepDao(), FakeActivityTransitionDao())
+        val repo = StepRepository(FakeStepDao())
 
         val millis = repo.getTodayStartMillis()
 
@@ -354,7 +281,7 @@ class StepRepositoryTest {
 
     @Test
     fun `getTodayStartMillis returns value in the past or present`() {
-        val repo = StepRepository(FakeStepDao(), FakeActivityTransitionDao())
+        val repo = StepRepository(FakeStepDao())
         val before = System.currentTimeMillis()
 
         val millis = repo.getTodayStartMillis()
@@ -367,7 +294,7 @@ class StepRepositoryTest {
     @Test
     fun `upsertStepsAndDistance delegates to StepDao`() = runTest {
         val dao = FakeStepDao()
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         repo.upsertStepsAndDistance(date = "2026-02-27", totalSteps = 3000, totalDistance = 2.25f)
 
@@ -381,7 +308,7 @@ class StepRepositoryTest {
     @Test
     fun `addWalkingMinutes delegates to StepDao`() = runTest {
         val dao = FakeStepDao()
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         repo.addWalkingMinutes(date = "2026-02-27", minutes = 60)
 
@@ -394,7 +321,7 @@ class StepRepositoryTest {
     @Test
     fun `addCyclingMinutes delegates to StepDao`() = runTest {
         val dao = FakeStepDao()
-        val repo = StepRepository(dao, FakeActivityTransitionDao())
+        val repo = StepRepository(dao)
 
         repo.addCyclingMinutes(date = "2026-02-27", minutes = 60)
 

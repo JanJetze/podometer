@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.activities
 
-import com.podometer.data.db.SensorWindow
 import com.podometer.domain.model.ActivitySession
 import com.podometer.domain.model.ActivityState
 import org.junit.Assert.assertEquals
@@ -18,11 +17,9 @@ class StepGraphTest {
     private val dayEnd = 86_400_000L
     private val bucketMs = 300_000L // 5 min
 
-    private fun window(ts: Long, steps: Int) = SensorWindow(
+    private fun window(ts: Long, steps: Int) = StepWindowPoint(
         id = 0,
         timestamp = ts,
-        magnitudeVariance = 0.0,
-        stepFrequencyHz = 0.0,
         stepCount = steps,
     )
 
@@ -79,9 +76,27 @@ class StepGraphTest {
     @Test
     fun `multiple buckets have correct cumulative totals`() {
         val windows = listOf(
-            window(0L, 5),           // bucket 0
-            window(300_000L, 3),     // bucket 1
-            window(600_000L, 7),     // bucket 2
+            window(0L, 5),            // bucket 0
+            window(30_000L, 0),
+            window(60_000L, 0),
+            window(90_000L, 0),
+            window(120_000L, 0),
+            window(150_000L, 0),
+            window(180_000L, 0),
+            window(210_000L, 0),
+            window(240_000L, 0),
+            window(270_000L, 0),
+            window(300_000L, 3),      // bucket 1
+            window(330_000L, 0),
+            window(360_000L, 0),
+            window(390_000L, 0),
+            window(420_000L, 0),
+            window(450_000L, 0),
+            window(480_000L, 0),
+            window(510_000L, 0),
+            window(540_000L, 0),
+            window(570_000L, 0),
+            window(600_000L, 7),      // bucket 2
         )
         val data = buildStepGraphData(windows, emptyList(), bucketMs, dayStart, dayEnd)
         assertEquals(3, data.points.size)
@@ -121,7 +136,25 @@ class StepGraphTest {
     fun `maxBucket is the highest single bucket`() {
         val windows = listOf(
             window(0L, 10),
+            window(30_000L, 0),
+            window(60_000L, 0),
+            window(90_000L, 0),
+            window(120_000L, 0),
+            window(150_000L, 0),
+            window(180_000L, 0),
+            window(210_000L, 0),
+            window(240_000L, 0),
+            window(270_000L, 0),
             window(300_000L, 20),
+            window(330_000L, 0),
+            window(360_000L, 0),
+            window(390_000L, 0),
+            window(420_000L, 0),
+            window(450_000L, 0),
+            window(480_000L, 0),
+            window(510_000L, 0),
+            window(540_000L, 0),
+            window(570_000L, 0),
             window(600_000L, 5),
         )
         val data = buildStepGraphData(windows, emptyList(), bucketMs, dayStart, dayEnd)

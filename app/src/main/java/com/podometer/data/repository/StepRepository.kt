@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.data.repository
 
-import com.podometer.data.db.ActivityTransition
-import com.podometer.data.db.ActivityTransitionDao
 import com.podometer.data.db.DailySummary
 import com.podometer.data.db.HourlyStepAggregate
 import com.podometer.data.db.StepDao
@@ -13,16 +11,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Single source of truth for step-count and activity-transition data.
+ * Single source of truth for step-count data.
  *
- * Delegates all persistence to [StepDao] and [ActivityTransitionDao].
+ * Delegates all persistence to [StepDao].
  * The only transformation applied is mapping a null step count to 0 in
  * [getTodaySteps].
  */
 @Singleton
 class StepRepository @Inject constructor(
     private val stepDao: StepDao,
-    private val activityTransitionDao: ActivityTransitionDao,
 ) {
 
     // ─── Read ────────────────────────────────────────────────────────────────
@@ -48,10 +45,6 @@ class StepRepository @Inject constructor(
      */
     fun getWeeklyDailySummaries(startDate: String, endDate: String): Flow<List<DailySummary>> =
         stepDao.getWeeklyDailySummaries(startDate, endDate)
-
-    /** Returns all activity transitions for today as a [Flow]. */
-    fun getTodayTransitions(): Flow<List<ActivityTransition>> =
-        activityTransitionDao.getTodayTransitions(getTodayStartMillis())
 
     // ─── One-shot reads for service-restart recovery ──────────────────────────
 
@@ -121,16 +114,6 @@ class StepRepository @Inject constructor(
         stepDao.addCyclingMinutes(date, minutes)
     }
 
-    /** Inserts a new activity transition row. */
-    suspend fun insertTransition(transition: ActivityTransition) {
-        activityTransitionDao.insertTransition(transition)
-    }
-
-    /** Updates an existing activity transition row (matched by primary key). */
-    suspend fun updateTransition(transition: ActivityTransition) {
-        activityTransitionDao.updateTransition(transition)
-    }
-
     /**
      * Returns all daily summaries ordered by date ascending.
      * One-shot suspend function intended for data export.
@@ -144,24 +127,6 @@ class StepRepository @Inject constructor(
      */
     suspend fun getAllHourlyAggregates(): List<HourlyStepAggregate> =
         stepDao.getAllHourlyAggregates()
-
-    /**
-     * Returns all activity transitions ordered by timestamp ascending.
-     * One-shot suspend function intended for data export.
-     */
-    suspend fun getAllTransitions(): List<ActivityTransition> =
-        activityTransitionDao.getAllTransitions()
-
-    /**
-     * Returns the first [ActivityTransition] whose timestamp is strictly greater than
-     * [afterTimestamp], or `null` if none exists.
-     *
-     * Used by [com.podometer.domain.usecase.OverrideActivityUseCaseImpl] to locate the
-     * transition immediately following a manual cycling override so that the session's
-     * end time and duration can be set at creation time.
-     */
-    suspend fun getNextTransitionAfter(afterTimestamp: Long): ActivityTransition? =
-        activityTransitionDao.getNextTransitionAfter(afterTimestamp)
 
     // ─── Helper ──────────────────────────────────────────────────────────────
 

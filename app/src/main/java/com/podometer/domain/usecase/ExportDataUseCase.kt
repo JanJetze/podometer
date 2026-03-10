@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.domain.usecase
 
-import com.podometer.data.export.ExportActivityTransition
-import com.podometer.data.export.ExportCyclingSession
 import com.podometer.data.export.ExportDailySummary
 import com.podometer.data.export.ExportData
 import com.podometer.data.export.ExportHourlyAggregate
 import com.podometer.data.export.ExportMetadata
-import com.podometer.data.export.ExportSensorWindow
-import com.podometer.data.db.SensorWindowDao
-import com.podometer.data.repository.CyclingRepository
 import com.podometer.data.repository.StepRepository
 import kotlinx.serialization.json.Json
 import java.time.Instant
@@ -21,14 +16,11 @@ import java.time.Instant
  * tested without Android dependencies. The [serializeToJson] function is a
  * pure function operating only on the export model.
  *
- * @param stepRepository Source for daily summaries, hourly aggregates, and transitions.
- * @param cyclingRepository Source for cycling sessions.
+ * @param stepRepository Source for daily summaries and hourly aggregates.
  * @param deviceModel Device model string included in export metadata (injectable for testing).
  */
 class ExportDataUseCase(
     private val stepRepository: StepRepository,
-    private val cyclingRepository: CyclingRepository,
-    private val sensorWindowDao: SensorWindowDao,
     private val deviceModel: String,
 ) {
 
@@ -36,7 +28,7 @@ class ExportDataUseCase(
 
     private companion object {
         /** App version included in every export. */
-        const val APP_VERSION = "1.0.0"
+        const val APP_VERSION = "2.0.0"
     }
 
     private val json = Json { prettyPrint = true }
@@ -55,9 +47,6 @@ class ExportDataUseCase(
     suspend fun buildExportData(): ExportData {
         val dailySummaries = stepRepository.getAllDailySummaries()
         val hourlyAggregates = stepRepository.getAllHourlyAggregates()
-        val transitions = stepRepository.getAllTransitions()
-        val sessions = cyclingRepository.getAllSessions()
-        val sensorWindows = sensorWindowDao.getAllWindows()
 
         return ExportData(
             metadata = ExportMetadata(
@@ -80,33 +69,6 @@ class ExportDataUseCase(
                     timestamp = aggregate.timestamp,
                     stepCountDelta = aggregate.stepCountDelta,
                     detectedActivity = aggregate.detectedActivity,
-                )
-            },
-            activityTransitions = transitions.map { transition ->
-                ExportActivityTransition(
-                    id = transition.id,
-                    timestamp = transition.timestamp,
-                    fromActivity = transition.fromActivity,
-                    toActivity = transition.toActivity,
-                    isManualOverride = transition.isManualOverride,
-                )
-            },
-            cyclingSessions = sessions.map { session ->
-                ExportCyclingSession(
-                    id = session.id,
-                    startTime = session.startTime,
-                    endTime = session.endTime,
-                    durationMinutes = session.durationMinutes,
-                    isManualOverride = session.isManualOverride,
-                )
-            },
-            sensorWindows = sensorWindows.map { window ->
-                ExportSensorWindow(
-                    id = window.id,
-                    timestamp = window.timestamp,
-                    magnitudeVariance = window.magnitudeVariance,
-                    stepFrequencyHz = window.stepFrequencyHz,
-                    stepCount = window.stepCount,
                 )
             },
         )

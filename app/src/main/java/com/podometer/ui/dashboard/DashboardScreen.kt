@@ -168,8 +168,7 @@ fun DashboardScreen(
                 }
 
                 // Today card or first-launch empty state
-                val isFirstLaunch = uiState.todaySteps == 0 && uiState.transitions.isEmpty()
-                if (isFirstLaunch) {
+                if (uiState.todaySteps == 0) {
                     FirstLaunchEmptyState(modifier = Modifier.fillMaxWidth())
                 } else {
                     TodayCard(

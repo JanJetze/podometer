@@ -226,7 +226,7 @@ private fun ActivityState.timelineColor(colors: ActivityColors): Color = when (t
  *
  * This is a pure presentational composable — it holds no internal state and receives
  * all data via parameters. Use [buildTimelineSegments] to convert a [List] of
- * [TransitionEvent]s (e.g. from [DashboardUiState.transitions]) into segments.
+ * [TransitionEvent]s into segments.
  *
  * Accessibility: the component carries a `contentDescription` built from string resources
  * (via `stringResource()`) so TalkBack can announce a localised text summary of the timeline.

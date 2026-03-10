@@ -4,20 +4,10 @@ package com.podometer.ui.activities
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
-import com.podometer.data.db.ManualSessionOverride
-import com.podometer.data.db.ManualSessionOverrideDao
-import com.podometer.data.db.SensorWindow
-import com.podometer.data.db.SensorWindowDao
 import com.podometer.data.repository.PreferencesManager
-import com.podometer.data.repository.SensorWindowRepository
-import com.podometer.domain.model.ActivitySession
-import com.podometer.domain.model.ActivityState
-import com.podometer.domain.usecase.RecomputeActivitySessionsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -35,8 +25,7 @@ import java.time.LocalDate
 /**
  * Unit tests for [ActivitiesViewModel].
  *
- * Uses fake [RecomputeActivitySessionsUseCase] to verify date navigation,
- * state emission, and date label formatting.
+ * Verifies date navigation, state emission, and date label formatting.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ActivitiesViewModelTest {
@@ -56,32 +45,6 @@ class ActivitiesViewModelTest {
         Dispatchers.resetMain()
     }
 
-    // ─── Fakes ───────────────────────────────────────────────────────────────
-
-    private class FakeRecomputeUseCase(
-        private val sessions: List<ActivitySession> = emptyList(),
-    ) : RecomputeActivitySessionsUseCase {
-        override fun invoke(date: LocalDate, nowMillis: Long): Flow<List<ActivitySession>> =
-            flowOf(sessions)
-    }
-
-    private class FakeSensorWindowDao : SensorWindowDao {
-        override suspend fun insert(window: SensorWindow) {}
-        override suspend fun insertAll(windows: List<SensorWindow>) {}
-        override fun getWindowsBetween(startMs: Long, endMs: Long): Flow<List<SensorWindow>> =
-            flowOf(emptyList())
-        override suspend fun getAllWindows(): List<SensorWindow> = emptyList()
-        override suspend fun deleteOlderThan(cutoffMs: Long) {}
-    }
-
-    private class FakeManualSessionOverrideDao : ManualSessionOverrideDao {
-        override suspend fun insert(override: ManualSessionOverride): Long = 1L
-        override suspend fun update(override: ManualSessionOverride) {}
-        override suspend fun deleteById(id: Long) {}
-        override fun getOverridesForDate(date: String): Flow<List<ManualSessionOverride>> =
-            flowOf(emptyList())
-    }
-
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private fun buildPreferencesManager(): PreferencesManager {
@@ -91,12 +54,7 @@ class ActivitiesViewModelTest {
         return PreferencesManager(dataStore)
     }
 
-    private fun buildViewModel(
-        sessions: List<ActivitySession> = emptyList(),
-    ): ActivitiesViewModel = ActivitiesViewModel(
-        recomputeActivitySessions = FakeRecomputeUseCase(sessions),
-        sensorWindowRepository = SensorWindowRepository(FakeSensorWindowDao()),
-        manualSessionOverrideDao = FakeManualSessionOverrideDao(),
+    private fun buildViewModel(): ActivitiesViewModel = ActivitiesViewModel(
         preferencesManager = buildPreferencesManager(),
     )
 
@@ -158,25 +116,6 @@ class ActivitiesViewModelTest {
     }
 
     // ─── UI state emission ───────────────────────────────────────────────────
-
-    @Test
-    fun `uiState emits sessions from use case`() = runTest {
-        val sessions = listOf(
-            ActivitySession(
-                activity = ActivityState.WALKING,
-                startTime = 1_000L,
-                endTime = 2_000L,
-                startTransitionId = 1,
-                isManualOverride = false,
-            ),
-        )
-        val viewModel = buildViewModel(sessions = sessions)
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(1, state.sessions.size)
-        assertEquals(ActivityState.WALKING, state.sessions[0].activity)
-    }
 
     @Test
     fun `uiState isToday is true when selectedDate is today`() = runTest {
