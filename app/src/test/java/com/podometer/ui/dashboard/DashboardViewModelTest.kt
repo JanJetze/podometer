@@ -4,11 +4,17 @@ package com.podometer.ui.dashboard
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import com.podometer.data.db.StepBucket
+import com.podometer.data.db.StepBucketDao
 import com.podometer.data.repository.PreferencesManager
+import com.podometer.data.repository.StepBucketRepository
 import com.podometer.domain.model.DaySummary
 import com.podometer.domain.model.StepData
+import com.podometer.domain.usecase.GetStreakUseCase
 import com.podometer.domain.usecase.GetTodayStepsUseCase
 import com.podometer.domain.usecase.GetWeeklyStepsUseCase
+import com.podometer.domain.usecase.StreakInfo
+import com.podometer.domain.usecase.TodayProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -78,24 +84,43 @@ class DashboardViewModelTest {
         override fun invoke(): Flow<List<DaySummary>> = flow
     }
 
+    private class FakeGetStreakUseCase(
+        private val info: StreakInfo = StreakInfo(
+            currentStreak = 0,
+            todayProgress = TodayProgress.NOT_MET,
+        ),
+    ) : GetStreakUseCase {
+        override suspend fun invoke(): StreakInfo = info
+    }
+
+    private class FakeStepBucketDao(
+        private val flow: Flow<List<StepBucket>> = flowOf(emptyList()),
+    ) : com.podometer.data.db.StepBucketDao {
+        override suspend fun upsert(bucket: StepBucket) = Unit
+        override fun getBucketsForDay(startOfDay: Long, endOfDay: Long): Flow<List<StepBucket>> = flow
+        override fun getBucketsInRange(start: Long, end: Long): Flow<List<StepBucket>> = flowOf(emptyList())
+        override suspend fun getStepsForBucket(bucketTimestamp: Long): Int? = null
+        override suspend fun getAllBuckets(): List<StepBucket> = emptyList()
+        override suspend fun deleteAll() = Unit
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private fun buildViewModel(
         stepData: StepData = StepData(steps = 0, goal = 10_000, progressPercent = 0f, distanceKm = 0f),
         weeklySteps: List<DaySummary> = emptyList(),
+        streakInfo: StreakInfo = StreakInfo(currentStreak = 0, todayProgress = TodayProgress.NOT_MET),
+        buckets: List<StepBucket> = emptyList(),
+        preferencesManager: PreferencesManager = buildPreferencesManager(),
     ): DashboardViewModel = DashboardViewModel(
         getTodaySteps = FakeGetTodayStepsUseCase(flowOf(stepData)),
         getWeeklySteps = FakeGetWeeklyStepsUseCase(flowOf(weeklySteps)),
-        preferencesManager = buildPreferencesManager(),
+        getStreak = FakeGetStreakUseCase(streakInfo),
+        stepBucketRepository = StepBucketRepository(FakeStepBucketDao(flowOf(buckets))),
+        preferencesManager = preferencesManager,
     )
 
     // ─── DashboardUiState default state ──────────────────────────────────────
-
-    @Test
-    fun `DashboardUiState default has isLoading true`() {
-        val state = DashboardUiState()
-        assertTrue(state.isLoading)
-    }
 
     @Test
     fun `DashboardUiState default has zero steps`() {
@@ -104,15 +129,57 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `DashboardUiState default has empty weeklySteps`() {
+    fun `DashboardUiState default has empty weeklyDays`() {
         val state = DashboardUiState()
-        assertTrue(state.weeklySteps.isEmpty())
+        assertTrue(state.weeklyDays.isEmpty())
     }
 
     @Test
-    fun `DashboardUiState default has daily goal 10000`() {
+    fun `DashboardUiState default has minimumGoal 5000`() {
         val state = DashboardUiState()
-        assertEquals(10_000, state.dailyGoal)
+        assertEquals(5_000, state.minimumGoal)
+    }
+
+    @Test
+    fun `DashboardUiState default has targetGoal 8000`() {
+        val state = DashboardUiState()
+        assertEquals(8_000, state.targetGoal)
+    }
+
+    @Test
+    fun `DashboardUiState default has stretchGoal 12000`() {
+        val state = DashboardUiState()
+        assertEquals(12_000, state.stretchGoal)
+    }
+
+    @Test
+    fun `DashboardUiState default has streakDays 0`() {
+        val state = DashboardUiState()
+        assertEquals(0, state.streakDays)
+    }
+
+    @Test
+    fun `DashboardUiState default has todayGoalMet false`() {
+        val state = DashboardUiState()
+        assertFalse(state.todayGoalMet)
+    }
+
+    @Test
+    fun `DashboardUiState default has empty todayBuckets`() {
+        val state = DashboardUiState()
+        assertTrue(state.todayBuckets.isEmpty())
+    }
+
+    @Test
+    fun `DashboardUiState default has chartResolution HOURLY`() {
+        val state = DashboardUiState()
+        assertEquals(ChartResolution.HOURLY, state.chartResolution)
+    }
+
+    @Test
+    fun `DashboardUiState default has isRestDay false`() {
+        val state = DashboardUiState()
+        assertFalse(state.isRestDay)
     }
 
     // ─── ViewModel initial state ──────────────────────────────────────────────
@@ -120,7 +187,6 @@ class DashboardViewModelTest {
     @Test
     fun `ViewModel initial uiState value has isLoading true`() {
         val viewModel = buildViewModel()
-        // The initial value of the StateFlow (before flows emit) is a loading state.
         assertTrue(viewModel.uiState.value.isLoading)
     }
 
@@ -137,37 +203,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `ViewModel emits dailyGoal from GetTodayStepsUseCase`() = runTest {
-        val stepData = StepData(steps = 0, goal = 10_000, progressPercent = 0f, distanceKm = 0f)
-        val viewModel = buildViewModel(stepData = stepData)
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(10_000, state.dailyGoal)
-    }
-
-    @Test
-    fun `ViewModel emits progressPercent from GetTodayStepsUseCase`() = runTest {
-        val stepData = StepData(steps = 5_000, goal = 10_000, progressPercent = 50f, distanceKm = 3.75f)
-        val viewModel = buildViewModel(stepData = stepData)
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(50f, state.progressPercent, 0.001f)
-    }
-
-    @Test
-    fun `ViewModel emits distanceKm from GetTodayStepsUseCase`() = runTest {
-        val stepData = StepData(steps = 5_000, goal = 10_000, progressPercent = 50f, distanceKm = 3.75f)
-        val viewModel = buildViewModel(stepData = stepData)
-
-        val state = viewModel.uiState.first { !it.isLoading }
-
-        assertEquals(3.75f, state.distanceKm, 0.001f)
-    }
-
-    @Test
-    fun `ViewModel emits weeklySteps from GetWeeklyStepsUseCase`() = runTest {
+    fun `ViewModel emits weeklyDays from GetWeeklyStepsUseCase`() = runTest {
         val weekly = listOf(
             DaySummary(date = "2026-02-17", totalSteps = 8_000, totalDistanceKm = 6f),
         )
@@ -175,9 +211,56 @@ class DashboardViewModelTest {
 
         val state = viewModel.uiState.first { !it.isLoading }
 
-        assertEquals(1, state.weeklySteps.size)
-        assertEquals("2026-02-17", state.weeklySteps[0].date)
-        assertEquals(8_000, state.weeklySteps[0].totalSteps)
+        assertEquals(1, state.weeklyDays.size)
+        assertEquals("2026-02-17", state.weeklyDays[0].date)
+        assertEquals(8_000, state.weeklyDays[0].totalSteps)
+    }
+
+    @Test
+    fun `ViewModel emits streakDays from GetStreakUseCase`() = runTest {
+        val streakInfo = StreakInfo(currentStreak = 7, todayProgress = TodayProgress.MET)
+        val viewModel = buildViewModel(streakInfo = streakInfo)
+
+        val state = viewModel.uiState.first { !it.isLoading }
+
+        assertEquals(7, state.streakDays)
+    }
+
+    @Test
+    fun `ViewModel emits todayGoalMet true when streak todayProgress is MET`() = runTest {
+        val streakInfo = StreakInfo(currentStreak = 3, todayProgress = TodayProgress.MET)
+        val viewModel = buildViewModel(streakInfo = streakInfo)
+
+        val state = viewModel.uiState.first { !it.isLoading }
+
+        assertTrue(state.todayGoalMet)
+    }
+
+    @Test
+    fun `ViewModel emits todayGoalMet false when streak todayProgress is NOT_MET`() = runTest {
+        val streakInfo = StreakInfo(currentStreak = 0, todayProgress = TodayProgress.NOT_MET)
+        val viewModel = buildViewModel(streakInfo = streakInfo)
+
+        val state = viewModel.uiState.first { !it.isLoading }
+
+        assertFalse(state.todayGoalMet)
+    }
+
+    @Test
+    fun `ViewModel maps StepBuckets to StepBars in todayBuckets`() = runTest {
+        val buckets = listOf(
+            StepBucket(timestamp = 1_000_000L, stepCount = 42),
+            StepBucket(timestamp = 1_300_000L, stepCount = 17),
+        )
+        val viewModel = buildViewModel(buckets = buckets)
+
+        val state = viewModel.uiState.first { !it.isLoading }
+
+        assertEquals(2, state.todayBuckets.size)
+        assertEquals(1_000_000L, state.todayBuckets[0].startTime)
+        assertEquals(42, state.todayBuckets[0].stepCount)
+        assertEquals(1_300_000L, state.todayBuckets[1].startTime)
+        assertEquals(17, state.todayBuckets[1].stepCount)
     }
 
     // ─── isLoading state ─────────────────────────────────────────────────────
@@ -201,6 +284,8 @@ class DashboardViewModelTest {
         val viewModel = DashboardViewModel(
             getTodaySteps = FakeGetTodayStepsUseCase(stepsFlow),
             getWeeklySteps = FakeGetWeeklyStepsUseCase(),
+            getStreak = FakeGetStreakUseCase(),
+            stepBucketRepository = StepBucketRepository(FakeStepBucketDao()),
             preferencesManager = buildPreferencesManager(),
         )
 
@@ -211,6 +296,28 @@ class DashboardViewModelTest {
 
         val updatedState = viewModel.uiState.first { it.todaySteps == 3_000 }
         assertEquals(3_000, updatedState.todaySteps)
+    }
+
+    // ─── Chart resolution ─────────────────────────────────────────────────────
+
+    @Test
+    fun `setChartResolution updates chartResolution in state`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.setChartResolution(ChartResolution.FIVE_MIN)
+
+        val state = viewModel.uiState.first { !it.isLoading }
+        assertEquals(ChartResolution.FIVE_MIN, state.chartResolution)
+    }
+
+    @Test
+    fun `setChartResolution to FIFTEEN_MIN is reflected in state`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.setChartResolution(ChartResolution.FIFTEEN_MIN)
+
+        val state = viewModel.uiState.first { !it.isLoading }
+        assertEquals(ChartResolution.FIFTEEN_MIN, state.chartResolution)
     }
 
     // ─── Permission state ─────────────────────────────────────────────────────
@@ -235,7 +342,6 @@ class DashboardViewModelTest {
         val viewModel = buildViewModel()
         viewModel.refreshPermissions(permissionsGranted = false)
 
-        // After refresh with denied, permissionsDenied should be true
         val state = viewModel.uiState.first { it.permissionsDenied }
         assertTrue(state.permissionsDenied)
     }
@@ -244,22 +350,12 @@ class DashboardViewModelTest {
     fun `refreshPermissions transitions from denied to granted`() = runTest {
         val viewModel = buildViewModel()
 
-        // Initially denied
         viewModel.refreshPermissions(permissionsGranted = false)
         val deniedState = viewModel.uiState.first { it.permissionsDenied }
         assertTrue(deniedState.permissionsDenied)
 
-        // Permissions become granted
         viewModel.refreshPermissions(permissionsGranted = true)
         val grantedState = viewModel.uiState.first { !it.permissionsDenied }
         assertFalse(grantedState.permissionsDenied)
-    }
-
-    @Test
-    fun `permissionsDenied is false by default before refreshPermissions is called`() = runTest {
-        val viewModel = buildViewModel()
-
-        val state = viewModel.uiState.first { !it.isLoading }
-        assertFalse(state.permissionsDenied)
     }
 }

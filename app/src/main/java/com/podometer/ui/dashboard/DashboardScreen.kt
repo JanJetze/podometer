@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -38,30 +40,32 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.podometer.R
-import com.podometer.data.sensor.SensorType
+import com.podometer.domain.model.DaySummary
 import com.podometer.service.startTrackingServiceIfPermitted
+import com.podometer.ui.theme.PodometerTheme
 import com.podometer.util.checkEssentialPermissions
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 /**
- * Dashboard screen displaying today's activity summary in a scrollable layout.
+ * Dashboard screen (v2) displaying today's step progress and weekly activity.
  *
- * Collects [DashboardViewModel.uiState] reactively. While [DashboardUiState.isLoading]
- * is true, a centred [CircularProgressIndicator] is shown. Once data is available:
+ * Collects [DashboardViewModel.uiState] reactively and renders a scrollable layout:
  *
- * - When [DashboardUiState.permissionsDenied] is true, a [PermissionRecoveryScreen] is
- *   shown full-screen, hiding the normal dashboard content.
- * - Otherwise, the screen renders a scrollable [Column] with:
- *   - Optional [SensorNotice] when the sensor is [SensorType.ACCELEROMETER] or [SensorType.NONE].
- *   - [FirstLaunchEmptyState] when `todaySteps == 0`, OR
- *     [TodayCard] showing steps, progress ring, and distance when there is activity.
- *   - Weekly Steps section.
+ * 1. [ProgressRing] — large centered ring with step count and tier label.
+ * 2. [StreakCounter] — compact streak display below the ring.
+ * 3. [TodayStepChart] — bar chart for today's buckets with resolution switcher.
+ * 4. [WeeklyStepChart] — daily summary chart for the current week.
+ *
+ * When [DashboardUiState.isLoading] is true a centered [CircularProgressIndicator] is shown.
+ * When [DashboardUiState.permissionsDenied] is true, [PermissionRecoveryScreen] is shown
+ * full-screen.
  *
  * Pull-to-refresh is not needed — all data flows are reactive.
  *
  * @param onNavigateToSettings Callback invoked when the user taps the settings gear icon.
  * @param onOpenSettings       Callback invoked when the user taps "Open App Settings" on the
- *                             [PermissionRecoveryScreen]. The caller should launch the system
- *                             app details settings intent.
+ *                             [PermissionRecoveryScreen].
  * @param modifier             Optional [Modifier] applied to the root [Scaffold].
  * @param viewModel            Hilt [DashboardViewModel]; override in previews/tests.
  */
@@ -77,10 +81,7 @@ fun DashboardScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Re-check permissions and ensure the tracking service is running every time the
-    // screen resumes (e.g. after returning from Settings, or after an app update that
-    // killed the previous service instance). startTrackingServiceIfPermitted is
-    // idempotent — it checks permissions and the service handles duplicate onStartCommand
-    // calls gracefully.
+    // screen resumes. startTrackingServiceIfPermitted is idempotent.
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -123,58 +124,88 @@ fun DashboardScreen(
                 CircularProgressIndicator()
             }
         } else if (uiState.permissionsDenied) {
-            // Full-screen recovery: guide the user to grant permissions in system settings.
             PermissionRecoveryScreen(
                 onOpenSettings = onOpenSettings,
                 modifier = Modifier.padding(innerPadding),
             )
         } else {
-            Column(
+            DashboardContent(
+                uiState = uiState,
+                onResolutionChange = viewModel::setChartResolution,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.Top,
-            ) {
-                // Sensor degraded-mode notice (shown when sensor is not the preferred type)
-                if (uiState.sensorType == SensorType.ACCELEROMETER ||
-                    uiState.sensorType == SensorType.NONE
-                ) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    SensorNotice(
-                        sensorType = uiState.sensorType,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-
-                // Today card or first-launch empty state
-                if (uiState.todaySteps == 0) {
-                    FirstLaunchEmptyState(modifier = Modifier.fillMaxWidth())
-                } else {
-                    TodayCard(
-                        steps = uiState.todaySteps,
-                        goal = uiState.dailyGoal,
-                        progressPercent = uiState.progressPercent,
-                        distanceKm = uiState.distanceKm,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Section: Weekly Steps
-                SectionHeader(title = stringResource(R.string.section_weekly_steps))
-                WeeklyStepChart(
-                    daySummaries = uiState.weeklySteps,
-                    goal = uiState.dailyGoal,
-                    todayDate = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+                    .padding(innerPadding),
+            )
         }
+    }
+}
+
+/**
+ * Scrollable content area for the dashboard, composed of the four main sections:
+ * ProgressRing, StreakCounter, TodayStepChart, and WeeklyStepChart.
+ *
+ * Pure presentational — no ViewModel access.
+ *
+ * @param uiState          The current dashboard state to render.
+ * @param onResolutionChange Callback when the user selects a different chart resolution.
+ * @param modifier         Applied to the root [Column].
+ */
+@Composable
+private fun DashboardContent(
+    uiState: DashboardUiState,
+    onResolutionChange: (ChartResolution) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.Top,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Section 1: Progress Ring
+        ProgressRing(
+            steps = uiState.todaySteps,
+            minimumGoal = uiState.minimumGoal,
+            targetGoal = uiState.targetGoal,
+            stretchGoal = uiState.stretchGoal,
+            isRestDay = uiState.isRestDay,
+            modifier = Modifier.size(220.dp),
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Section 2: Streak Counter
+        StreakCounter(
+            streakDays = uiState.streakDays,
+            todayMet = uiState.todayGoalMet,
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Section 3: Today's Step Chart
+        SectionHeader(title = stringResource(R.string.section_today_steps))
+        TodayStepChart(
+            bars = uiState.todayBuckets,
+            resolution = uiState.chartResolution,
+            onResolutionChange = onResolutionChange,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Section 4: Weekly Step Chart
+        SectionHeader(title = stringResource(R.string.section_weekly_steps))
+        WeeklyStepChart(
+            daySummaries = uiState.weeklyDays,
+            goal = uiState.targetGoal,
+            todayDate = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -188,6 +219,105 @@ private fun SectionHeader(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(vertical = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
     )
+}
+
+// ─── Preview functions ────────────────────────────────────────────────────────
+
+private fun previewUiState(
+    steps: Int = 0,
+    streakDays: Int = 0,
+    todayGoalMet: Boolean = false,
+    isRestDay: Boolean = false,
+    chartResolution: ChartResolution = ChartResolution.HOURLY,
+    weeklyDays: List<DaySummary> = emptyList(),
+): DashboardUiState = DashboardUiState(
+    todaySteps = steps,
+    todayDistance = steps * 0.00075,
+    minimumGoal = 5_000,
+    targetGoal = 8_000,
+    stretchGoal = 12_000,
+    isRestDay = isRestDay,
+    streakDays = streakDays,
+    todayGoalMet = todayGoalMet,
+    todayBuckets = emptyList(),
+    chartResolution = chartResolution,
+    weeklyDays = weeklyDays,
+    isLoading = false,
+    permissionsDenied = false,
+)
+
+/** Preview: zero steps, no streak — fresh start of the day. */
+@Preview(showBackground = true, name = "DashboardScreen — Zero steps")
+@Composable
+private fun PreviewDashboardScreenZero() {
+    PodometerTheme(dynamicColor = false) {
+        DashboardContent(
+            uiState = previewUiState(steps = 0),
+            onResolutionChange = {},
+        )
+    }
+}
+
+/** Preview: minimum goal reached with an active streak. */
+@Preview(showBackground = true, name = "DashboardScreen — Minimum goal reached")
+@Composable
+private fun PreviewDashboardScreenMinimum() {
+    PodometerTheme(dynamicColor = false) {
+        DashboardContent(
+            uiState = previewUiState(steps = 5_200, streakDays = 3, todayGoalMet = true),
+            onResolutionChange = {},
+        )
+    }
+}
+
+/** Preview: target goal reached, long streak. */
+@Preview(showBackground = true, name = "DashboardScreen — Target goal reached")
+@Composable
+private fun PreviewDashboardScreenTarget() {
+    PodometerTheme(dynamicColor = false) {
+        DashboardContent(
+            uiState = previewUiState(steps = 8_400, streakDays = 14, todayGoalMet = true),
+            onResolutionChange = {},
+        )
+    }
+}
+
+/** Preview: stretch goal fully reached. */
+@Preview(showBackground = true, name = "DashboardScreen — Stretch goal complete")
+@Composable
+private fun PreviewDashboardScreenStretch() {
+    PodometerTheme(dynamicColor = false) {
+        DashboardContent(
+            uiState = previewUiState(steps = 12_500, streakDays = 30, todayGoalMet = true),
+            onResolutionChange = {},
+        )
+    }
+}
+
+/** Preview: rest day — ring is muted. */
+@Preview(showBackground = true, name = "DashboardScreen — Rest day")
+@Composable
+private fun PreviewDashboardScreenRestDay() {
+    PodometerTheme(dynamicColor = false) {
+        DashboardContent(
+            uiState = previewUiState(steps = 2_000, streakDays = 7, isRestDay = true),
+            onResolutionChange = {},
+        )
+    }
+}
+
+/** Preview: dark theme, active progress. */
+@Preview(showBackground = true, backgroundColor = 0xFF0E1514, name = "DashboardScreen — Dark theme")
+@Composable
+private fun PreviewDashboardScreenDark() {
+    PodometerTheme(darkTheme = true, dynamicColor = false) {
+        DashboardContent(
+            uiState = previewUiState(steps = 6_800, streakDays = 5, todayGoalMet = true),
+            onResolutionChange = {},
+        )
+    }
 }

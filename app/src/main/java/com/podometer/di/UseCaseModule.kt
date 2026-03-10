@@ -2,19 +2,19 @@
 package com.podometer.di
 
 import android.os.Build
-import com.podometer.domain.usecase.ExportDataUseCase
-import com.podometer.domain.usecase.GetStreakUseCase
-import com.podometer.domain.usecase.GetStreakUseCaseImpl
-import com.podometer.domain.usecase.ImportDataUseCase
-import com.podometer.domain.usecase.GetTodayStepsUseCase
-import com.podometer.domain.usecase.GetTodayStepsUseCaseImpl
-import com.podometer.domain.usecase.GetWeeklyStepsUseCase
-import com.podometer.domain.usecase.GetWeeklyStepsUseCaseImpl
 import com.podometer.data.db.StepBucketDao
 import com.podometer.data.db.StepDao
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.data.repository.StepBucketRepository
 import com.podometer.data.repository.StepRepository
+import com.podometer.domain.usecase.ExportDataUseCase
+import com.podometer.domain.usecase.GetStreakUseCase
+import com.podometer.domain.usecase.GetStreakUseCaseImpl
+import com.podometer.domain.usecase.GetTodayStepsUseCase
+import com.podometer.domain.usecase.GetTodayStepsUseCaseImpl
+import com.podometer.domain.usecase.GetWeeklyStepsUseCase
+import com.podometer.domain.usecase.GetWeeklyStepsUseCaseImpl
+import com.podometer.domain.usecase.ImportDataUseCase
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -41,12 +41,25 @@ abstract class UseCaseModule {
     @Singleton
     abstract fun bindGetWeeklyStepsUseCase(impl: GetWeeklyStepsUseCaseImpl): GetWeeklyStepsUseCase
 
-    /** Binds [GetStreakUseCaseImpl] to the [GetStreakUseCase] interface. */
-    @Binds
-    @Singleton
-    abstract fun bindGetStreakUseCase(impl: GetStreakUseCaseImpl): GetStreakUseCase
-
     companion object {
+
+        /**
+         * Provides [GetStreakUseCase] by constructing [GetStreakUseCaseImpl] with
+         * [java.time.LocalDate.now] as the injected today date.
+         *
+         * Using [Provides] instead of [Binds] avoids requiring Hilt to inject
+         * [java.time.LocalDate] (which has no [javax.inject.Inject] constructor).
+         */
+        @Provides
+        @Singleton
+        fun provideGetStreakUseCase(
+            stepDao: StepDao,
+            preferencesManager: PreferencesManager,
+        ): GetStreakUseCase = GetStreakUseCaseImpl(
+            stepDao = stepDao,
+            preferencesManager = preferencesManager,
+        )
+
         /**
          * Provides [ExportDataUseCase] with the device model string resolved at runtime.
          *

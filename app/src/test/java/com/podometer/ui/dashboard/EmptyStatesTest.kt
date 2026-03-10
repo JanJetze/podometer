@@ -1,46 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
-import com.podometer.data.sensor.SensorType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Unit tests verifying the composable-package existence and [DashboardUiState] new fields
+ * Unit tests verifying the composable-package existence and [DashboardUiState] fields
  * for [EmptyStates] functionality.
  *
  * Compose composables cannot be rendered in JVM unit tests, so these tests verify:
- * - The new [DashboardUiState] fields exist with correct default values.
+ * - The [DashboardUiState] fields exist with correct default values.
  * - The [EmptyStatesKt] class is compiled into the expected package.
  */
 class EmptyStatesTest {
 
-    // ─── DashboardUiState new fields ─────────────────────────────────────────
-
-    @Test
-    fun `DashboardUiState default sensorType is STEP_COUNTER`() {
-        val state = DashboardUiState()
-        assertEquals(SensorType.STEP_COUNTER, state.sensorType)
-    }
+    // ─── DashboardUiState fields ──────────────────────────────────────────────
 
     @Test
     fun `DashboardUiState default permissionsDenied is false`() {
         val state = DashboardUiState()
         assertFalse(state.permissionsDenied)
-    }
-
-    @Test
-    fun `DashboardUiState can be created with sensorType ACCELEROMETER`() {
-        val state = DashboardUiState(sensorType = SensorType.ACCELEROMETER)
-        assertEquals(SensorType.ACCELEROMETER, state.sensorType)
-    }
-
-    @Test
-    fun `DashboardUiState can be created with sensorType NONE`() {
-        val state = DashboardUiState(sensorType = SensorType.NONE)
-        assertEquals(SensorType.NONE, state.sensorType)
     }
 
     @Test
@@ -50,13 +31,9 @@ class EmptyStatesTest {
     }
 
     @Test
-    fun `DashboardUiState copy preserves new fields`() {
-        val original = DashboardUiState(
-            sensorType = SensorType.ACCELEROMETER,
-            permissionsDenied = true,
-        )
+    fun `DashboardUiState copy preserves permissionsDenied`() {
+        val original = DashboardUiState(permissionsDenied = true)
         val copy = original.copy(todaySteps = 500)
-        assertEquals(SensorType.ACCELEROMETER, copy.sensorType)
         assertTrue(copy.permissionsDenied)
         assertEquals(500, copy.todaySteps)
     }
