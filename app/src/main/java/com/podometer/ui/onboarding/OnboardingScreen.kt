@@ -52,7 +52,7 @@ internal val ONBOARDING_PERMISSIONS = arrayOf(
  *
  * Displays the app logo, a tagline, plain-language descriptions of each required
  * permission, a privacy callout, and a "Get Started" button that triggers
- * [ActivityResultContracts.RequestMultiplePermissions] for all three runtime
+ * [ActivityResultContracts.RequestMultiplePermissions] for both runtime
  * permissions in a single system dialog sequence.
  *
  * This is a pure presentational composable. ViewModel access and navigation are

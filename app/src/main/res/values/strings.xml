@@ -14,57 +14,8 @@
     <!-- TodayCard labels -->
     <string name="today_distance_format">%1$.1f km</string>
 
-    <!-- ActivityBadge labels -->
-    <string name="activity_walking">Walking</string>
-    <string name="activity_cycling">Cycling</string>
-    <string name="activity_still">Still</string>
-    <string name="cd_activity_currently">Currently %1$s</string>
-
     <!-- Dashboard section headers -->
-    <string name="section_activity_timeline">Activity Timeline</string>
-    <string name="section_transition_log">Transition Log</string>
     <string name="section_weekly_steps">Weekly Steps</string>
-    <string name="section_activities">Activities</string>
-    <string name="section_cycling_sessions">Cycling Sessions</string>
-
-    <!-- Dashboard placeholder text -->
-    <string name="placeholder_timeline">Timeline will appear here</string>
-    <string name="placeholder_transitions">No activity transitions yet</string>
-    <string name="placeholder_weekly">Week chart will appear here</string>
-    <string name="placeholder_activities">No activities detected today</string>
-    <string name="placeholder_cycling">No cycling detected today</string>
-
-    <!-- ActivityTimeline accessibility -->
-    <string name="cd_timeline_no_data">Activity timeline: no activity data available.</string>
-    <string name="cd_timeline_summary">Activity timeline: %1$s</string>
-    <string name="cd_timeline_segment">%1$s from %2$d%% to %3$d%% of the day</string>
-
-    <!-- TransitionLog descriptions -->
-    <string name="transition_started_walking">Started walking</string>
-    <string name="transition_started_cycling">Started cycling</string>
-    <string name="transition_became_still">Became still</string>
-    <string name="transition_override_badge">Override</string>
-    <string name="transition_mark_as_walking">Mark as walking</string>
-    <string name="transition_mark_as_cycling">Mark as cycling</string>
-    <string name="transition_mark_as_still">Mark as still</string>
-    <string name="transition_overridden">Activity overridden</string>
-    <string name="transition_undo">Undo</string>
-    <string name="cd_transition_item">Transition at %1$s: %2$s</string>
-    <string name="cd_transition_override_options">Override options for transition at %1$s</string>
-
-    <!-- CyclingSessionList labels -->
-    <string name="cycling_session_range">%1$s – %2$s · %3$s</string>
-    <string name="cycling_session_ongoing">ongoing</string>
-    <string name="cycling_session_duration_format">%1$d min</string>
-    <string name="cycling_total_duration">Total: %1$s</string>
-    <string name="cycling_override_badge">Override</string>
-    <string name="cd_cycling_session_item">Cycling session from %1$s to %2$s, %3$d minutes</string>
-
-    <!-- ActivityLog labels -->
-    <string name="activity_session_ongoing">ongoing</string>
-    <string name="activity_session_steps">%1$d steps</string>
-    <string name="cd_activity_session_item">%1$s session, %2$s, %3$s</string>
-    <string name="cd_activity_override_options">Override options for session at %1$s</string>
 
     <!-- WeeklyStepChart accessibility -->
     <string name="cd_weekly_chart_summary">Weekly step chart: %1$s</string>
@@ -75,9 +26,6 @@
     <!-- WeeklyStepChart bar detail card -->
     <string name="chart_tooltip_no_data">No data</string>
     <string name="chart_tooltip_steps_distance">%1$s steps \u00B7 %2$.1f km</string>
-    <string name="chart_tooltip_walking">%1$d min walking</string>
-    <string name="chart_tooltip_cycling">%1$d min cycling</string>
-
     <!-- EmptyStates: first launch empty state -->
     <string name="empty_first_launch_message">Start walking! Your steps will appear here.</string>
 
@@ -99,7 +47,7 @@
     <string name="onboarding_permission_sensors_title">Step counting sensor</string>
     <string name="onboarding_permission_sensors_description">Reads the on-device pedometer to count your steps accurately without draining the battery.</string>
     <string name="onboarding_permission_activity_title">Activity recognition</string>
-    <string name="onboarding_permission_activity_description">Detects whether you are walking, cycling, or still so your steps are logged correctly.</string>
+    <string name="onboarding_permission_activity_description">Required by Android to access the step counter sensor and count your steps accurately.</string>
     <string name="onboarding_permission_notifications_title">Step count notification</string>
     <string name="onboarding_permission_notifications_description">Shows a persistent notification with your live step count so you can glance at your progress without opening the app.</string>
     <string name="onboarding_privacy_callout">No internet. No tracking. No Google Play Services.</string>
