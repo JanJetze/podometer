@@ -75,15 +75,6 @@ class StepTrackingService : Service() {
     private var notificationStyleJob: Job? = null
 
     /**
-     * Timestamp (ms) of the most recently processed step event.  Used by
-     * [collectStepEvents] to spread burst step timestamps evenly over the
-     * elapsed interval.
-     *
-     * Reset to `0L` in [onDestroy] alongside the other sensor state.
-     */
-    private var lastStepEventMs: Long = 0L
-
-    /**
      * Stride length in kilometres, read from [PreferencesManager] during
      * [onCreate] and refreshed by the notification ticker every 30 s.
      * Used by [collectStepEvents] for live dashboard distance updates and
@@ -156,7 +147,6 @@ class StepTrackingService : Service() {
             }
         }
         stepSensorManager.stopListening()
-        lastStepEventMs = 0L
         serviceScope.cancel()
         Log.d(TAG, "Service destroyed")
         super.onDestroy()
@@ -199,9 +189,6 @@ class StepTrackingService : Service() {
     private fun collectStepEvents(): Job = serviceScope.launch {
         stepSensorManager.stepEvents.collect { delta ->
             val nowMs = System.currentTimeMillis()
-            val timestamps = spreadTimestamps(lastStepEventMs, nowMs, delta)
-            lastStepEventMs = nowMs
-
             val flushResults = accumulator.addSteps(delta)
             for (flushResult in flushResults) {
                 stepBucketRepository.upsert(flushResult.bucket)
@@ -292,29 +279,6 @@ class StepTrackingService : Service() {
         internal const val TAG = "StepTrackingService"
         private const val NOTIFICATION_CHANNEL_NAME = "Step Tracking"
         private const val NOTIFICATION_UPDATE_INTERVAL_MS = 30_000L
-
-        /**
-         * Distributes [delta] step events evenly between [lastEventMs] and [nowMs],
-         * returning a [LongArray] of size [delta] with strictly ascending timestamps.
-         *
-         * Android's TYPE_STEP_COUNTER sensor delivers steps in batches. Without
-         * spreading, all steps in a burst would share the same timestamp.
-         *
-         * @param lastEventMs Wall-clock time of the previous step event, or `0L` if
-         *   no prior event has been recorded in this service session.
-         * @param nowMs       Wall-clock time of the current event (`System.currentTimeMillis()`).
-         * @param delta       Number of steps to spread (must be >= 1).
-         * @return A [LongArray] of size [delta] with strictly ascending timestamps
-         *         whose last element equals [nowMs].
-         */
-        @VisibleForTesting
-        internal fun spreadTimestamps(lastEventMs: Long, nowMs: Long, delta: Int): LongArray {
-            if (delta == 1) return longArrayOf(nowMs)
-            val rawSpan = if (lastEventMs > 0L) nowMs - lastEventMs else 0L
-            val spanMs = rawSpan.coerceAtLeast(delta.toLong())
-            val intervalMs = spanMs / delta
-            return LongArray(delta) { i -> nowMs - (delta - 1 - i) * intervalMs }
-        }
 
         /**
          * Runs [block] inside [runBlocking] and returns its result. If [block]
