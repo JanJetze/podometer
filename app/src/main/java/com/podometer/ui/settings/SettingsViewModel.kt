@@ -11,6 +11,9 @@ import com.podometer.domain.usecase.ExportDataUseCase
 import com.podometer.domain.usecase.ImportDataUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.IOException
+import java.time.DayOfWeek
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,8 +23,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.IOException
-import javax.inject.Inject
 
 /**
  * Represents the current state of the export operation.
@@ -43,11 +44,16 @@ sealed interface ExportState {
 /**
  * Combined UI state for the Settings screen, including all user preferences.
  *
- * @param dailyStepGoal The user's daily step goal (e.g. 10,000).
+ * @param dailyStepGoal The user's daily step goal (e.g. 10,000). Kept for backward compatibility.
  * @param strideLengthCm Stride length in centimetres for UI display (e.g. 75).
  * @param autoStartEnabled Whether auto-start on boot is enabled.
  * @param notificationStyle The selected notification style ("minimal" or "detailed").
  * @param exportState The current state of the export operation.
+ * @param useTestData Whether to use generated test data instead of real sensor data.
+ * @param minimumStepGoal The minimum (lower-tier) step goal (default 5,000).
+ * @param targetStepGoal The target (middle-tier) step goal (default 8,000).
+ * @param stretchStepGoal The stretch (upper-tier) step goal (default 12,000).
+ * @param restDays The set of [DayOfWeek] values designated as rest days.
  */
 data class SettingsUiState(
     val dailyStepGoal: Int = 10_000,
@@ -56,6 +62,10 @@ data class SettingsUiState(
     val notificationStyle: String = "minimal",
     val exportState: ExportState = ExportState.Idle,
     val useTestData: Boolean = false,
+    val minimumStepGoal: Int = 5_000,
+    val targetStepGoal: Int = 8_000,
+    val stretchStepGoal: Int = 12_000,
+    val restDays: Set<DayOfWeek> = emptySet(),
 )
 
 /**
@@ -95,10 +105,21 @@ class SettingsViewModel @Inject constructor(
             preferencesManager.strideLengthKm(),
             preferencesManager.isAutoStartEnabled(),
         ) { goal, stride, autoStart -> Triple(goal, stride, autoStart) },
-        preferencesManager.notificationStyle(),
-        _exportState,
-        preferencesManager.useTestData(),
-    ) { (dailyStepGoal, strideLengthKm, autoStart), notifStyle, exportState, useTestData ->
+        combine(
+            preferencesManager.notificationStyle(),
+            _exportState,
+            preferencesManager.useTestData(),
+        ) { notifStyle, exportState, useTestData -> Triple(notifStyle, exportState, useTestData) },
+        combine(
+            preferencesManager.minimumStepGoal(),
+            preferencesManager.targetStepGoal(),
+            preferencesManager.stretchStepGoal(),
+        ) { min, target, stretch -> Triple(min, target, stretch) },
+        preferencesManager.restDays(),
+    ) { (dailyStepGoal, strideLengthKm, autoStart),
+        (notifStyle, exportState, useTestData),
+        (minimumGoal, targetGoal, stretchGoal),
+        restDays ->
         SettingsUiState(
             dailyStepGoal = dailyStepGoal,
             strideLengthCm = strideLengthKmToCm(strideLengthKm),
@@ -106,6 +127,10 @@ class SettingsViewModel @Inject constructor(
             notificationStyle = notifStyle,
             exportState = exportState,
             useTestData = useTestData,
+            minimumStepGoal = minimumGoal,
+            targetStepGoal = targetGoal,
+            stretchStepGoal = stretchGoal,
+            restDays = restDays,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -167,6 +192,54 @@ class SettingsViewModel @Inject constructor(
     fun setUseTestData(enabled: Boolean) {
         viewModelScope.launch {
             preferencesManager.setUseTestData(enabled)
+        }
+    }
+
+    /**
+     * Persists the given [goal] as the minimum (lower-tier) step goal.
+     *
+     * The caller is responsible for ensuring the new value satisfies the
+     * ordering constraint minimum < target < stretch before calling this.
+     *
+     * @param goal A positive step goal integer in the range [1, 100_000].
+     */
+    fun setMinimumStepGoal(goal: Int) {
+        viewModelScope.launch {
+            preferencesManager.setMinimumStepGoal(goal)
+        }
+    }
+
+    /**
+     * Persists the given [goal] as the target (middle-tier) step goal.
+     *
+     * @param goal A positive step goal integer in the range [1, 100_000].
+     */
+    fun setTargetStepGoal(goal: Int) {
+        viewModelScope.launch {
+            preferencesManager.setTargetStepGoal(goal)
+        }
+    }
+
+    /**
+     * Persists the given [goal] as the stretch (upper-tier) step goal.
+     *
+     * @param goal A positive step goal integer in the range [1, 100_000].
+     */
+    fun setStretchStepGoal(goal: Int) {
+        viewModelScope.launch {
+            preferencesManager.setStretchStepGoal(goal)
+        }
+    }
+
+    /**
+     * Persists the given set of [days] as rest days.
+     *
+     * @param days The set of [DayOfWeek] values to mark as rest days. Pass an empty set
+     *   to clear all rest days.
+     */
+    fun setRestDays(days: Set<DayOfWeek>) {
+        viewModelScope.launch {
+            preferencesManager.setRestDays(days)
         }
     }
 

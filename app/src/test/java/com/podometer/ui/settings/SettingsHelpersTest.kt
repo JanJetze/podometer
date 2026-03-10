@@ -154,4 +154,73 @@ class SettingsHelpersTest {
         val result = validateStepGoal("5000.5")
         assertNull(result)
     }
+
+    // ─── validateGoalTiers ────────────────────────────────────────────────────
+
+    @Test
+    fun `validateGoalTiers returns null for all invalid inputs`() {
+        assertNull(validateGoalTiers("abc", "8000", "12000"))
+    }
+
+    @Test
+    fun `validateGoalTiers returns null when minimum equals target`() {
+        assertNull(validateGoalTiers("8000", "8000", "12000"))
+    }
+
+    @Test
+    fun `validateGoalTiers returns null when minimum exceeds target`() {
+        assertNull(validateGoalTiers("9000", "8000", "12000"))
+    }
+
+    @Test
+    fun `validateGoalTiers returns null when target equals stretch`() {
+        assertNull(validateGoalTiers("5000", "12000", "12000"))
+    }
+
+    @Test
+    fun `validateGoalTiers returns null when target exceeds stretch`() {
+        assertNull(validateGoalTiers("5000", "13000", "12000"))
+    }
+
+    @Test
+    fun `validateGoalTiers returns null when any value is zero`() {
+        assertNull(validateGoalTiers("0", "8000", "12000"))
+        assertNull(validateGoalTiers("5000", "0", "12000"))
+        assertNull(validateGoalTiers("5000", "8000", "0"))
+    }
+
+    @Test
+    fun `validateGoalTiers returns null when any value exceeds 100000`() {
+        assertNull(validateGoalTiers("5000", "8000", "100001"))
+        assertNull(validateGoalTiers("5000", "100001", "200000"))
+    }
+
+    @Test
+    fun `validateGoalTiers returns GoalTiers for valid strictly increasing goals`() {
+        val result = validateGoalTiers("5000", "8000", "12000")
+        assertEquals(GoalTiers(5000, 8000, 12000), result)
+    }
+
+    @Test
+    fun `validateGoalTiers returns GoalTiers for minimum valid values`() {
+        val result = validateGoalTiers("1", "2", "3")
+        assertEquals(GoalTiers(1, 2, 3), result)
+    }
+
+    @Test
+    fun `validateGoalTiers returns GoalTiers for maximum valid stretch`() {
+        val result = validateGoalTiers("50000", "80000", "100000")
+        assertEquals(GoalTiers(50000, 80000, 100000), result)
+    }
+
+    @Test
+    fun `validateGoalTiers handles leading and trailing whitespace`() {
+        val result = validateGoalTiers("  5000 ", " 8000 ", " 12000  ")
+        assertEquals(GoalTiers(5000, 8000, 12000), result)
+    }
+
+    @Test
+    fun `validateGoalTiers returns null for empty strings`() {
+        assertNull(validateGoalTiers("", "8000", "12000"))
+    }
 }

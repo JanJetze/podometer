@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.settings
 
+import java.time.DayOfWeek
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -178,5 +180,81 @@ class SettingsViewModelTest {
         state = ExportState.Idle
 
         assertEquals(ExportState.Idle, state)
+    }
+
+    // ─── SettingsUiState goal tier defaults ───────────────────────────────────
+
+    @Test
+    fun `SettingsUiState has default minimumStepGoal of 5000`() {
+        val state = SettingsUiState()
+        assertEquals(5_000, state.minimumStepGoal)
+    }
+
+    @Test
+    fun `SettingsUiState has default targetStepGoal of 8000`() {
+        val state = SettingsUiState()
+        assertEquals(8_000, state.targetStepGoal)
+    }
+
+    @Test
+    fun `SettingsUiState has default stretchStepGoal of 12000`() {
+        val state = SettingsUiState()
+        assertEquals(12_000, state.stretchStepGoal)
+    }
+
+    @Test
+    fun `SettingsUiState has default restDays as empty set`() {
+        val state = SettingsUiState()
+        assertTrue(state.restDays.isEmpty())
+    }
+
+    // ─── SettingsUiState goal tier copy ──────────────────────────────────────
+
+    @Test
+    fun `SettingsUiState can hold custom minimumStepGoal`() {
+        val state = SettingsUiState(minimumStepGoal = 3_000)
+        assertEquals(3_000, state.minimumStepGoal)
+    }
+
+    @Test
+    fun `SettingsUiState can hold custom targetStepGoal`() {
+        val state = SettingsUiState(targetStepGoal = 10_000)
+        assertEquals(10_000, state.targetStepGoal)
+    }
+
+    @Test
+    fun `SettingsUiState can hold custom stretchStepGoal`() {
+        val state = SettingsUiState(stretchStepGoal = 15_000)
+        assertEquals(15_000, state.stretchStepGoal)
+    }
+
+    @Test
+    fun `SettingsUiState can hold rest days set with Saturday and Sunday`() {
+        val restDays = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
+        val state = SettingsUiState(restDays = restDays)
+        assertEquals(restDays, state.restDays)
+        assertTrue(state.restDays.contains(DayOfWeek.SATURDAY))
+        assertTrue(state.restDays.contains(DayOfWeek.SUNDAY))
+    }
+
+    @Test
+    fun `SettingsUiState restDays does not contain non-rest day by default`() {
+        val state = SettingsUiState()
+        assertFalse(state.restDays.contains(DayOfWeek.MONDAY))
+    }
+
+    @Test
+    fun `SettingsUiState all seven days can be set as rest days`() {
+        val allDays = DayOfWeek.values().toSet()
+        val state = SettingsUiState(restDays = allDays)
+        assertEquals(7, state.restDays.size)
+        allDays.forEach { day -> assertTrue(state.restDays.contains(day)) }
+    }
+
+    @Test
+    fun `SettingsUiState goal tier invariant minimum less than target less than stretch`() {
+        val state = SettingsUiState(minimumStepGoal = 5_000, targetStepGoal = 8_000, stretchStepGoal = 12_000)
+        assertTrue(state.minimumStepGoal < state.targetStepGoal)
+        assertTrue(state.targetStepGoal < state.stretchStepGoal)
     }
 }

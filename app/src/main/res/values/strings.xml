@@ -77,6 +77,32 @@
     <string name="settings_step_goal_dialog_cancel">Cancel</string>
     <string name="settings_step_goal_dialog_error">Enter a number between 1 and 100,000</string>
 
+    <!-- Settings: Goal tiers -->
+    <string name="settings_goal_tiers_title">Step goal tiers</string>
+    <string name="settings_goal_tiers_description">Set minimum, target, and stretch goals</string>
+    <string name="settings_goal_minimum_label">Minimum</string>
+    <string name="settings_goal_minimum_hint">e.g. 5,000</string>
+    <string name="settings_goal_target_label">Target</string>
+    <string name="settings_goal_target_hint">e.g. 8,000</string>
+    <string name="settings_goal_stretch_label">Stretch</string>
+    <string name="settings_goal_stretch_hint">e.g. 12,000</string>
+    <string name="settings_goal_tiers_dialog_title">Set step goal tiers</string>
+    <string name="settings_goal_tiers_dialog_confirm">Save</string>
+    <string name="settings_goal_tiers_dialog_cancel">Cancel</string>
+    <string name="settings_goal_tiers_dialog_error">Goals must be: minimum &lt; target &lt; stretch (each 1–100,000)</string>
+
+    <!-- Settings: Rest days -->
+    <string name="settings_rest_days_title">Rest days</string>
+    <string name="settings_rest_days_description">Goals are relaxed and streaks preserved on these days</string>
+    <string name="settings_rest_day_mon">Mon</string>
+    <string name="settings_rest_day_tue">Tue</string>
+    <string name="settings_rest_day_wed">Wed</string>
+    <string name="settings_rest_day_thu">Thu</string>
+    <string name="settings_rest_day_fri">Fri</string>
+    <string name="settings_rest_day_sat">Sat</string>
+    <string name="settings_rest_day_sun">Sun</string>
+    <string name="cd_rest_day_chip">%1$s rest day toggle, currently %2$s</string>
+
     <!-- Settings: Calibration section -->
     <string name="settings_section_calibration">Calibration</string>
     <string name="settings_stride_length_title">Stride length</string>

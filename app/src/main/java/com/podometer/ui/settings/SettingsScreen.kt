@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +29,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,12 +52,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.podometer.BuildConfig
 import com.podometer.R
 import com.podometer.ui.theme.PodometerTheme
+import java.time.DayOfWeek
 
 private const val NOTIFICATION_STYLE_MINIMAL = "minimal"
 private const val NOTIFICATION_STYLE_DETAILED = "detailed"
@@ -73,12 +79,16 @@ private const val NOTIFICATION_STYLE_DETAILED = "detailed"
  * @param onSetStrideLengthCm Called with the new stride length (cm) when the slider changes.
  * @param onSetAutoStartEnabled Called when the auto-start switch is toggled.
  * @param onSetNotificationStyle Called with the selected style string when the dropdown changes.
+ * @param onSetMinimumStepGoal Called with the validated minimum step goal when the user confirms.
+ * @param onSetTargetStepGoal Called with the validated target step goal when the user confirms.
+ * @param onSetStretchStepGoal Called with the validated stretch step goal when the user confirms.
+ * @param onSetRestDays Called with the updated set of rest days when a chip is toggled.
  * @param onExportData Called with the SAF URI when the user has selected a save location.
  * @param onResetExportState Called to reset the export state after showing a result.
  * @param onOpenFeedbackUrl Called when the user taps the feedback row to open GitHub Issues.
  * @param modifier Optional [Modifier] for the root [Scaffold].
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     uiState: SettingsUiState,
@@ -87,6 +97,10 @@ fun SettingsScreen(
     onSetStrideLengthCm: (Int) -> Unit,
     onSetAutoStartEnabled: (Boolean) -> Unit,
     onSetNotificationStyle: (String) -> Unit,
+    onSetMinimumStepGoal: (Int) -> Unit = {},
+    onSetTargetStepGoal: (Int) -> Unit = {},
+    onSetStretchStepGoal: (Int) -> Unit = {},
+    onSetRestDays: (Set<DayOfWeek>) -> Unit = {},
     onExportData: (Uri) -> Unit,
     onImportData: (Uri) -> Unit,
     onResetExportState: () -> Unit,
@@ -97,6 +111,7 @@ fun SettingsScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showStepGoalDialog by remember { mutableStateOf(false) }
+    var showGoalTiersDialog by remember { mutableStateOf(false) }
 
     val exportFileName = stringResource(R.string.settings_export_file_name)
     val exportSuccessMessage = stringResource(R.string.settings_export_success)
@@ -158,6 +173,21 @@ fun SettingsScreen(
         )
     }
 
+    if (showGoalTiersDialog) {
+        GoalTiersDialog(
+            currentMinimum = uiState.minimumStepGoal,
+            currentTarget = uiState.targetStepGoal,
+            currentStretch = uiState.stretchStepGoal,
+            onConfirm = { tiers ->
+                onSetMinimumStepGoal(tiers.minimum)
+                onSetTargetStepGoal(tiers.target)
+                onSetStretchStepGoal(tiers.stretch)
+                showGoalTiersDialog = false
+            },
+            onDismiss = { showGoalTiersDialog = false },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -188,11 +218,25 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
             SettingsSectionHeader(text = stringResource(R.string.settings_section_goals))
 
-            SettingRowWithValue(
-                title = stringResource(R.string.settings_daily_step_goal_title),
-                description = stringResource(R.string.settings_daily_step_goal_description),
-                value = uiState.dailyStepGoal.toString(),
-                onClick = { showStepGoalDialog = true },
+            GoalTiersRow(
+                minimum = uiState.minimumStepGoal,
+                target = uiState.targetStepGoal,
+                stretch = uiState.stretchStepGoal,
+                onClick = { showGoalTiersDialog = true },
+            )
+
+            RestDaysRow(
+                title = stringResource(R.string.settings_rest_days_title),
+                description = stringResource(R.string.settings_rest_days_description),
+                restDays = uiState.restDays,
+                onToggleDay = { day ->
+                    val updated = if (day in uiState.restDays) {
+                        uiState.restDays - day
+                    } else {
+                        uiState.restDays + day
+                    }
+                    onSetRestDays(updated)
+                },
             )
 
             // ── Calibration section ────────────────────────────────────────
@@ -604,6 +648,124 @@ private fun SettingInfoRow(
 }
 
 /**
+ * A tappable preference row that displays the current three goal tiers (minimum, target, stretch)
+ * in a compact hierarchy. Tapping the row opens the [GoalTiersDialog].
+ *
+ * @param minimum The current minimum step goal.
+ * @param target The current target step goal.
+ * @param stretch The current stretch step goal.
+ * @param onClick Called when the row is tapped.
+ * @param modifier Optional [Modifier].
+ */
+@Composable
+private fun GoalTiersRow(
+    minimum: Int,
+    target: Int,
+    stretch: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.settings_goal_tiers_title),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                text = stringResource(R.string.settings_goal_tiers_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = stringResource(R.string.settings_goal_minimum_label) + ": $minimum",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+            Text(
+                text = stringResource(R.string.settings_goal_target_label) + ": $target",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = stringResource(R.string.settings_goal_stretch_label) + ": $stretch",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+        }
+    }
+}
+
+/**
+ * A preference row with a row of [FilterChip] toggles for each day of the week.
+ * Selected days are visually distinct and represent rest days.
+ *
+ * @param title The preference title.
+ * @param description Short description of what the preference controls.
+ * @param restDays The currently selected rest days.
+ * @param onToggleDay Called with the [DayOfWeek] when a chip is tapped.
+ * @param modifier Optional [Modifier].
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RestDaysRow(
+    title: String,
+    description: String,
+    restDays: Set<DayOfWeek>,
+    onToggleDay: (DayOfWeek) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dayLabels = listOf(
+        DayOfWeek.MONDAY to stringResource(R.string.settings_rest_day_mon),
+        DayOfWeek.TUESDAY to stringResource(R.string.settings_rest_day_tue),
+        DayOfWeek.WEDNESDAY to stringResource(R.string.settings_rest_day_wed),
+        DayOfWeek.THURSDAY to stringResource(R.string.settings_rest_day_thu),
+        DayOfWeek.FRIDAY to stringResource(R.string.settings_rest_day_fri),
+        DayOfWeek.SATURDAY to stringResource(R.string.settings_rest_day_sat),
+        DayOfWeek.SUNDAY to stringResource(R.string.settings_rest_day_sun),
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            dayLabels.forEach { (day, label) ->
+                val selected = day in restDays
+                val cdState = if (selected) "on" else "off"
+                val cdText = stringResource(R.string.cd_rest_day_chip, label, cdState)
+                FilterChip(
+                    selected = selected,
+                    onClick = { onToggleDay(day) },
+                    label = { Text(text = label, style = MaterialTheme.typography.labelMedium) },
+                    modifier = Modifier.semantics { contentDescription = cdText },
+                )
+            }
+        }
+    }
+}
+
+/**
  * AlertDialog for entering a new daily step goal.
  *
  * Contains a number-input [OutlinedTextField]. The confirm button is only enabled
@@ -654,9 +816,96 @@ private fun StepGoalDialog(
     )
 }
 
+/**
+ * AlertDialog for entering the three step goal tiers (minimum, target, stretch).
+ *
+ * All three fields are number inputs. The confirm button is only enabled when
+ * [validateGoalTiers] returns a non-null [GoalTiers] (i.e. all three values are
+ * in range and satisfy the ordering: minimum < target < stretch).
+ *
+ * @param currentMinimum The current minimum step goal, pre-populated in the field.
+ * @param currentTarget The current target step goal, pre-populated in the field.
+ * @param currentStretch The current stretch step goal, pre-populated in the field.
+ * @param onConfirm Called with the validated [GoalTiers] when the user confirms.
+ * @param onDismiss Called when the dialog is dismissed without confirmation.
+ */
+@Composable
+private fun GoalTiersDialog(
+    currentMinimum: Int,
+    currentTarget: Int,
+    currentStretch: Int,
+    onConfirm: (GoalTiers) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var minimumInput by remember { mutableStateOf(currentMinimum.toString()) }
+    var targetInput by remember { mutableStateOf(currentTarget.toString()) }
+    var stretchInput by remember { mutableStateOf(currentStretch.toString()) }
+    val tiers = validateGoalTiers(minimumInput, targetInput, stretchInput)
+    val isError = tiers == null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.settings_goal_tiers_dialog_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = minimumInput,
+                    onValueChange = { minimumInput = it },
+                    label = { Text(text = stringResource(R.string.settings_goal_minimum_label)) },
+                    placeholder = { Text(text = stringResource(R.string.settings_goal_minimum_hint)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    isError = isError,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = targetInput,
+                    onValueChange = { targetInput = it },
+                    label = { Text(text = stringResource(R.string.settings_goal_target_label)) },
+                    placeholder = { Text(text = stringResource(R.string.settings_goal_target_hint)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    isError = isError,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = stretchInput,
+                    onValueChange = { stretchInput = it },
+                    label = { Text(text = stringResource(R.string.settings_goal_stretch_label)) },
+                    placeholder = { Text(text = stringResource(R.string.settings_goal_stretch_hint)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    isError = isError,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (isError) {
+                    Text(
+                        text = stringResource(R.string.settings_goal_tiers_dialog_error),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (tiers != null) onConfirm(tiers) },
+                enabled = tiers != null,
+            ) {
+                Text(text = stringResource(R.string.settings_goal_tiers_dialog_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.settings_goal_tiers_dialog_cancel))
+            }
+        },
+    )
+}
+
 // ─── Previews ────────────────────────────────────────────────────────────────
 
-/** Preview: Settings screen in idle state — all sections visible. */
+/** Preview: Settings screen in idle state — all sections visible with default goal tiers. */
 @Preview(showBackground = true, name = "Settings - Idle")
 @Composable
 private fun SettingsScreenIdlePreview() {
@@ -667,6 +916,34 @@ private fun SettingsScreenIdlePreview() {
                 strideLengthCm = 75,
                 autoStartEnabled = true,
                 notificationStyle = NOTIFICATION_STYLE_MINIMAL,
+                exportState = ExportState.Idle,
+                minimumStepGoal = 5_000,
+                targetStepGoal = 8_000,
+                stretchStepGoal = 12_000,
+            ),
+            onNavigateBack = {},
+            onSetDailyStepGoal = {},
+            onSetStrideLengthCm = {},
+            onSetAutoStartEnabled = {},
+            onSetNotificationStyle = {},
+            onExportData = {},
+            onImportData = {},
+            onResetExportState = {},
+        )
+    }
+}
+
+/** Preview: Settings screen with weekend rest days configured. */
+@Preview(showBackground = true, name = "Settings - Weekend Rest Days")
+@Composable
+private fun SettingsScreenWeekendRestDaysPreview() {
+    PodometerTheme {
+        SettingsScreen(
+            uiState = SettingsUiState(
+                minimumStepGoal = 5_000,
+                targetStepGoal = 8_000,
+                stretchStepGoal = 12_000,
+                restDays = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY),
                 exportState = ExportState.Idle,
             ),
             onNavigateBack = {},
@@ -798,6 +1075,92 @@ private fun StepGoalDialogLowPreview() {
             currentGoal = 1_000,
             onConfirm = {},
             onDismiss = {},
+        )
+    }
+}
+
+/** Preview: GoalTiersDialog with default valid values pre-populated. */
+@Preview(showBackground = true, name = "GoalTiersDialog - Default Values")
+@Composable
+private fun GoalTiersDialogDefaultPreview() {
+    PodometerTheme {
+        GoalTiersDialog(
+            currentMinimum = 5_000,
+            currentTarget = 8_000,
+            currentStretch = 12_000,
+            onConfirm = {},
+            onDismiss = {},
+        )
+    }
+}
+
+/** Preview: GoalTiersDialog showing the error state when goals are not strictly ordered. */
+@Preview(showBackground = true, name = "GoalTiersDialog - Invalid (Error State)")
+@Composable
+private fun GoalTiersDialogInvalidPreview() {
+    PodometerTheme {
+        GoalTiersDialog(
+            currentMinimum = 8_000,
+            currentTarget = 5_000,
+            currentStretch = 12_000,
+            onConfirm = {},
+            onDismiss = {},
+        )
+    }
+}
+
+/** Preview: GoalTiersRow with default goal tiers showing tier hierarchy. */
+@Preview(showBackground = true, name = "GoalTiersRow - Default Tiers")
+@Composable
+private fun GoalTiersRowPreview() {
+    PodometerTheme {
+        GoalTiersRow(
+            minimum = 5_000,
+            target = 8_000,
+            stretch = 12_000,
+            onClick = {},
+        )
+    }
+}
+
+/** Preview: RestDaysRow with no days selected (no rest days). */
+@Preview(showBackground = true, name = "RestDaysRow - No Rest Days")
+@Composable
+private fun RestDaysRowNoSelectionPreview() {
+    PodometerTheme {
+        RestDaysRow(
+            title = "Rest days",
+            description = "Goals are relaxed on these days",
+            restDays = emptySet(),
+            onToggleDay = {},
+        )
+    }
+}
+
+/** Preview: RestDaysRow with weekend days selected as rest days. */
+@Preview(showBackground = true, name = "RestDaysRow - Weekend Rest Days")
+@Composable
+private fun RestDaysRowWeekendPreview() {
+    PodometerTheme {
+        RestDaysRow(
+            title = "Rest days",
+            description = "Goals are relaxed on these days",
+            restDays = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY),
+            onToggleDay = {},
+        )
+    }
+}
+
+/** Preview: RestDaysRow with all days selected as rest days. */
+@Preview(showBackground = true, name = "RestDaysRow - All Days Rest")
+@Composable
+private fun RestDaysRowAllDaysPreview() {
+    PodometerTheme {
+        RestDaysRow(
+            title = "Rest days",
+            description = "Goals are relaxed on these days",
+            restDays = DayOfWeek.values().toSet(),
+            onToggleDay = {},
         )
     }
 }
