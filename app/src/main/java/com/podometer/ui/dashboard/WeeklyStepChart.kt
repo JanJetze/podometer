@@ -116,19 +116,19 @@ fun computeGoalFraction(goal: Int, maxSteps: Int): Float {
 }
 
 /**
- * Builds 7 [ChartBar]s for the rolling 7-day window ending on [todayDate] (inclusive).
+ * Builds 7 [ChartBar]s for the ISO calendar week (Monday–Sunday) containing [todayDate].
  *
- * The window spans the 6 days prior to [todayDate] plus today itself, ordered oldest-first.
- * Days without a matching [DaySummary] entry are represented as placeholder bars with
- * zero steps and `isPlaceholder = true`.
+ * Days are ordered Monday-first through Sunday-last. Days after [todayDate] (future days
+ * within the same week) are represented as placeholder bars with zero steps and
+ * `isPlaceholder = true`. Days without a matching [DaySummary] entry are also placeholders.
  *
  * The Y-axis ceiling is `max(goal, maxSteps)` so bars above the goal are always
  * fully visible within the chart area.
  *
  * @param daySummaries List of per-day summaries (may be empty or contain fewer than 7 entries).
  * @param goal         User's daily step goal.
- * @param todayDate    Today's date in "yyyy-MM-dd" format; the window ends on this date.
- * @return A list of exactly 7 [ChartBar]s ordered oldest-day-first to today-last.
+ * @param todayDate    Today's date in "yyyy-MM-dd" format; determines the ISO week window.
+ * @return A list of exactly 7 [ChartBar]s ordered Monday-first to Sunday-last.
  */
 fun buildChartBars(
     daySummaries: List<DaySummary>,
@@ -136,8 +136,9 @@ fun buildChartBars(
     todayDate: String,
 ): List<ChartBar> {
     val today = LocalDate.parse(todayDate, DATE_FORMATTER)
-    // Rolling 7-day window: 6 days ago through today
-    val windowDates = (6L downTo 0L).map { today.minusDays(it) }
+    // ISO week: Monday through Sunday of the week containing today
+    val monday = today.with(DayOfWeek.MONDAY)
+    val windowDates = (0L..6L).map { monday.plusDays(it) }
 
     // Index summaries by date string for O(1) lookup
     val summaryByDate: Map<String, DaySummary> = daySummaries.associateBy { it.date }
@@ -153,8 +154,9 @@ fun buildChartBars(
         val summary = summaryByDate[dateStr]
         val dayLabel = DAY_LABELS[date.dayOfWeek] ?: "?"
         val isToday = dateStr == todayDate
+        val isFuture = date.isAfter(today)
 
-        if (summary == null) {
+        if (summary == null || isFuture) {
             ChartBar(
                 date = dateStr,
                 dayLabel = dayLabel,
@@ -224,7 +226,7 @@ fun formatChartDate(dateStr: String): String {
  * 7-day vertical bar chart displaying daily step counts with tap-to-reveal details.
  *
  * Features:
- * - 7 vertical bars, one per day (rolling 7-day window ending today)
+ * - 7 vertical bars, one per day (Monday–Sunday of the ISO week containing today)
  * - Tap any bar to reveal a detail card showing steps, distance, and activity time
  * - Today's bar has a highlighted outline in [MaterialTheme.colorScheme.primary]
  * - Y-axis auto-scaled to `max(goal, maxSteps)` so bars above goal are never clipped

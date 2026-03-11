@@ -15,8 +15,11 @@ fun interface GetWeeklyStepsUseCase {
 }
 
 /**
- * Returns a [Flow] of [List<DaySummary>] covering the current calendar week
- * (Monday through today).
+ * Returns a [Flow] of [List<DaySummary>] covering the full current ISO calendar week
+ * (Monday through Sunday).
+ *
+ * Future days within the week will have no data in the repository, which is fine —
+ * the chart renders them as empty placeholder bars.
  *
  * Maps DB [com.podometer.data.db.DailySummary] entities to domain
  * [DaySummary] models, converting [totalDistance] to [DaySummary.totalDistanceKm].
@@ -29,10 +32,11 @@ class GetWeeklyStepsUseCaseImpl @Inject constructor(
 
     override operator fun invoke(): Flow<List<DaySummary>> {
         val today = LocalDate.now()
-        // ISO week starts on Monday (day-of-week 1)
-        val startOfWeek = today.minusDays((today.dayOfWeek.value - 1).toLong())
-        val startDate = startOfWeek.format(formatter)
-        val endDate = today.format(formatter)
+        // ISO week: Monday through Sunday of the week containing today
+        val monday = today.with(java.time.DayOfWeek.MONDAY)
+        val sunday = monday.plusDays(6)
+        val startDate = monday.format(formatter)
+        val endDate = sunday.format(formatter)
 
         return stepRepository.getWeeklyDailySummaries(startDate, endDate).map { dbList ->
             dbList.map { db ->
