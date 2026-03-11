@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -12,9 +15,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -159,32 +167,70 @@ fun ProgressRing(
 
     val tierAngles = computeTierSweepAngles(steps, minimumGoal, targetGoal, stretchGoal)
 
+    // Spring-based sweep animations for a more natural, physical feel.
+    val sweepSpec = spring<Float>(dampingRatio = 0.7f, stiffness = 200f)
     val animatedMin by animateFloatAsState(
         targetValue = tierAngles.minimumSweep,
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = sweepSpec,
         label = "ringMinimum",
     )
     val animatedTarget by animateFloatAsState(
         targetValue = tierAngles.targetSweep,
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = sweepSpec,
         label = "ringTarget",
     )
     val animatedStretch by animateFloatAsState(
         targetValue = tierAngles.stretchSweep,
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = sweepSpec,
         label = "ringStretch",
     )
 
-    val minimumColor = ringColors.minimum.copy(alpha = alpha)
-    val targetColor = ringColors.target.copy(alpha = alpha)
-    val stretchColor = ringColors.stretch.copy(alpha = alpha)
+    // Smooth color transitions when crossing tier boundaries.
+    val colorSpec = tween<Color>(durationMillis = RING_ANIMATION_DURATION_MS)
+    val minimumColor by animateColorAsState(
+        targetValue = ringColors.minimum.copy(alpha = alpha),
+        animationSpec = colorSpec,
+        label = "colorMinimum",
+    )
+    val targetColor by animateColorAsState(
+        targetValue = ringColors.target.copy(alpha = alpha),
+        animationSpec = colorSpec,
+        label = "colorTarget",
+    )
+    val stretchColor by animateColorAsState(
+        targetValue = ringColors.stretch.copy(alpha = alpha),
+        animationSpec = colorSpec,
+        label = "colorStretch",
+    )
+
+    // Pulse/scale animation when a tier boundary is first crossed.
+    val currentTier = resolveGoalTier(steps, minimumGoal, targetGoal, stretchGoal)
+    var previousTier by remember { mutableStateOf(currentTier) }
+    val pulseScale = remember { Animatable(1f) }
+
+    LaunchedEffect(currentTier) {
+        if (hasNewTierBeenReached(previousTier, currentTier)) {
+            // Scale up then settle back to normal — a brief, rewarding pulse.
+            pulseScale.animateTo(
+                targetValue = 1.06f,
+                animationSpec = tween(durationMillis = TIER_PULSE_DURATION_MS / 2),
+            )
+            pulseScale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.4f, stiffness = 300f),
+            )
+        }
+        previousTier = currentTier
+    }
 
     val accessibilityText = progressRingContentDescription(steps, stretchGoal)
 
     val density = LocalDensity.current
 
     Box(
-        modifier = modifier.semantics { contentDescription = accessibilityText },
+        modifier = modifier
+            .scale(pulseScale.value)
+            .semantics { contentDescription = accessibilityText },
         contentAlignment = Alignment.Center,
     ) {
         ProgressRingCanvas(

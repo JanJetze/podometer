@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,14 +30,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -144,6 +152,10 @@ fun DashboardScreen(
  * Scrollable content area for the dashboard, composed of the four main sections:
  * ProgressRing, StreakCounter, TodayStepChart, and WeeklyStepChart.
  *
+ * Each section enters with a staggered fade-in + slide-up animation when the content first
+ * becomes visible after loading completes. The stagger delay between sections is
+ * [CARD_STAGGER_DELAY_MS] milliseconds, giving a sequential reveal feel.
+ *
  * Pure presentational — no ViewModel access.
  *
  * @param uiState          The current dashboard state to render.
@@ -156,6 +168,27 @@ private fun DashboardContent(
     onResolutionChange: (ChartResolution) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Four visibility flags — one per dashboard section — driven by a LaunchedEffect
+    // that fires them in a staggered sequence on first composition.
+    var ringVisible by remember { mutableStateOf(false) }
+    var streakVisible by remember { mutableStateOf(false) }
+    var todayChartVisible by remember { mutableStateOf(false) }
+    var weeklyChartVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        ringVisible = true
+        delay(CARD_STAGGER_DELAY_MS.toLong())
+        streakVisible = true
+        delay(CARD_STAGGER_DELAY_MS.toLong())
+        todayChartVisible = true
+        delay(CARD_STAGGER_DELAY_MS.toLong())
+        weeklyChartVisible = true
+    }
+
+    // Shared entrance spec: fade in + slide up from 20px below final position.
+    val enterTransition = fadeIn(tween(durationMillis = 220)) +
+        slideInVertically(tween(durationMillis = 220)) { 20 }
+
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -166,44 +199,68 @@ private fun DashboardContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Section 1: Progress Ring
-        ProgressRing(
-            steps = uiState.todaySteps,
-            minimumGoal = uiState.minimumGoal,
-            targetGoal = uiState.targetGoal,
-            stretchGoal = uiState.stretchGoal,
-            isRestDay = uiState.isRestDay,
-            modifier = Modifier.size(220.dp),
-        )
+        AnimatedVisibility(
+            visible = ringVisible,
+            enter = enterTransition,
+        ) {
+            ProgressRing(
+                steps = uiState.todaySteps,
+                minimumGoal = uiState.minimumGoal,
+                targetGoal = uiState.targetGoal,
+                stretchGoal = uiState.stretchGoal,
+                isRestDay = uiState.isRestDay,
+                modifier = Modifier.size(220.dp),
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         // Section 2: Streak Counter
-        StreakCounter(
-            streakDays = uiState.streakDays,
-            todayMet = uiState.todayGoalMet,
-        )
+        AnimatedVisibility(
+            visible = streakVisible,
+            enter = enterTransition,
+        ) {
+            StreakCounter(
+                streakDays = uiState.streakDays,
+                todayMet = uiState.todayGoalMet,
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
         // Section 3: Today's Step Chart
-        SectionHeader(title = stringResource(R.string.section_today_steps))
-        TodayStepChart(
-            bars = uiState.todayBuckets,
-            resolution = uiState.chartResolution,
-            onResolutionChange = onResolutionChange,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        AnimatedVisibility(
+            visible = todayChartVisible,
+            enter = enterTransition,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SectionHeader(title = stringResource(R.string.section_today_steps))
+                TodayStepChart(
+                    bars = uiState.todayBuckets,
+                    resolution = uiState.chartResolution,
+                    onResolutionChange = onResolutionChange,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
         // Section 4: Weekly Step Chart
-        SectionHeader(title = stringResource(R.string.section_weekly_steps))
-        WeeklyStepChart(
-            daySummaries = uiState.weeklyDays,
-            goal = uiState.targetGoal,
-            todayDate = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
-            modifier = Modifier.fillMaxWidth(),
-        )
+        AnimatedVisibility(
+            visible = weeklyChartVisible,
+            enter = enterTransition,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SectionHeader(title = stringResource(R.string.section_weekly_steps))
+                WeeklyStepChart(
+                    daySummaries = uiState.weeklyDays,
+                    goal = uiState.targetGoal,
+                    todayDate = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
     }
