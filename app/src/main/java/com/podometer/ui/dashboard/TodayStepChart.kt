@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.podometer.ui.theme.LocalGoalRingColors
 import com.podometer.ui.theme.PodometerTheme
 import java.time.Instant
 import java.time.ZoneId
@@ -190,7 +191,7 @@ fun TodayStepChart(
             val currentBucketStart = (nowMs / bucketMs) * bucketMs
 
             val primaryColor = MaterialTheme.colorScheme.primary
-            val highlightColor = MaterialTheme.colorScheme.tertiary
+            val highlightColor = LocalGoalRingColors.current.target
             val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
             val density = LocalDensity.current
