@@ -182,6 +182,70 @@ class TodayStepChartTest {
         assertEquals(2, labels[1].first)
     }
 
+    // ─── labelIntervalHoursFor ────────────────────────────────────────────────
+
+    @Test
+    fun `labelIntervalHoursFor HOURLY returns 1`() {
+        assertEquals(1, labelIntervalHoursFor(ChartResolution.HOURLY))
+    }
+
+    @Test
+    fun `labelIntervalHoursFor THIRTY_MIN returns 2`() {
+        assertEquals(2, labelIntervalHoursFor(ChartResolution.THIRTY_MIN))
+    }
+
+    @Test
+    fun `labelIntervalHoursFor FIFTEEN_MIN returns 2`() {
+        assertEquals(2, labelIntervalHoursFor(ChartResolution.FIFTEEN_MIN))
+    }
+
+    @Test
+    fun `labelIntervalHoursFor FIVE_MIN returns 3`() {
+        assertEquals(3, labelIntervalHoursFor(ChartResolution.FIVE_MIN))
+    }
+
+    // ─── formatTooltipTimeRange ───────────────────────────────────────────────
+
+    @Test
+    fun `formatTooltipTimeRange returns non-blank string`() {
+        val hourAlignedBase = 1_699_999_200_000L
+        val bar = StepBar(startTime = hourAlignedBase, stepCount = 245)
+        val result = formatTooltipTimeRange(bar, ChartResolution.THIRTY_MIN)
+        assertTrue("Tooltip time range should not be blank", result.isNotBlank())
+    }
+
+    @Test
+    fun `formatTooltipTimeRange contains step count`() {
+        val hourAlignedBase = 1_699_999_200_000L
+        val bar = StepBar(startTime = hourAlignedBase, stepCount = 245)
+        val result = formatTooltipTimeRange(bar, ChartResolution.THIRTY_MIN)
+        assertTrue("Tooltip should contain step count '245'", result.contains("245"))
+    }
+
+    @Test
+    fun `formatTooltipTimeRange contains 'steps' keyword`() {
+        val hourAlignedBase = 1_699_999_200_000L
+        val bar = StepBar(startTime = hourAlignedBase, stepCount = 100)
+        val result = formatTooltipTimeRange(bar, ChartResolution.FIFTEEN_MIN)
+        assertTrue("Tooltip should contain 'steps'", result.contains("steps", ignoreCase = true))
+    }
+
+    @Test
+    fun `formatTooltipTimeRange contains separator between start and end time`() {
+        val hourAlignedBase = 1_699_999_200_000L
+        val bar = StepBar(startTime = hourAlignedBase, stepCount = 50)
+        val result = formatTooltipTimeRange(bar, ChartResolution.HOURLY)
+        assertTrue("Tooltip time range should contain '–' or '-' separator", result.contains("–") || result.contains("-"))
+    }
+
+    @Test
+    fun `formatTooltipTimeRange for 1 step uses singular word`() {
+        val hourAlignedBase = 1_699_999_200_000L
+        val bar = StepBar(startTime = hourAlignedBase, stepCount = 1)
+        val result = formatTooltipTimeRange(bar, ChartResolution.FIVE_MIN)
+        assertTrue("Tooltip for 1 step should contain 'step'", result.contains("step", ignoreCase = true))
+    }
+
     // ─── ChartResolution enum ─────────────────────────────────────────────────
 
     @Test

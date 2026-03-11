@@ -1,31 +1,43 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package com.podometer.ui.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.podometer.ui.theme.LocalGoalRingColors
 import com.podometer.ui.theme.PodometerTheme
 import java.time.Instant
@@ -59,6 +71,9 @@ enum class ChartResolution(val minutes: Int, val label: String) {
 
 private val TIME_LABEL_FORMATTER: DateTimeFormatter =
     DateTimeFormatter.ofPattern("ha").withZone(ZoneId.systemDefault())
+
+private val TOOLTIP_TIME_FORMATTER: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("h:mma").withZone(ZoneId.systemDefault())
 
 /**
  * Aggregates a list of 5-minute [StepBar]s into wider buckets defined by [resolution].
@@ -132,6 +147,43 @@ fun buildTimeLabels(
     }
 }
 
+/**
+ * Returns the X-axis label interval in hours for the given [resolution].
+ *
+ * - [ChartResolution.HOURLY]: every 1 hour (every bar)
+ * - [ChartResolution.THIRTY_MIN]: every 2 hours (every 4 bars)
+ * - [ChartResolution.FIFTEEN_MIN]: every 2 hours (every 8 bars)
+ * - [ChartResolution.FIVE_MIN]: every 3 hours (every 36 bars)
+ *
+ * @param resolution The current chart resolution.
+ * @return Number of hours between consecutive X-axis labels.
+ */
+fun labelIntervalHoursFor(resolution: ChartResolution): Int = when (resolution) {
+    ChartResolution.HOURLY -> 1
+    ChartResolution.THIRTY_MIN -> 2
+    ChartResolution.FIFTEEN_MIN -> 2
+    ChartResolution.FIVE_MIN -> 3
+}
+
+/**
+ * Formats a tooltip string for a single [StepBar], showing the time range and step count.
+ *
+ * Example output: "8:00am–8:30am: 245 steps"
+ *
+ * @param bar        The bar to format.
+ * @param resolution The chart resolution, used to compute the end time of the bucket.
+ * @return A human-readable string like "8:00am–8:30am: 245 steps" (or "1 step" when count = 1).
+ */
+fun formatTooltipTimeRange(bar: StepBar, resolution: ChartResolution): String {
+    val bucketMs = resolution.minutes.toLong() * 60_000L
+    val start = Instant.ofEpochMilli(bar.startTime)
+    val end = Instant.ofEpochMilli(bar.startTime + bucketMs)
+    val startLabel = TOOLTIP_TIME_FORMATTER.format(start).lowercase()
+    val endLabel = TOOLTIP_TIME_FORMATTER.format(end).lowercase()
+    val stepWord = if (bar.stepCount == 1) "step" else "steps"
+    return "$startLabel\u2013$endLabel: ${bar.stepCount} $stepWord"
+}
+
 // ─── Composable ───────────────────────────────────────────────────────────────
 
 /**
@@ -141,10 +193,12 @@ fun buildTimeLabels(
  * - Adjustable resolution via chip group: 5m, 15m, 30m, 1h
  * - Bars coloured with [MaterialTheme.colorScheme.primary]
  * - The current time bucket's bar is highlighted with a distinct colour
- * - X-axis time labels every few hours
+ * - Flush bars (no gaps) forming a continuous histogram
+ * - Canvas-drawn X-axis time labels with resolution-aware spacing
+ * - Tap a bar to show a tooltip with the time range and step count
  * - Empty-state message when no data is available
  *
- * This is a purely presentational composable — it holds no internal state.
+ * This is a purely presentational composable. The selected-bar state is held internally.
  *
  * @param bars               5-minute-aligned step buckets for today (may be empty).
  * @param resolution         Currently selected chart resolution.
@@ -194,8 +248,14 @@ fun TodayStepChart(
             val primaryColor = MaterialTheme.colorScheme.primary
             val highlightColor = LocalGoalRingColors.current.target
             val trackColor = MaterialTheme.colorScheme.surfaceVariant
+            val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
             val density = LocalDensity.current
+
+            var selectedBarIndex by remember(resolution) { mutableStateOf<Int?>(null) }
+
+            val intervalHours = labelIntervalHoursFor(resolution)
+            val timeLabels = buildTimeLabels(aggregated, resolution, intervalHours = intervalHours)
 
             TodayStepChartCanvas(
                 bars = aggregated,
@@ -204,23 +264,41 @@ fun TodayStepChart(
                 primaryColor = primaryColor,
                 highlightColor = highlightColor,
                 trackColor = trackColor,
+                selectedBarIndex = selectedBarIndex,
+                onBarTap = { index ->
+                    selectedBarIndex = if (selectedBarIndex == index) null else index
+                },
                 density = density,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(160.dp),
             )
 
-            // X-axis labels: use 3-hour intervals for 5m resolution to reduce crowding
-            val labelIntervalHours = if (resolution == ChartResolution.FIVE_MIN) 3 else 2
-            val timeLabels = buildTimeLabels(aggregated, resolution, intervalHours = labelIntervalHours)
-            if (timeLabels.isNotEmpty()) {
-                TodayStepChartXAxis(
-                    bars = aggregated,
-                    timeLabels = timeLabels,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 2.dp),
-                )
+            TodayStepChartXAxisCanvas(
+                bars = aggregated,
+                timeLabels = timeLabels,
+                labelColor = labelColor,
+                density = density,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(16.dp),
+            )
+
+            AnimatedVisibility(
+                visible = selectedBarIndex != null && selectedBarIndex!! in aggregated.indices,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                val idx = selectedBarIndex
+                if (idx != null && idx in aggregated.indices) {
+                    StepBarTooltip(
+                        bar = aggregated[idx],
+                        resolution = resolution,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    )
+                }
             }
         }
     }
@@ -229,12 +307,17 @@ fun TodayStepChart(
 /**
  * Canvas that draws the vertical step bars for [TodayStepChart].
  *
+ * Bars are flush (no gaps), forming a continuous histogram. The selected bar is drawn with
+ * a slightly lower opacity overlay to indicate selection. Tapping a bar invokes [onBarTap].
+ *
  * @param bars               Aggregated [StepBar]s to render.
  * @param ceiling            Y-axis maximum (equals max step count).
  * @param currentBucketStart Epoch ms of the current time bucket; used to highlight that bar.
  * @param primaryColor       Default bar colour.
  * @param highlightColor     Colour used for the current time bucket bar.
  * @param trackColor         Background fill for empty/zero bars.
+ * @param selectedBarIndex   Index of the currently selected bar, or null if none.
+ * @param onBarTap           Called with the tapped bar index when the user taps the canvas.
  * @param density            Density for dp-to-px conversions.
  * @param modifier           Applied to the [Canvas].
  */
@@ -246,35 +329,45 @@ private fun TodayStepChartCanvas(
     primaryColor: Color,
     highlightColor: Color,
     trackColor: Color,
+    selectedBarIndex: Int?,
+    onBarTap: (Int) -> Unit,
     density: androidx.compose.ui.unit.Density,
     modifier: Modifier = Modifier,
 ) {
-    val cornerRadiusDp = 3.dp
-    val barGapDp = 2.dp
+    val cornerRadiusDp = 1.dp
     val minBarHeightDp = 3.dp
 
     val cornerRadiusPx = with(density) { cornerRadiusDp.toPx() }
-    val barGapPx = with(density) { barGapDp.toPx() }
     val minBarHeightPx = with(density) { minBarHeightDp.toPx() }
 
-    Canvas(modifier = modifier) {
+    Canvas(
+        modifier = modifier.pointerInput(bars) {
+            detectTapGestures { offset ->
+                if (bars.isEmpty()) return@detectTapGestures
+                val barWidth = size.width.toFloat() / bars.size
+                val index = (offset.x / barWidth).toInt().coerceIn(0, bars.size - 1)
+                onBarTap(index)
+            }
+        },
+    ) {
         val totalWidth = size.width
         val totalHeight = size.height
         val barCount = bars.size
         if (barCount == 0) return@Canvas
 
-        val totalGapWidth = barGapPx * (barCount - 1)
-        val barWidth = (totalWidth - totalGapWidth) / barCount
+        val barWidth = totalWidth / barCount
 
         bars.forEachIndexed { index, bar ->
-            val barLeft = index * (barWidth + barGapPx)
+            val barLeft = index * barWidth
             val isCurrentBucket = bar.startTime == currentBucketStart
-            val barColor = if (isCurrentBucket) highlightColor else primaryColor
+            val isSelected = index == selectedBarIndex
+            val baseColor = if (isCurrentBucket) highlightColor else primaryColor
+            val barColor = if (isSelected) baseColor.copy(alpha = baseColor.alpha * 0.6f) else baseColor
 
             if (ceiling == 0 || bar.stepCount == 0) {
                 // Draw a minimal placeholder at the bottom
                 drawRoundRect(
-                    color = trackColor,
+                    color = if (isSelected) trackColor.copy(alpha = 0.6f) else trackColor,
                     topLeft = Offset(barLeft, totalHeight - minBarHeightPx),
                     size = Size(barWidth, minBarHeightPx),
                     cornerRadius = CornerRadius(cornerRadiusPx),
@@ -296,39 +389,74 @@ private fun TodayStepChartCanvas(
 }
 
 /**
- * X-axis label row for [TodayStepChart], placing time strings under their corresponding bars.
+ * Canvas-based X-axis label row for [TodayStepChart].
  *
- * @param bars       Aggregated bars (defines the number of columns).
+ * Draws text labels at the left edge of the corresponding bars, using absolute pixel positions
+ * that match the bar canvas layout. This avoids the inaccuracy of weight-based Row spacers.
+ *
+ * @param bars       Aggregated bars (defines the number of columns and bar width).
  * @param timeLabels List of (barIndex, label) pairs indicating where to display labels.
- * @param modifier   Applied to the [Row].
+ * @param labelColor Colour for the label text.
+ * @param density    Used for sp-to-px text size conversion.
+ * @param modifier   Applied to the [Canvas].
  */
 @Composable
-private fun TodayStepChartXAxis(
+private fun TodayStepChartXAxisCanvas(
     bars: List<StepBar>,
     timeLabels: List<Pair<Int, String>>,
+    labelColor: Color,
+    density: androidx.compose.ui.unit.Density,
     modifier: Modifier = Modifier,
 ) {
-    val labelMap = timeLabels.toMap()
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        bars.forEachIndexed { index, _ ->
-            val label = labelMap[index]
-            if (label != null) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Visible,
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
-            }
+    val labelSizePx = with(density) { 10.sp.toPx() }
+    val labelColorArgb = android.graphics.Color.argb(
+        (labelColor.alpha * 255).toInt(),
+        (labelColor.red * 255).toInt(),
+        (labelColor.green * 255).toInt(),
+        (labelColor.blue * 255).toInt(),
+    )
+
+    Canvas(modifier = modifier) {
+        if (bars.isEmpty()) return@Canvas
+        val barWidth = size.width / bars.size
+        val paint = android.graphics.Paint().apply {
+            color = labelColorArgb
+            textSize = labelSizePx
+            isAntiAlias = true
         }
+        timeLabels.forEach { (index, label) ->
+            val x = index * barWidth
+            drawContext.canvas.nativeCanvas.drawText(label, x, size.height, paint)
+        }
+    }
+}
+
+/**
+ * Tooltip card shown above the chart when a bar is selected.
+ *
+ * Displays the time range and step count for the selected [bar].
+ *
+ * @param bar        The selected [StepBar].
+ * @param resolution The current resolution, used to compute the bucket end time.
+ * @param modifier   Applied to the [Surface].
+ */
+@Composable
+private fun StepBarTooltip(
+    bar: StepBar,
+    resolution: ChartResolution,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        tonalElevation = 2.dp,
+        modifier = modifier,
+    ) {
+        Text(
+            text = formatTooltipTimeRange(bar, resolution),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
     }
 }
 
@@ -458,5 +586,20 @@ private fun PreviewTodayStepChartDark() {
             onResolutionChange = {},
             modifier = Modifier.padding(16.dp),
         )
+    }
+}
+
+/** Preview: tooltip visible on hourly bar. */
+@Preview(showBackground = true, name = "TodayStepChart — Tooltip visible")
+@Composable
+private fun PreviewTodayStepChartTooltip() {
+    PodometerTheme(dynamicColor = false) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Show the tooltip card directly for preview purposes
+            StepBarTooltip(
+                bar = StepBar(startTime = 1_741_860_000_000L, stepCount = 245),
+                resolution = ChartResolution.THIRTY_MIN,
+            )
+        }
     }
 }
