@@ -1,4 +1,4 @@
-Podometer is a privacy-first step counter for Android that tracks your daily walking activity and detects cycling — with zero data leaving your device.
+Podometer is a privacy-first step counter for Android that tracks your daily walking activity — with zero data leaving your device.
 
 No network permission. No analytics. No tracking. Your activity data belongs to you.
 
@@ -7,20 +7,20 @@ FEATURES
 Step Counting
 Podometer counts your steps using the hardware step sensor built into modern Android devices. When the dedicated step sensor is unavailable, the app falls back to the raw accelerometer to ensure reliable counting across a wide range of hardware.
 
-Cycling Detection
-The app analyses accelerometer patterns to automatically detect when you switch from walking to cycling. Activity transitions are recorded so you can review exactly when and how your activity type changed throughout the day.
+Flexible Step Goals
+Set a daily step goal that fits your lifestyle, or configure minimum, target, and stretch tiers to give yourself meaningful milestones throughout the day. Rest days let you preserve your streaks without pressure.
 
-Activity Timeline
-A visual timeline shows your activity segments for the day, making it easy to see how your walking and cycling periods are distributed. Weekly charts give you a broader view of your activity history.
+Weekly Trends
+A weekly bar chart gives you a clear view of your step history so you can spot patterns, stay motivated, and track progress over time.
 
 Data Export
-Export your activity data in JSON format for personal analysis or backup. You remain in full control of your data.
+Export your step data in JSON format for personal analysis or backup. You remain in full control of your data.
 
 Privacy by Design
 - No INTERNET permission — the app cannot make network requests
 - No account required — no sign-up, no login
 - All data stored locally using Room and DataStore
-- Minimal permissions: activity recognition, body sensors, foreground service, and notifications — nothing else
+- Minimal permissions: activity recognition, foreground service, and notifications — nothing else
 
 Material 3 Interface
 Built with Jetpack Compose and Material 3, Podometer provides a clean, modern interface that respects your system theme and display settings.

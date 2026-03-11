@@ -1,0 +1,10 @@
+v2.0.0
+
+- Simplified onboarding: only activity recognition and notification permissions are requested
+- Flexible step goal tiers: set minimum, target, and stretch goals
+- Rest days: preserve streaks on designated off days
+- Weekly step trends chart
+- Notification style preference (minimal or detailed)
+- Auto-start on device boot
+- Removed cycling detection (simplified to pure step counting)
+- Data export to JSON

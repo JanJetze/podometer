@@ -1,1 +1,1 @@
-Privacy-first pedometer with cycling detection. No network, all data on-device.
+Privacy-first pedometer with flexible step goals and weekly trends. No network, all data on-device.

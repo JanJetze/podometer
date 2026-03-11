@@ -46,8 +46,6 @@
 
     <!-- Onboarding screen -->
     <string name="onboarding_tagline">Private step counting. No cloud. No tracking.</string>
-    <string name="onboarding_permission_sensors_title">Step counting sensor</string>
-    <string name="onboarding_permission_sensors_description">Reads the on-device pedometer to count your steps accurately without draining the battery.</string>
     <string name="onboarding_permission_activity_title">Activity recognition</string>
     <string name="onboarding_permission_activity_description">Required by Android to access the step counter sensor and count your steps accurately.</string>
     <string name="onboarding_permission_notifications_title">Step count notification</string>
@@ -123,7 +121,7 @@
     <!-- Settings: About section -->
     <string name="settings_section_about">About</string>
     <string name="settings_about_version_title">Version</string>
-    <string name="settings_about_version_value">1.0.0</string>
+    <string name="settings_about_version_value">2.0.0</string>
     <string name="settings_about_license_title">License</string>
     <string name="settings_about_license_value">GNU General Public License v3.0 or later</string>
     <string name="settings_about_source_title">Source code</string>
