@@ -30,6 +30,7 @@ import com.podometer.ui.onboarding.OnboardingViewModel
 import com.podometer.ui.settings.SettingsScreen
 import com.podometer.ui.settings.SettingsViewModel
 import com.podometer.ui.theme.PodometerTheme
+import com.podometer.ui.trends.TrendsScreen
 import com.podometer.util.areEssentialPermissionsGranted
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -70,7 +71,8 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
-                val showBottomBar = currentRoute == Screen.Dashboard.route
+                val showBottomBar = currentRoute == Screen.Dashboard.route ||
+                    currentRoute == Screen.Trends.route
 
                 Scaffold(
                     bottomBar = {
@@ -162,6 +164,10 @@ class MainActivity : ComponentActivity() {
                             },
                             onSetUseTestData = viewModel::setUseTestData,
                         )
+                    }
+
+                    composable(Screen.Trends.route) {
+                        TrendsScreen()
                     }
 
                     composable(Screen.Donate.route) {

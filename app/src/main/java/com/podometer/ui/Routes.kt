@@ -18,4 +18,7 @@ sealed class Screen(val route: String) {
 
     /** Donate / support development screen. */
     data object Donate : Screen("donate")
+
+    /** Trends screen showing weekly and monthly step history. */
+    data object Trends : Screen("trends")
 }

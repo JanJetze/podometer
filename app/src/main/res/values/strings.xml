@@ -6,6 +6,7 @@
     <string name="screen_dashboard">Dashboard</string>
     <string name="screen_settings">Settings</string>
     <string name="screen_onboarding">Onboarding</string>
+    <string name="screen_trends">Trends</string>
     <!-- Content descriptions -->
     <string name="cd_open_settings">Open settings</string>
     <string name="cd_navigate_back">Navigate back</string>
