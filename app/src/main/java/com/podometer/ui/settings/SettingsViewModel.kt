@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.podometer.data.TestDataGenerator
 import com.podometer.data.repository.PreferencesManager
 import com.podometer.domain.usecase.ExportDataUseCase
 import com.podometer.domain.usecase.ImportDataUseCase
@@ -86,6 +87,7 @@ class SettingsViewModel @Inject constructor(
     private val exportDataUseCase: ExportDataUseCase,
     private val importDataUseCase: ImportDataUseCase,
     private val preferencesManager: PreferencesManager,
+    private val testDataGenerator: TestDataGenerator,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -192,6 +194,11 @@ class SettingsViewModel @Inject constructor(
     fun setUseTestData(enabled: Boolean) {
         viewModelScope.launch {
             preferencesManager.setUseTestData(enabled)
+            if (enabled) {
+                testDataGenerator.seed()
+            } else {
+                testDataGenerator.clear()
+            }
         }
     }
 
