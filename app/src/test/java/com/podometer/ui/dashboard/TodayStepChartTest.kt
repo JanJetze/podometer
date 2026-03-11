@@ -139,6 +139,49 @@ class TodayStepChartTest {
         }
     }
 
+    @Test
+    fun `buildTimeLabels uses compact lowercase format without space`() {
+        // Use a known hour-aligned epoch so the time is predictable (midnight UTC = 1970-01-01T00:00Z)
+        // At UTC+0, epoch 0 = 12am, epoch 3_600_000 = 1am, etc.
+        // We just verify labels don't contain a space between hour and meridiem
+        val bars = (0 until 12).map { StepBar(it.toLong() * 3_600_000L, 100) }
+        val labels = buildTimeLabels(bars, ChartResolution.HOURLY, intervalHours = 1)
+        labels.forEach { (_, label) ->
+            assertTrue(
+                "Label '$label' should not contain a space (expected compact format like '6am')",
+                !label.contains(' '),
+            )
+            assertTrue(
+                "Label '$label' should be lowercase",
+                label == label.lowercase(),
+            )
+        }
+    }
+
+    @Test
+    fun `buildTimeLabels FIVE_MIN resolution uses 3-hour intervals by default when called with intervalHours=3`() {
+        // 24 hours * 12 bars/hour = 288 bars for a full day at 5m resolution
+        val hourAlignedBase = 1_699_999_200_000L
+        val bars = (0 until 288).map { StepBar(hourAlignedBase + it.toLong() * 5 * 60_000L, 100) }
+        val labels = buildTimeLabels(bars, ChartResolution.FIVE_MIN, intervalHours = 3)
+        // 3 hours * 12 bars/hour = 36 bars per interval
+        // First label at index 0, then 36, 72, 108, 144, 180, 216, 252 → 8 labels for 288 bars
+        assertEquals(8, labels.size)
+        assertEquals(0, labels[0].first)
+        assertEquals(36, labels[1].first)
+    }
+
+    @Test
+    fun `buildTimeLabels non-FIVE_MIN resolutions use 2-hour intervals by default`() {
+        // 24 hourly bars, intervalHours=2 → labels at indices 0, 2, 4, ..., 22 → 12 labels
+        val hourAlignedBase = 1_699_999_200_000L
+        val bars = (0 until 24).map { StepBar(hourAlignedBase + it.toLong() * 3_600_000L, 100) }
+        val labels = buildTimeLabels(bars, ChartResolution.HOURLY, intervalHours = 2)
+        assertEquals(12, labels.size)
+        assertEquals(0, labels[0].first)
+        assertEquals(2, labels[1].first)
+    }
+
     // ─── ChartResolution enum ─────────────────────────────────────────────────
 
     @Test

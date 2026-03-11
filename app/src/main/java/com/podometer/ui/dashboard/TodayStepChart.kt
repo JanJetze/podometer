@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.podometer.ui.theme.LocalGoalRingColors
@@ -57,7 +58,7 @@ enum class ChartResolution(val minutes: Int, val label: String) {
 // ─── Pure helper functions (unit-testable) ────────────────────────────────────
 
 private val TIME_LABEL_FORMATTER: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("h a").withZone(ZoneId.systemDefault())
+    DateTimeFormatter.ofPattern("ha").withZone(ZoneId.systemDefault())
 
 /**
  * Aggregates a list of 5-minute [StepBar]s into wider buckets defined by [resolution].
@@ -105,7 +106,7 @@ fun chartYAxisCeiling(bars: List<StepBar>): Int {
  * Builds a list of (barIndex, timeLabel) pairs for the X-axis labels.
  *
  * Labels are emitted every [intervalHours] bars. The label text is the bar's time
- * formatted as "h a" (e.g. "9 AM", "2 PM") in the system default timezone.
+ * formatted as "ha" lowercase (e.g. "9am", "2pm") in the system default timezone.
  *
  * @param bars          The aggregated bars to label.
  * @param resolution    Current chart resolution (used for context, not computation here).
@@ -123,7 +124,7 @@ fun buildTimeLabels(
         if (index % intervalBars == 0) {
             val label = TIME_LABEL_FORMATTER.format(
                 Instant.ofEpochMilli(bar.startTime),
-            )
+            ).lowercase()
             index to label
         } else {
             null
@@ -209,8 +210,9 @@ fun TodayStepChart(
                     .height(160.dp),
             )
 
-            // X-axis labels
-            val timeLabels = buildTimeLabels(aggregated, resolution, intervalHours = 2)
+            // X-axis labels: use 3-hour intervals for 5m resolution to reduce crowding
+            val labelIntervalHours = if (resolution == ChartResolution.FIVE_MIN) 3 else 2
+            val timeLabels = buildTimeLabels(aggregated, resolution, intervalHours = labelIntervalHours)
             if (timeLabels.isNotEmpty()) {
                 TodayStepChartXAxis(
                     bars = aggregated,
@@ -319,6 +321,8 @@ private fun TodayStepChartXAxis(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Visible,
                     modifier = Modifier.weight(1f),
                 )
             } else {
