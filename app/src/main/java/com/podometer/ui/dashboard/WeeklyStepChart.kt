@@ -39,15 +39,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.podometer.R
 import com.podometer.domain.model.DaySummary
+import com.podometer.ui.theme.LocalGoalRingColors
 import com.podometer.ui.theme.PodometerTheme
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 // ─── Chart colour constants ────────────────────────────────────────────────────
-
-/** Colour for bars that have not reached the daily goal. */
-private val BarBelowGoalColor = Color(0xFF78909C)
 
 /** Colour for placeholder bars (days with no data). */
 private val BarPlaceholderColor = Color(0xFFCFD8DC)
@@ -232,7 +230,7 @@ fun formatChartDate(dateStr: String): String {
  * - Y-axis auto-scaled to `max(goal, maxSteps)` so bars above goal are never clipped
  * - Day labels (M T W T F S S) displayed below the bars
  * - Dashed horizontal goal line at the computed [computeGoalFraction] height
- * - Bars above goal use [MaterialTheme.colorScheme.tertiary]; others use a neutral colour
+ * - Bars above goal use [LocalGoalRingColors.current.target] (forest green); bars below goal use [LocalGoalRingColors.current.minimum] (sage green)
  * - Days with no [DaySummary] data show gray placeholder bars
  *
  * Accessibility: the component carries a `contentDescription` describing each day's step
@@ -269,7 +267,9 @@ fun WeeklyStepChart(
     val goalFraction = computeGoalFraction(goal, maxSteps)
 
     // Theme colours resolved here, passed down to Canvas (no MaterialTheme inside Canvas)
-    val accentColor = MaterialTheme.colorScheme.tertiary
+    val goalRingColors = LocalGoalRingColors.current
+    val aboveGoalColor = goalRingColors.target
+    val belowGoalColor = goalRingColors.minimum
     val todayOutlineColor = MaterialTheme.colorScheme.primary
     val labelColor = MaterialTheme.colorScheme.onSurface
 
@@ -279,7 +279,8 @@ fun WeeklyStepChart(
         WeeklyStepChartCanvas(
             bars = bars,
             goalFraction = goalFraction,
-            accentColor = accentColor,
+            aboveGoalColor = aboveGoalColor,
+            belowGoalColor = belowGoalColor,
             todayOutlineColor = todayOutlineColor,
             onBarTap = { index ->
                 selectedBarIndex = if (selectedBarIndex == index) -1 else index
@@ -314,7 +315,8 @@ fun WeeklyStepChart(
  *
  * @param bars               The 7 [ChartBar]s to render.
  * @param goalFraction       Normalised height of the goal line in [0f, 1f].
- * @param accentColor        Colour used for bars that exceed the goal.
+ * @param aboveGoalColor     Colour used for bars that strictly exceed the goal (target tier green).
+ * @param belowGoalColor     Colour used for bars that have not reached the goal (minimum tier green).
  * @param todayOutlineColor  Colour used for the highlight outline on today's bar.
  * @param onBarTap           Callback invoked with the tapped bar index (0–6).
  * @param modifier           Applied to the [Canvas].
@@ -323,7 +325,8 @@ fun WeeklyStepChart(
 private fun WeeklyStepChartCanvas(
     bars: List<ChartBar>,
     goalFraction: Float,
-    accentColor: Color,
+    aboveGoalColor: Color,
+    belowGoalColor: Color,
     todayOutlineColor: Color,
     onBarTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -381,8 +384,8 @@ private fun WeeklyStepChartCanvas(
                     rawBarHeight
                 }
                 val barColor = when {
-                    bar.aboveGoal -> accentColor
-                    else -> BarBelowGoalColor
+                    bar.aboveGoal -> aboveGoalColor
+                    else -> belowGoalColor
                 }
                 drawRoundedBar(
                     left = barLeft,
