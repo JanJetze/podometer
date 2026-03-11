@@ -8,6 +8,9 @@
     <!-- Boot receiver -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Required by Android for TYPE_STEP_COUNTER and FOREGROUND_SERVICE_HEALTH -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
     <!-- Step-count notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
